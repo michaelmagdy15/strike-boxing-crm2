@@ -1,0 +1,157 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'manager', 'super_admin', 'crm_admin'] ||
+        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'crm_admin'] ||
+        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isRep() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'rep';
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidString(field, min, max) {
+      return request.resource.data[field] is string && 
+             request.resource.data[field].size() >= min && 
+             request.resource.data[field].size() <= max;
+    }
+
+    // ===============================================================
+    // Entity Validators
+    // ===============================================================
+
+    function isValidClient(data) {
+      return data.name is string && data.name.size() > 0 &&
+             data.phone is string && data.phone.size() > 0 &&
+             data.status in ["Lead", "Active", "Nearly Expired", "Expired"];
+    }
+
+    function isValidPayment(data) {
+      return data.clientId is string &&
+             data.amount is number && data.amount >= 0 &&
+             data.method in ["Cash", "Credit Card", "Bank Transfer", "Instapay", "Other"] &&
+             (!('instapayRef' in data) || (data.instapayRef is string && data.instapayRef.matches("^[0-9]{12}$"))) &&
+             data.packageType is string;
+    }
+
+    function isValidSession(data) {
+      return data.clientId is string &&
+             data.status in ["Scheduled", "Attended", "No Show", "Cancelled"];
+    }
+
+    function isValidAuditLog(data) {
+      return data.userId is string &&
+             data.action in ["CREATE", "UPDATE", "DELETE"] &&
+             data.entityType in ["CLIENT", "PAYMENT", "SESSION", "LEAD", "TARGET"] &&
+             data.entityId is string;
+    }
+
+    function isValidTask(data) {
+      return data.title is string && data.title.size() > 0 &&
+             data.dueDate is string &&
+             data.status in ["Pending", "In Progress", "Completed"] &&
+             data.priority in ["Low", "Medium", "High"] &&
+             data.assignedTo is string &&
+             data.createdBy is string &&
+             data.createdAt is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /{path=**}/comments/{commentId} {
+      allow read: if isAuthenticated();
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) || isSuperAdmin();
+    }
+
+    match /counters/{counterId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /packages/{packageId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /importBatches/{batchId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidTask(request.resource.data);
+      allow update: if isAuthenticated() && isValidTask(request.resource.data);
+      allow delete: if isAuthenticated(); // Or isAdmin() if only admins should delete
+    }
+
+    match /clients/{clientId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidClient(request.resource.data);
+      allow update: if isAuthenticated() && isValidClient(request.resource.data);
+      allow delete: if isAdmin();
+
+      match /comments/{commentId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+      }
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidPayment(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidSession(request.resource.data);
+      allow update: if isAuthenticated() && isValidSession(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() && isValidAuditLog(request.resource.data);
+    }
+
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}
