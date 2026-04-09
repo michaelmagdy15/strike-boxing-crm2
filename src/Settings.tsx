@@ -5,15 +5,19 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Save, Building2, Image as ImageIcon, Users, Package } from 'lucide-react';
+import { Save, Building2, Image as ImageIcon, Users, Package, AlertTriangle, ShieldCheck } from 'lucide-react';
 import UsersManagement from './Users';
 import Packages from './Packages';
 
 export default function Settings() {
-  const { branding, updateBranding } = useAppContext();
+  const { branding, updateBranding, isSuperUser, clearAllData } = useAppContext();
   const [companyName, setCompanyName] = useState(branding.companyName);
   const [logoUrl, setLogoUrl] = useState(branding.logoUrl);
   const [isSaving, setIsSaving] = useState(false);
+  
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
 
   React.useEffect(() => {
     setCompanyName(branding.companyName);
@@ -26,6 +30,19 @@ export default function Settings() {
       await updateBranding({ companyName, logoUrl });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSystemReset = async () => {
+    if (confirmText !== 'DELETE ALL') return;
+    setIsResetting(true);
+    try {
+      await clearAllData();
+      setIsResetDialogOpen(false);
+      setConfirmText('');
+      window.location.reload(); // Reload to refresh all data
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -49,6 +66,12 @@ export default function Settings() {
             <Package className="h-4 w-4" />
             Packages
           </TabsTrigger>
+          {isSuperUser && (
+            <TabsTrigger value="admin" className="flex items-center gap-2 text-destructive data-[state=active]:bg-destructive/10">
+              <ShieldCheck className="h-4 w-4" />
+              Administration
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="branding" className="space-y-6 animate-in fade-in-50 duration-500">
@@ -143,6 +166,89 @@ export default function Settings() {
         <TabsContent value="packages" className="animate-in fade-in-50 duration-500">
           <Packages />
         </TabsContent>
+
+        {isSuperUser && (
+          <TabsContent value="admin" className="space-y-6 animate-in fade-in-50 duration-500">
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card className="border-destructive/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="h-5 w-5" />
+                    Danger Zone: System Reset
+                  </CardTitle>
+                  <CardDescription>
+                    Permanently delete all data and reset the system. This action is irreversible.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground bg-destructive/5 p-3 rounded-lg border border-destructive/20">
+                    This will delete all <strong>Clients</strong>, <strong>Payments</strong>, <strong>Leads</strong>, <strong>Packages</strong>, <strong>Tasks</strong>, and <strong>User Accounts</strong>.
+                    <br /><br />
+                    <span className="text-destructive font-bold">Only the three Super User accounts will be preserved.</span>
+                  </p>
+                  
+                  <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+                    <DialogTrigger render={<Button variant="destructive" className="w-full" />}>
+                      <AlertTriangle className="mr-2 h-4 w-4" /> Clear Whole System
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle className="text-destructive">Final Confirmation Required</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <p className="text-sm text-balance">
+                          You are about to perform a full system reset. Every record in the database (except super users) will be destroyed. 
+                          This cannot be undone.
+                        </p>
+                        <div className="space-y-2">
+                          <Label>Please type <span className="font-bold text-destructive underline">DELETE ALL</span> to confirm:</Label>
+                          <Input 
+                            value={confirmText} 
+                            onChange={(e) => setConfirmText(e.target.value)}
+                            placeholder="Type exactly DELETE ALL"
+                            className="border-destructive"
+                            autoComplete="off"
+                          />
+                        </div>
+                        <Button 
+                          variant="destructive" 
+                          className="w-full" 
+                          onClick={handleSystemReset}
+                          disabled={confirmText !== 'DELETE ALL' || isResetting}
+                        >
+                          {isResetting ? 'Processing Reset...' : 'CONFIRM IRREVERSIBLE RESET'}
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-primary" />
+                    Admin Access Details
+                  </CardTitle>
+                  <CardDescription>
+                    Information about authorized super users.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="text-sm text-muted-foreground space-y-2">
+                    <p>Destructive actions are limited to the following whitelisted users:</p>
+                    <ul className="list-disc pl-4 space-y-1 text-xs">
+                      <li>michaelmitry13@gmail.com</li>
+                      <li>Shadyyoussef305@gmail.com</li>
+                      <li>magd.gallab@gmail.com</li>
+                    </ul>
+                    <p className="pt-2 italic">Role: super_admin / crm_admin</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

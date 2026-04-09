@@ -10,11 +10,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, parseISO, addDays } from 'date-fns';
 import { Payment } from './types';
-import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer } from 'lucide-react';
+import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Trash2 } from 'lucide-react';
 import { AlertDialog } from './components/AlertDialog';
+import { ConfirmDialog } from './components/ConfirmDialog';
 
 export default function Payments() {
-  const { payments, clients, users, packages, addPayment, updateClient, currentUser, branding } = useAppContext();
+  const { payments, clients, users, packages, addPayment, deletePayment, updateClient, currentUser, isSuperUser, branding } = useAppContext();
   const [isNewPaymentOpen, setIsNewPaymentOpen] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
@@ -27,6 +28,9 @@ export default function Payments() {
   const [packageType, setPackageType] = useState('');
   const [customPackage, setCustomPackage] = useState('');
   const [notes, setNotes] = useState('');
+  
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState<string | null>(null);
 
   const handlePackageChange = (val: string) => {
     setPackageType(val);
@@ -191,9 +195,13 @@ export default function Payments() {
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold tracking-tight">Payments</h2>
         <Dialog open={isNewPaymentOpen} onOpenChange={setIsNewPaymentOpen}>
-          <DialogTrigger render={<Button />}>
-            <Plus className="mr-2 h-4 w-4" /> Record Payment
-          </DialogTrigger>
+          <DialogTrigger
+            render={
+              <Button>
+                <Plus className="mr-2 h-4 w-4" /> Record Payment
+              </Button>
+            }
+          />
           <DialogContent className="w-[95vw] max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Record New Payment</DialogTitle>
@@ -339,9 +347,25 @@ export default function Payments() {
                         )}
                         <TableCell className="text-muted-foreground text-xs hidden xl:table-cell">{payment.notes || '-'}</TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" onClick={() => printInvoice(payment, client)}>
-                            <Printer className="h-4 w-4" />
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => printInvoice(payment, client)} title="Print Invoice">
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                            {isSuperUser && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => {
+                                  setPaymentToDelete(payment.id);
+                                  setIsDeleteConfirmOpen(true);
+                                }}
+                                title="Delete Payment"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -401,6 +425,21 @@ export default function Payments() {
         onOpenChange={setAlertOpen}
         title={alertTitle}
         description={alertDescription}
+      />
+
+      <ConfirmDialog
+        isOpen={isDeleteConfirmOpen}
+        onOpenChange={setIsDeleteConfirmOpen}
+        title="Delete Payment"
+        description="Are you sure you want to delete this payment record? This action cannot be undone."
+        confirmText="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (paymentToDelete) {
+            deletePayment(paymentToDelete);
+            setPaymentToDelete(null);
+          }
+        }}
       />
     </div>
   );

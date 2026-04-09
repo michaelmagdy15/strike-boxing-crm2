@@ -17,7 +17,7 @@ import ImportData from './ImportData';
 import ImportHistory from './ImportHistory';
 
 export default function Clients() {
-  const { clients, updateClient, deleteMultipleClients, deleteClient, currentUser, users, payments } = useAppContext();
+  const { clients, updateClient, deleteMultipleClients, deleteClient, currentUser, users, payments, isSuperUser } = useAppContext();
   const [activeTab, setActiveTab] = useState('all');
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -235,7 +235,7 @@ export default function Clients() {
                     defaultValue={client.assignedTo || 'unassigned'}
                     onChange={(e) => updateClient(client.id, { assignedTo: e.target.value === 'unassigned' ? undefined : e.target.value })}
                   >
-                    <option value="unassigned">Unassigned</option>
+                    <option key="unassigned" value="unassigned">Unassigned</option>
                     {users.filter(u => u.role === 'rep').map(rep => (
                       <option key={rep.id} value={rep.id}>{rep.name}</option>
                     ))}
@@ -245,9 +245,13 @@ export default function Clients() {
               <TableCell>
                 <div className="flex items-center gap-2">
                   <Dialog>
-                    <DialogTrigger render={<Button variant="outline" size="sm" />}>
-                      Manage
-                    </DialogTrigger>
+                    <DialogTrigger
+                      render={
+                        <Button variant="outline" size="sm">
+                          Manage
+                        </Button>
+                      }
+                    />
                     <DialogContent className="w-[95vw] max-w-md max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Manage Member: {client.name}</DialogTitle>
@@ -339,7 +343,7 @@ export default function Clients() {
                     </div>
                   </DialogContent>
                 </Dialog>
-                {(currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
+                {isSuperUser && (
                   <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteClient(client.id)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -389,7 +393,7 @@ export default function Clients() {
               </Button>
             </div>
             <div className="flex items-center gap-2">
-              {(currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
+              {isSuperUser && (
                 <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
                   <Trash2 className="h-4 w-4 mr-2" /> Delete Selected
                 </Button>

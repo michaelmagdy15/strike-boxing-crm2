@@ -105,9 +105,14 @@ interface AppContextType {
   addPackage: (pkg: Omit<Package, 'id'>) => Promise<void>;
   updatePackage: (id: string, updates: Partial<Package>) => Promise<void>;
   deletePackage: (id: string) => Promise<void>;
+  deletePackage: (id: string) => Promise<void>;
+  deletePayment: (id: string) => Promise<void>;
+  deleteUser: (id: string) => Promise<void>;
+  clearAllData: () => Promise<void>;
   addImportBatch: (batch: Omit<ImportBatch, 'id'>) => Promise<string>;
   rollbackImport: (batchId: string) => Promise<void>;
   isAuthReady: boolean;
+  isSuperUser: boolean;
   branding: BrandingSettings;
   updateBranding: (branding: Partial<BrandingSettings>) => Promise<void>;
   previewRole: 'manager' | 'rep' | null;
@@ -125,6 +130,13 @@ function cleanData(data: any) {
   });
   return clean;
 }
+
+const SUPER_USERS = [
+  'michaelmitry13@gmail.com',
+  'Shadyyoussef305@gmail.com',
+  'magd.gallab@gmail.com'
+];
+
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -164,6 +176,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return currentUser?.role;
   }, [currentUser, previewRole]);
+
+  const isSuperUser = useMemo(() => {
+    return currentUser?.email ? SUPER_USERS.includes(currentUser.email) : false;
+  }, [currentUser]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -452,6 +468,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteClient = async (id: string) => {
+    if (!isSuperUser) throw new Error("Unauthorized: Only super users can delete records.");
     try {
       const clientName = clients.find(c => c.id === id)?.name || id;
       await deleteDoc(doc(db, 'clients', id));
@@ -462,6 +479,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteMultipleClients = async (ids: string[]) => {
+    if (!isSuperUser) throw new Error("Unauthorized: Only super users can delete records.");
     try {
       // For simplicity, delete one by one. In production with huge lists, use batched writes.
       for (const id of ids) {
@@ -480,6 +498,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addAuditLog('UPDATE', 'CLIENT', id, `Updated user permissions: ${userName}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `users/${id}`);
+    }
+  };
+
+  const deleteUser = async (id: string) => {
+    if (!isSuperUser) throw new Error("Unauthorized: Only super users can delete user accounts.");
+    try {
+      const user = users.find(u => u.id === id);
+      if (user && SUPER_USERS.includes(user.email)) {
+        throw new Error("Cannot delete a super user account.");
+      }
+      await deleteDoc(doc(db, 'users', id));
+      addAuditLog('DELETE', 'CLIENT', id, `Deleted user account: ${user?.name || id}`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `users/${id}`);
     }
   };
 
@@ -520,6 +552,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await addAuditLog('CREATE', 'PAYMENT', docRef.id, `Recorded payment of ${payment.amount} LE for ${clientName}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'payments');
+    }
+  };
+
+  const deletePayment = async (id: string) => {
+    if (!isSuperUser) throw new Error("Unauthorized: Only super users can delete payments.");
+    try {
+      const payment = payments.find(p => p.id === id);
+      await deleteDoc(doc(db, 'payments', id));
+      addAuditLog('DELETE', 'PAYMENT', id, `Deleted payment of ${payment?.amount || 'unknown'} LE`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `payments/${id}`);
     }
   };
 
@@ -649,6 +692,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const clearAllData = async () => {
+    if (!isSuperUser) throw new Error("Unauthorized: Only super users can reset the system.");
+    
+    try {
+      const collectionsToClear = [
+        'clients',
+        'payments',
+        'sessions',
+        'tasks',
+        'packages',
+        'auditLogs',
+        'importBatches'
+      ];
+
+      for (const collName of collectionsToClear) {
+        const snapshot = await getDocs(collection(db, collName));
+        let batch = writeBatch(db);
+        let count = 0;
+        
+        for (const docSnapshot of snapshot.docs) {
+          batch.delete(docSnapshot.ref);
+          count++;
+          if (count === 500) {
+            await batch.commit();
+            batch = writeBatch(db);
+            count = 0;
+          }
+        }
+        if (count > 0) await batch.commit();
+      }
+
+      // Special handling for users - keep SUPER_USERS
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      let userBatch = writeBatch(db);
+      let userCount = 0;
+      for (const userDoc of usersSnapshot.docs) {
+        const userData = userDoc.data() as User;
+        if (!SUPER_USERS.includes(userData.email)) {
+          userBatch.delete(userDoc.ref);
+          userCount++;
+          if (userCount === 500) {
+            await userBatch.commit();
+            userBatch = writeBatch(db);
+            userCount = 0;
+          }
+        }
+      }
+      if (userCount > 0) await userBatch.commit();
+
+      await addAuditLog('DELETE', 'TARGET', 'system', 'Full system reset performed by super user');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'system/reset');
+    }
+  };
+
   // Filter clients based on user role and search query
   const visibleClients = useMemo(() => {
     if (!currentUser) return [];
@@ -715,11 +813,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addPackage,
     updatePackage,
     deletePackage,
+    deletePayment,
+    deleteUser,
+    clearAllData,
     addImportBatch,
     rollbackImport,
     branding,
     updateBranding,
     isAuthReady,
+    isSuperUser,
     previewRole,
     setPreviewRole
   }), [

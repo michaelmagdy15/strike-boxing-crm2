@@ -9,13 +9,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { UserRole } from './types';
-import { Shield, User as UserIcon, Plus } from 'lucide-react';
+import { Shield, User as UserIcon, Plus, Trash2 } from 'lucide-react';
+import { ConfirmDialog } from './components/ConfirmDialog';
+
+const SUPER_USER_EMAILS = [
+  'michaelmitry13@gmail.com',
+  'Shadyyoussef305@gmail.com',
+  'magd.gallab@gmail.com'
+];
 
 export default function Users() {
-  const { users, currentUser, updateUser, inviteUser } = useAppContext();
+  const { users, currentUser, updateUser, inviteUser, deleteUser, isSuperUser } = useAppContext();
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('rep');
+  
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<string | null>(null);
 
   if (currentUser?.role !== 'manager' && currentUser?.role !== 'admin' && currentUser?.role !== 'super_admin' && currentUser?.role !== 'crm_admin') {
     return (
@@ -57,9 +67,13 @@ export default function Users() {
         <h2 className="text-2xl font-bold tracking-tight">User Management</h2>
         {canChangeRoles && (
           <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
-            <DialogTrigger render={<Button />}>
-              <Plus className="mr-2 h-4 w-4" /> Invite User
-            </DialogTrigger>
+            <DialogTrigger
+              render={
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" /> Invite User
+                </Button>
+              }
+            />
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Invite New User</DialogTitle>
@@ -108,6 +122,7 @@ export default function Users() {
                 <TableHead>Email</TableHead>
                 <TableHead>Current Role</TableHead>
                 <TableHead>Change Role</TableHead>
+                {isSuperUser && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -144,12 +159,45 @@ export default function Users() {
                       <span className="text-sm text-muted-foreground">Restricted</span>
                     )}
                   </TableCell>
+                  {isSuperUser && (
+                    <TableCell className="text-right">
+                      {!SUPER_USER_EMAILS.includes(user.email) && user.id !== currentUser.id && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => {
+                            setUserToDelete(user.id);
+                            setIsDeleteConfirmOpen(true);
+                          }}
+                          title="Delete User"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        isOpen={isDeleteConfirmOpen}
+        onOpenChange={setIsDeleteConfirmOpen}
+        title="Delete User"
+        description="Are you sure you want to delete this user account? This action cannot be undone."
+        confirmText="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (userToDelete) {
+            deleteUser(userToDelete);
+            setUserToDelete(null);
+          }
+        }}
+      />
     </div>
   );
 }
