@@ -108,7 +108,7 @@ service cloud.firestore {
 
     match /importBatches/{batchId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow write, delete: if isAdmin();
     }
 
     match /tasks/{taskId} {
@@ -147,6 +147,7 @@ service cloud.firestore {
     match /auditLogs/{logId} {
       allow read: if isAdmin();
       allow create: if isAuthenticated() && isValidAuditLog(request.resource.data);
+      allow delete: if isSuperAdmin();
     }
 
     match /settings/{settingId} {
