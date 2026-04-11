@@ -340,7 +340,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         entityId,
         details,
         timestamp: new Date().toISOString(),
-        branch: branch || undefined
+        branch: branch || null
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'auditLogs');
