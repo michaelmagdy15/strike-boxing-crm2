@@ -9,10 +9,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { UserRole } from './types';
-import { Shield, User as UserIcon, Plus } from 'lucide-react';
+import { Shield, User as UserIcon, Plus, Trash2 } from 'lucide-react';
 
 export default function Users() {
-  const { users, currentUser, updateUser, inviteUser } = useAppContext();
+  const { users, currentUser, updateUser, inviteUser, deleteUser } = useAppContext();
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('rep');
@@ -29,6 +29,12 @@ export default function Users() {
 
   const handleRoleChange = (userId: string, newRole: UserRole) => {
     updateUser(userId, { role: newRole });
+  };
+
+  const handleDeleteUser = (userId: string) => {
+    if (window.confirm("Are you sure you want to delete this user? This revokes their access.")) {
+      deleteUser(userId);
+    }
   };
 
   const getRoleBadge = (role: UserRole) => {
@@ -108,6 +114,7 @@ export default function Users() {
                 <TableHead>Email</TableHead>
                 <TableHead>Current Role</TableHead>
                 <TableHead>Change Role</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -142,6 +149,19 @@ export default function Users() {
                       </Select>
                     ) : (
                       <span className="text-sm text-muted-foreground">Restricted</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {canChangeRoles && user.id !== currentUser.id && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:bg-destructive/10"
+                        onClick={() => handleDeleteUser(user.id)}
+                        disabled={user.role === 'super_admin'}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     )}
                   </TableCell>
                 </TableRow>

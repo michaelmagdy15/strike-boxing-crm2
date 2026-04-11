@@ -93,6 +93,7 @@ interface AppContextType {
   deleteClient: (id: string) => Promise<void>;
   deleteMultipleClients: (ids: string[]) => Promise<void>;
   updateUser: (id: string, updates: Partial<User>) => Promise<void>;
+  deleteUser: (id: string) => Promise<void>;
   inviteUser: (email: string, role: UserRole) => Promise<void>;
   addComment: (clientId: string, text: string, author: string) => Promise<void>;
   addPayment: (payment: Omit<Payment, 'id'>) => Promise<void>;
@@ -198,8 +199,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               if (!querySnapshot.empty) {
                 const invitedUserDoc = querySnapshot.docs[0];
                 role = invitedUserDoc.data().role as UserRole;
-                // Delete the placeholder doc
-                await deleteDoc(doc(db, 'users', invitedUserDoc.id));
+                // Try to delete the placeholder doc (might fail due to permissions)
+                try {
+                  await deleteDoc(doc(db, 'users', invitedUserDoc.id));
+                } catch (e) {
+                  console.warn("Could not delete placeholder invitation doc (this is normal if rules restrict it):", e);
+                }
               }
             }
             
@@ -483,6 +488,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const deleteUser = async (id: string) => {
+    try {
+      const userName = users.find(u => u.id === id)?.name || id;
+      await deleteDoc(doc(db, 'users', id));
+      await addAuditLog('DELETE', 'CLIENT', id, `Deleted user: ${userName}`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `users/${id}`);
+    }
+  };
+
   const inviteUser = async (email: string, role: UserRole) => {
     try {
       // Create a placeholder user doc. When they log in, it will match their email or they'll get a new UID.
@@ -703,6 +718,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     deleteClient,
     deleteMultipleClients,
     updateUser,
+    deleteUser,
     inviteUser,
     addComment, 
     addPayment, 

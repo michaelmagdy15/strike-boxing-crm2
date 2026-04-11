@@ -95,6 +95,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow write: if isOwner(userId) || isSuperAdmin();
+      allow delete: if isAuthenticated() && resource.data.email == request.auth.token.email;
     }
 
     match /counters/{counterId} {
