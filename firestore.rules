@@ -148,6 +148,7 @@ service cloud.firestore {
     match /auditLogs/{logId} {
       allow read: if isAdmin();
       allow create: if isAuthenticated() && isValidAuditLog(request.resource.data);
+      allow delete: if isAdmin();
     }
 
     match /settings/{settingId} {
