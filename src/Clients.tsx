@@ -18,7 +18,7 @@ import ImportHistory from './ImportHistory';
 
 export default function Clients() {
   const { clients, updateClient, deleteMultipleClients, deleteClient, currentUser, users, payments } = useAppContext();
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState('active');
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
@@ -46,10 +46,9 @@ export default function Clients() {
 
   const getFilteredMembers = () => {
     switch (activeTab) {
-      case 'active': return activeMembers;
-      case 'expiring': return nearlyExpired;
+      case 'active': return [...activeMembers, ...nearlyExpired];
       case 'expired': return expired;
-      default: return members;
+      default: return [...activeMembers, ...nearlyExpired];
     }
   };
 
@@ -237,7 +236,7 @@ export default function Clients() {
                   >
                     <option value="unassigned">Unassigned</option>
                     {users.filter(u => u.role === 'rep').map(rep => (
-                      <option key={rep.id} value={rep.id}>{rep.name}</option>
+                      <option key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</option>
                     ))}
                   </select>
                 </TableCell>
@@ -368,12 +367,10 @@ export default function Clients() {
         </div>
       </div>
 
-      <Tabs defaultValue="all" onValueChange={setActiveTab}>
+      <Tabs defaultValue="active" onValueChange={setActiveTab}>
         <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
           <TabsList className="flex w-max sm:w-full bg-muted/50 rounded-lg p-1 justify-start sm:justify-center">
-            <TabsTrigger value="all" className="px-4 text-xs sm:text-sm">All ({members.length})</TabsTrigger>
-            <TabsTrigger value="active" className="px-4 text-xs sm:text-sm">Active ({activeMembers.length})</TabsTrigger>
-            <TabsTrigger value="expiring" className="px-4 text-xs sm:text-sm">Expiring ({nearlyExpired.length})</TabsTrigger>
+            <TabsTrigger value="active" className="px-4 text-xs sm:text-sm">Active ({activeMembers.length + nearlyExpired.length})</TabsTrigger>
             <TabsTrigger value="expired" className="px-4 text-xs sm:text-sm">Expired ({expired.length})</TabsTrigger>
           </TabsList>
         </div>

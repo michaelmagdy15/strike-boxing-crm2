@@ -10,6 +10,12 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Security headers for Firebase Auth popups
+  app.use((req, res, next) => {
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+    next();
+  });
+
   // API routes go here
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });

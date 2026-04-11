@@ -103,6 +103,7 @@ export default function Payments() {
             body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #333; }
             .header { border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px; }
             .logo { font-size: 24px; font-weight: bold; color: #000; }
+            .logo img { max-height: 60px; object-fit: contain; }
             .invoice-title { font-size: 20px; color: #666; text-transform: uppercase; letter-spacing: 2px; margin-top: 10px; }
             .details { display: flex; justify-content: space-between; margin-bottom: 40px; }
             .details-col { flex: 1; }
@@ -117,7 +118,7 @@ export default function Payments() {
         </head>
         <body>
           <div class="header">
-            <div class="logo">${branding.companyName.toUpperCase()}</div>
+            <div class="logo"><img src="/strikelogo.png" alt="${branding.companyName}" /></div>
             <div class="invoice-title">Payment Receipt</div>
           </div>
           

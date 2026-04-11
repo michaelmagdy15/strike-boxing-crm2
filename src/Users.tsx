@@ -8,14 +8,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UserRole } from './types';
-import { Shield, User as UserIcon, Plus, Trash2 } from 'lucide-react';
+import { UserRole, User } from './types';
+import { Shield, User as UserIcon, Plus, Trash2, Edit } from 'lucide-react';
 
 export default function Users() {
   const { users, currentUser, updateUser, inviteUser, deleteUser } = useAppContext();
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('rep');
+  
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
 
   if (currentUser?.role !== 'manager' && currentUser?.role !== 'admin' && currentUser?.role !== 'super_admin' && currentUser?.role !== 'crm_admin') {
     return (
@@ -29,6 +33,19 @@ export default function Users() {
 
   const handleRoleChange = (userId: string, newRole: UserRole) => {
     updateUser(userId, { role: newRole });
+  };
+
+  const openEditDialog = (user: User) => {
+    setEditingUser(user);
+    setEditName(user.name);
+    setEditEmail(user.email);
+  };
+
+  const handleUpdateUserDetails = () => {
+    if (editingUser) {
+      updateUser(editingUser.id, { name: editName, email: editEmail });
+      setEditingUser(null);
+    }
   };
 
   const handleDeleteUser = (userId: string) => {
@@ -153,23 +170,66 @@ export default function Users() {
                   </TableCell>
                   <TableCell className="text-right">
                     {canChangeRoles && user.id !== currentUser.id && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:bg-destructive/10"
-                        onClick={() => handleDeleteUser(user.id)}
-                        disabled={user.role === 'super_admin'}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openEditDialog(user)}
+                        >
+                          <Edit className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDeleteUser(user.id)}
+                          disabled={user.role === 'super_admin'}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     )}
                   </TableCell>
                 </TableRow>
-              ))}
+             ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User Profile</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input 
+                value={editName} 
+                onChange={(e) => setEditName(e.target.value)} 
+                placeholder="User's full name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input 
+                type="email"
+                value={editEmail} 
+                onChange={(e) => setEditEmail(e.target.value)} 
+                placeholder="User's email"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground pt-2">
+              Note: Updating their email here allows them to login with the new email address if they haven't registered yet. If they already login via Google, it just updates their display email.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingUser(null)}>Cancel</Button>
+            <Button onClick={handleUpdateUserDetails}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

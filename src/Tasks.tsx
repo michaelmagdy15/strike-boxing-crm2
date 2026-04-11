@@ -155,7 +155,7 @@ export default function Tasks() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {users.map(u => (
-                        <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                        <SelectItem key={u.id} value={u.id}>{u.name || u.email || 'Unknown User'}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -319,7 +319,7 @@ export default function Tasks() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {users.map(u => (
-                        <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                        <SelectItem key={u.id} value={u.id}>{u.name || u.email || 'Unknown User'}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

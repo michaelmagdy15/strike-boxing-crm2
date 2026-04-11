@@ -362,7 +362,7 @@ export default function Leads() {
                     <SelectContent>
                       <SelectItem value="unassigned">Unassigned</SelectItem>
                       {users.filter(u => u.role === 'rep').map(rep => (
-                        <SelectItem key={rep.id} value={rep.id}>{rep.name}</SelectItem>
+                        <SelectItem key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -677,7 +677,7 @@ export default function Leads() {
                 <SelectItem value="All">All Reps</SelectItem>
                 <SelectItem value="unassigned">Unassigned</SelectItem>
                 {users.filter(u => u.role === 'rep').map(rep => (
-                  <SelectItem key={rep.id} value={rep.id}>{rep.name}</SelectItem>
+                  <SelectItem key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -721,7 +721,7 @@ export default function Leads() {
                   <SelectContent>
                     <SelectItem value="unassigned">Unassigned</SelectItem>
                     {users.filter(u => u.role === 'rep').map(rep => (
-                      <SelectItem key={rep.id} value={rep.id}>{rep.name}</SelectItem>
+                      <SelectItem key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

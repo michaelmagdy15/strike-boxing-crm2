@@ -233,7 +233,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!currentUser) return;
 
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      setUsers(snapshot.docs.map(doc => doc.data() as User));
+      setUsers(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User)));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
 
     const unsubClients = onSnapshot(collection(db, 'clients'), (snapshot) => {
