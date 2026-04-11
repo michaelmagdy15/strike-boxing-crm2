@@ -12,11 +12,12 @@ import Leads from './Leads';
 import Clients from './Clients';
 import Payments from './Payments';
 import PrivateSessions from './PrivateSessions';
+import Attendance from './Attendance';
 import AuditLogs from './AuditLogs';
 import Tasks from './Tasks';
 import Settings from './Settings';
 import Login from './Login';
-import { Activity, Users, UserPlus, CreditCard, LogOut, Calendar as CalendarIcon, ShieldAlert, Settings as SettingsIcon, Eye, EyeOff, CheckSquare, Package, Search } from 'lucide-react';
+import { Activity, Users, UserPlus, CreditCard, LogOut, Calendar as CalendarIcon, ShieldAlert, Settings as SettingsIcon, Eye, EyeOff, CheckSquare, Package, Search, Scan, History } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
 function AppContent() {
@@ -141,18 +142,13 @@ function AppContent() {
                     <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
                     Payments
                   </TabsTrigger>
-                  <TabsTrigger value="sessions" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                    <CalendarIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                    Sessions
+                  <TabsTrigger value="attendance" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
+                    <Scan className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                    Attendance
                   </TabsTrigger>
-                </>
-              )}
-              
-              {(currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') && (
-                <>
                   <TabsTrigger value="audit" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                    <ShieldAlert className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                    Audit
+                    <History className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                    History
                   </TabsTrigger>
                   <TabsTrigger value="settings" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
                     <SettingsIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
@@ -187,14 +183,10 @@ function AppContent() {
                 <Payments />
               </TabsContent>
 
-              <TabsContent value="sessions" className="m-0 animate-in fade-in-50 duration-500">
-                <PrivateSessions />
+              <TabsContent value="attendance" className="m-0 animate-in fade-in-50 duration-500">
+                <Attendance />
               </TabsContent>
-            </>
-          )}
 
-          {(currentUser.role === 'manager' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') && (
-            <>
               <TabsContent value="audit" className="m-0 animate-in fade-in-50 duration-500">
                 <AuditLogs />
               </TabsContent>

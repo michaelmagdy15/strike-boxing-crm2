@@ -23,7 +23,7 @@ export default function Packages() {
   const [sessions, setSessions] = useState<number | ''>('');
   const [price, setPrice] = useState<number | ''>('');
   const [expiryDays, setExpiryDays] = useState<number | ''>('');
-  const [branch, setBranch] = useState<'COMPLEX' | 'MIVIDA' | 'ALL'>('ALL');
+  const [branch, setBranch] = useState<'COMPLEX' | 'MIVIDA' | 'Strike IMPACT' | 'ALL'>('ALL');
 
   if (currentUser?.role !== 'manager' && currentUser?.role !== 'admin' && currentUser?.role !== 'super_admin' && currentUser?.role !== 'crm_admin') {
     return (
@@ -134,6 +134,7 @@ export default function Packages() {
                       <SelectItem value="ALL">All Branches</SelectItem>
                       <SelectItem value="COMPLEX">COMPLEX</SelectItem>
                       <SelectItem value="MIVIDA">MIVIDA</SelectItem>
+                      <SelectItem value="Strike IMPACT">Strike IMPACT</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -222,9 +223,10 @@ export default function Packages() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ALL">All Branches</SelectItem>
+                    <SelectItem value="ALL">All Branches (Global)</SelectItem>
                     <SelectItem value="COMPLEX">COMPLEX</SelectItem>
                     <SelectItem value="MIVIDA">MIVIDA</SelectItem>
+                    <SelectItem value="Strike IMPACT">Strike IMPACT</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

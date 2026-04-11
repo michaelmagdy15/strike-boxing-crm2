@@ -11,18 +11,48 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, parseISO, isAfter, isBefore, addDays, subDays } from 'date-fns';
 import { Client } from './types';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Trash2, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, Gift, Phone, Calendar, Download } from 'lucide-react';
+import { Trash2, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, Gift, Phone, Calendar, Download, Plus, Search, ArrowUpDown, QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import ImportData from './ImportData';
 import ImportHistory from './ImportHistory';
 
 export default function Clients() {
-  const { clients, updateClient, deleteMultipleClients, deleteClient, currentUser, users, payments } = useAppContext();
+  const { clients, addClient, updateClient, deleteMultipleClients, deleteClient, currentUser, users, payments } = useAppContext();
   const [activeTab, setActiveTab] = useState('active');
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<string | null>(null);
+
+  const [isNewMemberOpen, setIsNewMemberOpen] = useState(false);
+  const [newMemberName, setNewMemberName] = useState('');
+  const [newMemberPhone, setNewMemberPhone] = useState('');
+  const [newMemberBranch, setNewMemberBranch] = useState<any>('');
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterBranch, setFilterBranch] = useState('All');
+  const [sortBy, setSortBy] = useState('newest');
+
+  const handleAddMember = () => {
+    if (newMemberName && newMemberPhone) {
+      addClient({
+        id: Math.random().toString(36).substr(2, 9),
+        name: newMemberName,
+        phone: newMemberPhone,
+        status: 'Active',
+        branch: newMemberBranch || undefined,
+        stage: 'Converted',
+        comments: [],
+        assignedTo: currentUser?.role === 'rep' ? currentUser.id : undefined,
+        startDate: new Date().toISOString()
+      });
+      setIsNewMemberOpen(false);
+      setNewMemberName('');
+      setNewMemberPhone('');
+      setNewMemberBranch('');
+    }
+  };
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -45,11 +75,43 @@ export default function Clients() {
   });
 
   const getFilteredMembers = () => {
+    let base = [];
     switch (activeTab) {
-      case 'active': return [...activeMembers, ...nearlyExpired];
-      case 'expired': return expired;
-      default: return [...activeMembers, ...nearlyExpired];
+      case 'active': base = [...activeMembers, ...nearlyExpired]; break;
+      case 'expired': base = expired; break;
+      default: base = [...activeMembers, ...nearlyExpired]; break;
     }
+
+    let filtered = base;
+
+    // Search
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(m => 
+        m.name.toLowerCase().includes(term) || 
+        m.phone.includes(term) ||
+        (m.memberId && m.memberId.toString().includes(term))
+      );
+    }
+
+    // Branch
+    if (filterBranch !== 'All') {
+      filtered = filtered.filter(m => m.branch === filterBranch);
+    }
+
+    // Sort
+    filtered = [...filtered].sort((a, b) => {
+      if (sortBy === 'id-asc') return (Number(a.memberId) || 0) - (Number(b.memberId) || 0);
+      if (sortBy === 'id-desc') return (Number(b.memberId) || 0) - (Number(a.memberId) || 0);
+      if (sortBy === 'newest') {
+        const dateA = a.startDate ? new Date(a.startDate).getTime() : 0;
+        const dateB = b.startDate ? new Date(b.startDate).getTime() : 0;
+        return dateB - dateA;
+      }
+      return 0;
+    });
+
+    return filtered;
   };
 
   const filteredMembers = getFilteredMembers();
@@ -93,11 +155,11 @@ export default function Clients() {
     }
   };
 
-  // Reset page when tab changes
+  // Reset page when tab or filters change
   React.useEffect(() => {
     setCurrentPage(1);
     setSelectedClientIds([]);
-  }, [activeTab]);
+  }, [activeTab, searchTerm, filterBranch, sortBy]);
 
   const exportToCSV = () => {
     const headers = ['Member ID', 'Name', 'Phone', 'Branch', 'Package', 'Sessions', 'Status', 'Expiry Date', 'Total Paid', 'Assigned To'];
@@ -135,7 +197,7 @@ export default function Clients() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'Active': return <Badge className="bg-green-500"><CheckCircle2 className="w-3 h-3 mr-1" /> Active</Badge>;
+      case 'Active': return <Badge className="bg-green-500"><CheckCircle className="w-3 h-3 mr-1" /> Active</Badge>;
       case 'Nearly Expired': return <Badge className="bg-amber-500"><AlertTriangle className="w-3 h-3 mr-1" /> Expiring Soon</Badge>;
       case 'Expired': return <Badge variant="destructive">Expired</Badge>;
       default: return <Badge variant="outline">{status}</Badge>;
@@ -335,6 +397,29 @@ export default function Clients() {
                           />
                         </div>
                       </div>
+                      
+                      <div className="pt-6 border-t flex flex-col items-center space-y-3">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+                          <QrCode className="h-4 w-4" />
+                          <span>Member QR Identity</span>
+                        </div>
+                        <div className="bg-white p-4 rounded-xl shadow-sm border">
+                          <QRCodeSVG 
+                            value={client.id} 
+                            size={160} 
+                            level="H"
+                            includeMargin={true}
+                          />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] font-bold">
+                            #{client.memberId || client.id.substring(0, 8)}
+                          </p>
+                          <p className="text-[9px] text-muted-foreground mt-1">
+                            Scan this code at the reception for attendance
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -364,10 +449,89 @@ export default function Clients() {
           </Button>
           <ImportData type="Active" />
           <ImportHistory />
+          <Dialog open={isNewMemberOpen} onOpenChange={setIsNewMemberOpen}>
+            <DialogTrigger render={<Button size="sm" />}>
+              <Plus className="mr-2 h-4 w-4" /> Add Member
+            </DialogTrigger>
+            <DialogContent className="w-[95vw] max-w-md max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Add New Member</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Name</Label>
+                  <Input placeholder="Member Name" value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone</Label>
+                  <Input placeholder="+20 100..." value={newMemberPhone} onChange={(e) => setNewMemberPhone(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Branch</Label>
+                  <select 
+                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={newMemberBranch} 
+                    onChange={(e) => setNewMemberBranch(e.target.value)}
+                  >
+                    <option value="" disabled>Select branch</option>
+                    <option value="COMPLEX">COMPLEX</option>
+                    <option value="MIVIDA">MIVIDA</option>
+                    <option value="Strike IMPACT">Strike IMPACT</option>
+                  </select>
+                </div>
+                <Button onClick={handleAddMember} className="w-full">Save Member</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
       <Tabs defaultValue="active" onValueChange={setActiveTab}>
+        <div className="flex flex-col md:flex-row items-end gap-4 mb-6 bg-card p-4 rounded-xl border shadow-sm">
+          <div className="flex-1 w-full space-y-1.5">
+            <Label className="text-xs font-semibold text-muted-foreground ml-1">Search Name/Phone/ID</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Search..." 
+                className="pl-9 h-11 bg-muted/30 border-none focus-visible:ring-1"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+          
+          <div className="w-full md:w-[180px] space-y-1.5">
+            <Label className="text-xs font-semibold text-muted-foreground ml-1">Branch</Label>
+            <select 
+              className="flex h-11 w-full items-center justify-between rounded-md bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 border-none"
+              value={filterBranch}
+              onChange={(e) => setFilterBranch(e.target.value)}
+            >
+              <option value="All">All Branches</option>
+              <option value="COMPLEX">COMPLEX</option>
+              <option value="MIVIDA">MIVIDA</option>
+              <option value="Strike IMPACT">Strike IMPACT</option>
+            </select>
+          </div>
+
+          <div className="w-full md:w-[180px] space-y-1.5">
+            <Label className="text-xs font-semibold text-muted-foreground ml-1">Sort By</Label>
+            <div className="relative">
+              <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <select 
+                className="flex h-11 w-full items-center justify-between rounded-md bg-muted/30 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 border-none appearance-none"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="newest">Newest First</option>
+                <option value="id-asc">Member ID (Low-High)</option>
+                <option value="id-desc">Member ID (High-Low)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
           <TabsList className="flex w-max sm:w-full bg-muted/50 rounded-lg p-1 justify-start sm:justify-center">
             <TabsTrigger value="active" className="px-4 text-xs sm:text-sm">Active ({activeMembers.length + nearlyExpired.length})</TabsTrigger>

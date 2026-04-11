@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, parseISO, addDays } from 'date-fns';
 import { Payment } from './types';
-import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer } from 'lucide-react';
+import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search } from 'lucide-react';
 import { AlertDialog } from './components/AlertDialog';
 
 export default function Payments() {
@@ -27,6 +27,10 @@ export default function Payments() {
   const [packageType, setPackageType] = useState('');
   const [customPackage, setCustomPackage] = useState('');
   const [notes, setNotes] = useState('');
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterMethod, setFilterMethod] = useState('All');
+  const [filterBranch, setFilterBranch] = useState('All');
 
   const handlePackageChange = (val: string) => {
     setPackageType(val);
@@ -187,6 +191,30 @@ export default function Payments() {
     }
   };
 
+  const filteredPayments = payments.filter(payment => {
+    const client = clients.find(c => c.id === payment.clientId);
+    
+    // Search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      const matchesName = client?.name.toLowerCase().includes(term);
+      const matchesId = client?.memberId?.toString().includes(term);
+      const matchesPhone = client?.phone.includes(term);
+      const matchesAmount = payment.amount.toString().includes(term);
+      const matchesRef = payment.instapayRef?.toLowerCase().includes(term);
+      
+      if (!matchesName && !matchesId && !matchesPhone && !matchesAmount && !matchesRef) return false;
+    }
+    
+    // Method filter
+    if (filterMethod !== 'All' && payment.method !== filterMethod) return false;
+    
+    // Branch filter (via client)
+    if (filterBranch !== 'All' && client?.branch !== filterBranch) return false;
+    
+    return true;
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -208,7 +236,7 @@ export default function Payments() {
                   </SelectTrigger>
                   <SelectContent>
                     {clients.map(client => (
-                      <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
+                      <SelectItem key={client.id} value={client.id}>{client.name || client.email || 'Unknown User'}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -288,6 +316,51 @@ export default function Payments() {
         </Dialog>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-card p-4 rounded-xl border shadow-sm">
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold text-muted-foreground ml-1">Search Payments</Label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Name, ID, Phone, Ref..." 
+              className="pl-9 h-11 bg-muted/30 border-none focus-visible:ring-1"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+        
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold text-muted-foreground ml-1">Method</Label>
+          <select 
+            className="flex h-11 w-full items-center justify-between rounded-md bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 border-none"
+            value={filterMethod}
+            onChange={(e) => setFilterMethod(e.target.value)}
+          >
+            <option value="All">All Methods</option>
+            <option value="Cash">Cash</option>
+            <option value="Credit Card">Credit Card</option>
+            <option value="Bank Transfer">Bank Transfer</option>
+            <option value="Instapay">Instapay</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold text-muted-foreground ml-1">Branch</Label>
+          <select 
+            className="flex h-11 w-full items-center justify-between rounded-md bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 border-none"
+            value={filterBranch}
+            onChange={(e) => setFilterBranch(e.target.value)}
+          >
+            <option value="All">All Branches</option>
+            <option value="COMPLEX">COMPLEX</option>
+            <option value="MIVIDA">MIVIDA</option>
+            <option value="Strike IMPACT">Strike IMPACT</option>
+          </select>
+        </div>
+      </div>
+
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -305,8 +378,8 @@ export default function Payments() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {payments.length > 0 ? (
-                  payments.map(payment => {
+                {filteredPayments.length > 0 ? (
+                  filteredPayments.map(payment => {
                     const client = clients.find(c => c.id === payment.clientId);
                     const recordedByUser = users.find(u => u.id === payment.recordedBy);
                     return (

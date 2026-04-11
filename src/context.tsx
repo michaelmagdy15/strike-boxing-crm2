@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
-import { Client, SalesTarget, Payment, User, PrivateSession, AuditLog, Comment, Task, UserRole, Package, ImportBatch, BrandingSettings } from './types';
+import { Client, SalesTarget, Payment, User, PrivateSession, AuditLog, Comment, Task, UserRole, Package, ImportBatch, BrandingSettings, Attendance, Branch } from './types';
 import { auth, db, signInWithGoogle, logOut } from './firebase';
 import { 
   collection, 
@@ -113,6 +113,8 @@ interface AppContextType {
   updateBranding: (branding: Partial<BrandingSettings>) => Promise<void>;
   previewRole: 'manager' | 'rep' | null;
   setPreviewRole: (role: 'manager' | 'rep' | null) => void;
+  attendances: Attendance[];
+  recordAttendance: (clientId: string, branch: Branch) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -151,6 +153,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
   const [importBatches, setImportBatches] = useState<ImportBatch[]>([]);
+  const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [branding, setBranding] = useState<BrandingSettings>({
     companyName: 'Strike',
     logoUrl: '/strikelogo.png'
@@ -293,6 +296,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setImportBatches(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ImportBatch)));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'importBatches'));
 
+    const unsubAttendances = onSnapshot(query(collection(db, 'attendance'), orderBy('date', 'desc')), (snapshot) => {
+      setAttendances(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Attendance)));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'attendance'));
+
     const unsubBranding = onSnapshot(doc(db, 'settings', 'branding'), (snapshot) => {
       if (snapshot.exists()) {
         setBranding(snapshot.data() as BrandingSettings);
@@ -309,6 +316,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubTasks();
       unsubPackages();
       unsubBatches();
+      unsubAttendances();
       unsubBranding();
     };
   }, [currentUser]);
@@ -321,7 +329,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logOut();
   };
 
-  const addAuditLog = async (action: AuditLog['action'], entityType: AuditLog['entityType'], entityId: string, details: string) => {
+  const addAuditLog = async (action: AuditLog['action'], entityType: AuditLog['entityType'], entityId: string, details: string, branch?: Branch) => {
     if (!currentUser) return;
     try {
       await addDoc(collection(db, 'auditLogs'), {
@@ -330,7 +338,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         entityType,
         entityId,
         details,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        branch: branch || undefined
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'auditLogs');
@@ -733,6 +742,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     deletePackage,
     addImportBatch,
     rollbackImport,
+    attendances,
+    recordAttendance: async (clientId: string, branch: Branch) => {
+      if (!currentUser) return;
+      try {
+        const client = clients.find(c => c.id === clientId);
+        if (!client) throw new Error("Client not found");
+
+        const attendanceData: Omit<Attendance, 'id'> = {
+          clientId,
+          branch,
+          date: new Date().toISOString(),
+          recordedBy: currentUser.id,
+          packageName: client.packageType
+        };
+
+        await addDoc(collection(db, 'attendance'), attendanceData);
+        
+        // Decrement sessions if numeric
+        if (typeof client.sessionsRemaining === 'number') {
+          await updateDoc(doc(db, 'clients', clientId), {
+            sessionsRemaining: client.sessionsRemaining - 1
+          });
+        }
+
+        await addAuditLog('CREATE', 'ATTENDANCE', clientId, `Attendance: ${client.name} at ${branch}`, branch);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.CREATE, 'attendance');
+      }
+    },
     branding,
     updateBranding,
     isAuthReady,
@@ -753,7 +791,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     branding,
     searchQuery,
     isAuthReady, 
-    previewRole
+    previewRole,
+    attendances
   ]);
 
   return (

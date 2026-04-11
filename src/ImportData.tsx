@@ -277,9 +277,10 @@ export default function ImportData({ type }: ImportDataProps) {
           sessionsRemaining = isNaN(s) ? (sessionsRemainingRaw.toString().toLowerCase().includes('no') ? 'no attend' : undefined) : s;
         }
 
-        let branch: 'COMPLEX' | 'MIVIDA' | undefined;
+        let branch: 'COMPLEX' | 'MIVIDA' | 'Strike IMPACT' | undefined;
         if (branchRaw.includes('COMPLEX')) branch = 'COMPLEX';
         else if (branchRaw.includes('MIVIDA')) branch = 'MIVIDA';
+        else if (branchRaw.includes('STRIKE IMPACT') || branchRaw.includes('IMPACT')) branch = 'Strike IMPACT';
 
         clientsToImport.push({
           id: Math.random().toString(36).substr(2, 9),

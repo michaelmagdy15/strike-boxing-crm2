@@ -286,7 +286,7 @@ export default function Leads() {
             <TableHead className="hidden xl:table-cell">Trial/Visit Date</TableHead>
             <TableHead className="hidden md:table-cell">Last Contact</TableHead>
             <TableHead>Next Reminder</TableHead>
-            {currentUser?.role === 'manager' && <TableHead className="hidden lg:table-cell">Assigned To</TableHead>}
+            {(currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && <TableHead className="hidden lg:table-cell">Assigned To</TableHead>}
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -414,6 +414,7 @@ export default function Leads() {
                               <SelectContent>
                                 <SelectItem value="COMPLEX">COMPLEX</SelectItem>
                                 <SelectItem value="MIVIDA">MIVIDA</SelectItem>
+                                <SelectItem value="Strike IMPACT">Strike IMPACT</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -603,6 +604,7 @@ export default function Leads() {
                     <SelectContent>
                       <SelectItem value="COMPLEX">COMPLEX</SelectItem>
                       <SelectItem value="MIVIDA">MIVIDA</SelectItem>
+                      <SelectItem value="Strike IMPACT">Strike IMPACT</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -634,6 +636,7 @@ export default function Leads() {
                 <SelectItem value="All">All Branches</SelectItem>
                 <SelectItem value="COMPLEX">COMPLEX</SelectItem>
                 <SelectItem value="MIVIDA">MIVIDA</SelectItem>
+                <SelectItem value="Strike IMPACT">Strike IMPACT</SelectItem>
               </SelectContent>
             </Select>
           </div>

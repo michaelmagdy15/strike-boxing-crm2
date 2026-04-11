@@ -5,7 +5,7 @@ export type LeadSource = 'Instagram' | 'WhatsApp' | 'Walk-in' | 'Social Media' |
 export type LeadStage = 'New' | 'Trial' | 'Follow Up' | 'Converted' | 'Lost';
 export type SessionType = 'Private' | 'Group';
 export type UserRole = 'manager' | 'rep' | 'admin' | 'super_admin' | 'crm_admin';
-export type Branch = 'COMPLEX' | 'MIVIDA';
+export type Branch = 'COMPLEX' | 'MIVIDA' | 'Strike IMPACT';
 
 export interface Package {
   id: string;
@@ -40,6 +40,8 @@ export interface PrivateSession {
   date: string; // ISO string
   status: 'Scheduled' | 'Attended' | 'No Show' | 'Cancelled';
   notes?: string;
+  trainerId?: string; // userId
+  branch?: Branch;
 }
 
 export interface Comment {
@@ -53,10 +55,11 @@ export interface AuditLog {
   id: string;
   userId: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE';
-  entityType: 'CLIENT' | 'PAYMENT' | 'SESSION' | 'LEAD' | 'TARGET';
+  entityType: 'CLIENT' | 'PAYMENT' | 'SESSION' | 'LEAD' | 'TARGET' | 'ATTENDANCE';
   entityId: string;
   details: string;
   timestamp: string;
+  branch?: Branch;
 }
 
 export interface Payment {
@@ -100,6 +103,15 @@ export interface Client {
   comments: Comment[];
   lastContactDate: string; // ISO string
   nextReminderDate?: string; // ISO string
+}
+
+export interface Attendance {
+  id: string;
+  clientId: string;
+  branch: Branch;
+  date: string; // ISO string
+  recordedBy: string; // userId
+  packageName?: string;
 }
 
 export type TaskStatus = 'Pending' | 'In Progress' | 'Completed';
