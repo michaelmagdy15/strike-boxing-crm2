@@ -188,15 +188,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             } else if (firebaseUser.email === "magd.gallab@gmail.com" && userData.role !== 'super_admin') {
               userData.role = 'super_admin';
               await updateDoc(userDocRef, { role: 'super_admin' });
-            } else if (firebaseUser.email === "samahany614@gmail.com" && userData.role !== 'crm_admin') {
-              userData.role = 'crm_admin';
-              await updateDoc(userDocRef, { role: 'crm_admin' });
             }
             setCurrentUser(userData);
           } else {
             // Check if user was invited by email
             let role: UserRole = 'rep';
-            if (firebaseUser.email === "michaelmitry13@gmail.com" || firebaseUser.email === "samahany614@gmail.com") {
+            if (firebaseUser.email === "michaelmitry13@gmail.com") {
               role = 'crm_admin';
             } else if (firebaseUser.email === "magd.gallab@gmail.com") {
               role = 'super_admin';
