@@ -90,6 +90,7 @@ service cloud.firestore {
 
     match /{path=**}/comments/{commentId} {
       allow read: if isAuthenticated();
+      allow delete: if isAdmin();
     }
 
     match /users/{userId} {
