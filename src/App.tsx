@@ -163,7 +163,7 @@ function AppContent() {
             <Dashboard />
           </TabsContent>
 
-          {(currentUser.role === 'manager' || currentUser.role === 'rep' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') && (
+          {(currentUser.role === 'manager' || currentUser.role === 'rep' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') && (
             <TabsContent value="leads" className="m-0 animate-in fade-in-50 duration-500">
               <Leads />
             </TabsContent>
