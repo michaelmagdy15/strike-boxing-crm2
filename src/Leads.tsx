@@ -714,7 +714,7 @@ export default function Leads() {
               </Select>
             </div>
 
-            {currentUser?.role === 'manager' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin' ? (
+            {currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin' ? (
               <div className="flex items-center gap-2 bg-primary-foreground/10 p-1 rounded-md">
                 <UserCheck className="h-4 w-4" />
                 <Select onValueChange={handleBulkAssign}>

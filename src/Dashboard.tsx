@@ -97,7 +97,7 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Sales Target</CardTitle>
-            {currentUser?.role === 'manager' && (
+            {(currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
               <CardAction>
         <Dialog open={isTargetDialogOpen} onOpenChange={setIsTargetDialogOpen}>
                   <DialogTrigger
