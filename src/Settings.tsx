@@ -5,15 +5,23 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Save, Building2, Image as ImageIcon, Users, Package } from 'lucide-react';
+import { Save, Building2, Image as ImageIcon, Users, Package, AlertTriangle, ShieldAlert, Trash2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import UsersManagement from './Users';
 import Packages from './Packages';
 
 export default function Settings() {
-  const { branding, updateBranding } = useAppContext();
+  const { branding, updateBranding, currentUser, wipeSystem } = useAppContext();
   const [companyName, setCompanyName] = useState(branding.companyName);
   const [logoUrl, setLogoUrl] = useState(branding.logoUrl);
   const [isSaving, setIsSaving] = useState(false);
+  
+  const [isWipeDialogOpen, setIsWipeDialogOpen] = useState(false);
+  const [wipeStep, setWipeStep] = useState(1);
+  const [wipeConfirmText, setWipeConfirmText] = useState('');
+  const [isWiping, setIsWiping] = useState(false);
+
+  const canWipe = currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin' || currentUser?.email === 'michaelmitry13@gmail.com';
 
   React.useEffect(() => {
     setCompanyName(branding.companyName);
@@ -49,6 +57,12 @@ export default function Settings() {
             <Package className="h-4 w-4" />
             Packages
           </TabsTrigger>
+          {canWipe && (
+            <TabsTrigger value="danger" className="flex items-center gap-2 text-destructive data-[state=active]:bg-destructive data-[state=active]:text-destructive-foreground">
+              <AlertTriangle className="h-4 w-4" />
+              Danger Zone
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="branding" className="space-y-6 animate-in fade-in-50 duration-500">
@@ -143,7 +157,101 @@ export default function Settings() {
         <TabsContent value="packages" className="animate-in fade-in-50 duration-500">
           <Packages />
         </TabsContent>
+
+        {canWipe && (
+          <TabsContent value="danger" className="animate-in fade-in-50 duration-500">
+            <Card className="border-destructive/50 bg-destructive/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-destructive">
+                  <ShieldAlert className="h-5 w-5" />
+                  Master System Reset
+                </CardTitle>
+                <CardDescription className="text-destructive/80 font-medium">
+                  This area contains highly destructive actions. Proceed with extreme caution.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="p-4 border border-destructive/20 rounded-lg bg-background/50 space-y-3">
+                  <h4 className="font-bold text-destructive flex items-center gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    Wipe All CRM Data
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    This will permanently delete all Clients, Leads, Payments, Attendance records, and Tasks. 
+                    This action is irreversible. Admins and Branding settings will be preserved.
+                  </p>
+                  <Button 
+                    variant="destructive" 
+                    className="font-bold"
+                    onClick={() => {
+                      setWipeStep(1);
+                      setIsWipeDialogOpen(true);
+                    }}
+                  >
+                    Wipe System Content
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
+
+      <Dialog open={isWipeDialogOpen} onOpenChange={setIsWipeDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              {wipeStep === 1 ? 'Confirm Reset' : 'Final Verification'}
+            </DialogTitle>
+            <DialogDescription>
+              {wipeStep === 1 
+                ? 'Are you absolutely sure you want to delete all CRM data? This cannot be undone.' 
+                : 'To prevent accidental deletion, please type "RESET SYSTEM" in the box below to confirm.'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {wipeStep === 2 && (
+            <div className="py-4">
+              <Input 
+                value={wipeConfirmText} 
+                onChange={(e) => setWipeConfirmText(e.target.value.toUpperCase())}
+                placeholder="RESET SYSTEM"
+                className="font-mono text-center tracking-widest"
+              />
+            </div>
+          )}
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setIsWipeDialogOpen(false)} disabled={isWiping}>
+              Cancel
+            </Button>
+            {wipeStep === 1 ? (
+              <Button variant="destructive" onClick={() => setWipeStep(2)}>
+                Continue to Final Step
+              </Button>
+            ) : (
+              <Button 
+                variant="destructive" 
+                disabled={wipeConfirmText !== 'RESET SYSTEM' || isWiping}
+                onClick={async () => {
+                  setIsWiping(true);
+                  try {
+                    await wipeSystem();
+                    setIsWipeDialogOpen(false);
+                    window.location.reload(); // Refresh to clear local state
+                  } catch (e) {
+                    alert("Wipe failed: " + (e as Error).message);
+                    setIsWiping(false);
+                  }
+                }}
+              >
+                {isWiping ? 'Wiping...' : 'Wipe Everything Now'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

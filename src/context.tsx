@@ -115,6 +115,7 @@ interface AppContextType {
   setPreviewRole: (role: 'manager' | 'rep' | null) => void;
   attendances: Attendance[];
   recordAttendance: (clientId: string, branch: Branch) => Promise<void>;
+  wipeSystem: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -775,7 +776,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateBranding,
     isAuthReady,
     previewRole,
-    setPreviewRole
+    setPreviewRole,
+    wipeSystem: async () => {
+      if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'crm_admin' && currentUser.email !== 'michaelmitry13@gmail.com')) {
+        throw new Error("Unauthorized: Only super admins can wipe the system.");
+      }
+
+      try {
+        const collectionsToWipe = [
+          'clients',
+          'payments',
+          'attendance',
+          'sessions',
+          'tasks',
+          'importBatches',
+          'auditLogs'
+        ];
+
+        // Wipe main collections in parallel batches
+        await Promise.all(collectionsToWipe.map(async (collName) => {
+          const snapshot = await getDocs(collection(db, collName));
+          if (snapshot.empty) return;
+          
+          let i = 0;
+          let batch = writeBatch(db);
+          for (const doc of snapshot.docs) {
+            batch.delete(doc.ref);
+            i++;
+            if (i === 450) { // Limit batch size
+              await batch.commit();
+              batch = writeBatch(db);
+              i = 0;
+            }
+          }
+          if (i > 0) await batch.commit();
+        }));
+
+        // Wipe subcollections like comments
+        const commentsSnapshot = await getDocs(collectionGroup(db, 'comments'));
+        if (!commentsSnapshot.empty) {
+          let i = 0;
+          let batch = writeBatch(db);
+          for (const doc of commentsSnapshot.docs) {
+            batch.delete(doc.ref);
+            i++;
+            if (i === 450) {
+              await batch.commit();
+              batch = writeBatch(db);
+              i = 0;
+            }
+          }
+          if (i > 0) await batch.commit();
+        }
+
+        // Reset counters
+        await setDoc(doc(db, 'counters', 'clients'), { lastId: 111 }, { merge: true });
+
+        await addAuditLog('DELETE', 'CLIENT', 'system', `CRITICAL: Full system wipe performed by ${currentUser.name}`);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, 'system');
+        throw error;
+      }
+    }
   }), [
     currentUser, 
     effectiveRole,
