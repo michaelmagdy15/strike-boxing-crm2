@@ -1,26 +1,161 @@
-import React, { useState } from 'react';
-import { useAppContext } from './context';
+import React, { useState, useMemo, useCallback } from 'react';
+import { useCRMData, useAuth } from './context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, parseISO, isBefore, addDays } from 'date-fns';
-import { Client, LeadCategory, LeadInterest, LeadSource, LeadStage, Branch } from './types';
-import { Phone, Calendar, MessageSquare, Plus, FileSpreadsheet, Download, UserCheck, ArrowRight } from 'lucide-react';
+import { Client, LeadCategory, LeadInterest, LeadSource, LeadStage, Branch, isAdmin } from './types';
+import { Phone, Calendar, MessageSquare, Plus, Download, UserCheck, ArrowRight, Trash2, ChevronLeft, ChevronRight, Target, Zap, Globe, Info, Clock, UserPlus, Search } from 'lucide-react';
 import ImportData from './ImportData';
 import ImportHistory from './ImportHistory';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { motion, AnimatePresence } from 'motion/react';
+
+// Memoized Table Row for better performance
+const LeadTableRow = React.memo(({ 
+  lead, 
+  isSelected, 
+  onSelect, 
+  onDelete, 
+  onUpdate,
+  onLogActivity,
+  currentUser, 
+  users, 
+  isSuperUser
+}: { 
+  lead: Client, 
+  isSelected: boolean, 
+  onSelect: (id: string, checked: boolean) => void,
+  onDelete: (id: string) => void,
+  onUpdate: (id: string, updates: Partial<Client>) => void,
+  onLogActivity: (lead: Client) => void,
+  currentUser: any,
+  users: any[],
+  isSuperUser: boolean
+}) => {
+  const isReminderOverdue = lead.nextReminderDate ? isBefore(parseISO(lead.nextReminderDate), new Date()) : false;
+  const isReminderSoon = lead.nextReminderDate ? isBefore(parseISO(lead.nextReminderDate), addDays(new Date(), 3)) : false;
+  const isReminderDue = lead.nextReminderDate ? isBefore(parseISO(lead.nextReminderDate), addDays(new Date(), 3)) : false;
+
+  const getInterestBadge = (interest?: LeadInterest) => {
+    switch (interest) {
+      case 'Interested': return <Badge className="bg-emerald-500/10 text-emerald-600 border-none font-black text-[10px] uppercase tracking-widest">Interested</Badge>;
+      case 'Not Interested': return <Badge variant="destructive" className="font-black text-[10px] uppercase tracking-widest">Not Interested</Badge>;
+      case 'Pending': return <Badge variant="secondary" className="font-black text-[10px] uppercase tracking-widest">Pending</Badge>;
+      default: return <Badge variant="outline" className="font-black text-[10px] uppercase tracking-widest">Unknown</Badge>;
+    }
+  };
+
+  const rowBg = isReminderDue 
+    ? (isReminderOverdue ? 'bg-red-500/5 hover:bg-red-500/10' : 'bg-amber-500/5 hover:bg-amber-500/10') 
+    : 'hover:bg-white/5';
+
+  return (
+    <TableRow className={`border-white/5 transition-colors group ${rowBg}`}>
+      <TableCell>
+        <Checkbox 
+          checked={isSelected}
+          onCheckedChange={(checked) => onSelect(lead.id, !!checked)}
+          className="border-white/20 data-[state=checked]:bg-primary"
+        />
+      </TableCell>
+      <TableCell>
+        <div className="flex flex-col">
+          <span className="font-black text-sm tracking-tight uppercase">{lead.name}</span>
+          <span className="text-[10px] font-bold text-muted-foreground opacity-60 uppercase">{lead.category || 'NO CATEGORY'}</span>
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center font-bold text-xs opacity-80 letter-spacing-tight">
+          <Phone className="h-3 w-3 mr-2 opacity-40" />
+          {lead.phone}
+        </div>
+      </TableCell>
+      <TableCell className="hidden md:table-cell">
+        <Badge variant="outline" className="font-black text-[10px] uppercase border-white/10 bg-white/5">{lead.branch || 'UNASSIGNED'}</Badge>
+      </TableCell>
+      <TableCell className="hidden md:table-cell">
+        <Badge variant="outline" className="font-black text-[10px] uppercase border-white/10">{lead.source || 'UNKNOWN'}</Badge>
+      </TableCell>
+      <TableCell>
+        <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] uppercase tracking-widest">
+          {lead.stage || 'NEW'}
+        </Badge>
+      </TableCell>
+      <TableCell className="hidden lg:table-cell">{getInterestBadge(lead.interest)}</TableCell>
+      <TableCell className="hidden xl:table-cell">
+        {lead.trialDate || lead.expectedVisitDate ? (
+          <div className="flex items-center font-bold text-xs">
+            <Calendar className="h-3 w-3 mr-2 text-primary opacity-60" />
+            {format(parseISO((lead.trialDate || lead.expectedVisitDate)!), 'MMM d, yyyy')}
+          </div>
+        ) : (
+          <span className="text-muted-foreground text-[10px] font-black uppercase tracking-widest opacity-30">TBD</span>
+        )}
+      </TableCell>
+      <TableCell>
+        {lead.nextReminderDate ? (
+          <div className="flex flex-col space-y-1">
+            <span className="text-xs font-bold">
+              {format(parseISO(lead.nextReminderDate), 'MMM d, yyyy')}
+            </span>
+            {isReminderOverdue ? (
+              <Badge variant="destructive" className="w-fit text-[9px] h-4 px-1 font-black uppercase letter-spacing-widest">OVERDUE</Badge>
+            ) : isReminderSoon ? (
+              <Badge className="bg-amber-500 hover:bg-amber-600 w-fit text-[9px] h-4 px-1 font-black uppercase letter-spacing-widest">URGENT</Badge>
+            ) : null}
+          </div>
+        ) : (
+          <span className="text-muted-foreground text-[10px] font-black uppercase tracking-widest opacity-30">—</span>
+        )}
+      </TableCell>
+      {isAdmin(currentUser?.role) && (
+        <TableCell className="hidden lg:table-cell">
+          <Select 
+            defaultValue={lead.assignedTo || 'unassigned'}
+            onValueChange={(v) => onUpdate(lead.id, { assignedTo: v === 'unassigned' ? undefined : v })}
+          >
+            <SelectTrigger className="w-[120px] h-8 text-[10px] font-black uppercase tracking-tight bg-white/5 border-white/10">
+              <SelectValue placeholder="REP" />
+            </SelectTrigger>
+            <SelectContent className="glass-card border-white/20">
+              <SelectItem value="unassigned" className="text-[10px] font-black uppercase">UNASSIGNED</SelectItem>
+              {users.filter(u => u.role === 'rep').map(rep => (
+                <SelectItem key={rep.id} value={rep.id} className="text-[10px] font-black uppercase">{rep.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </TableCell>
+      )}
+      <TableCell>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={() => onLogActivity(lead)} className="h-9 font-black text-[10px] uppercase opacity-60 hover:opacity-100 hover:bg-white/5">
+            <MessageSquare className="h-4 w-4 mr-1" />
+            LOG
+          </Button>
+          {isSuperUser && (
+            <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive/40 hover:text-destructive hover:bg-destructive/5" onClick={() => onDelete(lead.id)}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+});
 
 export default function Leads() {
-  const { clients, addClient, updateClient, deleteMultipleClients, deleteClient, addComment, currentUser, users, isSuperUser } = useAppContext();
+  const { clients, addClient, updateClient, deleteMultipleClients, deleteClient, addComment } = useCRMData();
+  const { isSuperUser, currentUser, users } = useAuth();
+  
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [selectedLead, setSelectedLead] = useState<Client | null>(null);
   const [newComment, setNewComment] = useState('');
@@ -46,11 +181,11 @@ export default function Leads() {
   const [leadToDelete, setLeadToDelete] = useState<string | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const itemsPerPage = 15;
 
-  const allLeads = clients.filter(c => c.status === 'Lead');
+  const allLeads = useMemo(() => clients.filter(c => c.status === 'Lead'), [clients]);
   
-  const getFilteredLeads = () => {
+  const filteredLeads = useMemo(() => {
     let filtered = allLeads;
     
     // Tab filtering
@@ -86,27 +221,37 @@ export default function Leads() {
     }
 
     return filtered;
-  };
+  }, [allLeads, activeTab, searchTerm, filterBranch, filterStage, filterInterest, filterAssignedTo]);
 
-  const leads = getFilteredLeads();
-  const totalPages = Math.ceil(leads.length / itemsPerPage);
-  const paginatedLeads = leads.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
+  const paginatedLeads = useMemo(() => {
+    return filteredLeads.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  }, [filteredLeads, currentPage, itemsPerPage]);
 
-  const handleSelectAll = (checked: boolean) => {
+  const stats = useMemo(() => {
+    return {
+        total: allLeads.length,
+        new: allLeads.filter(l => l.stage === 'New').length,
+        trials: allLeads.filter(l => l.stage === 'Trial').length,
+        interested: allLeads.filter(l => l.interest === 'Interested').length
+    };
+  }, [allLeads]);
+
+  const handleSelectAll = useCallback((checked: boolean) => {
     if (checked) {
       setSelectedLeadIds(paginatedLeads.map(l => l.id));
     } else {
       setSelectedLeadIds([]);
     }
-  };
+  }, [paginatedLeads]);
 
-  const handleSelectLead = (id: string, checked: boolean) => {
+  const handleSelectLead = useCallback((id: string, checked: boolean) => {
     if (checked) {
       setSelectedLeadIds(prev => [...prev, id]);
     } else {
       setSelectedLeadIds(prev => prev.filter(i => i !== id));
     }
-  };
+  }, []);
 
   const handleBulkStageUpdate = async (stage: LeadStage) => {
     for (const id of selectedLeadIds) {
@@ -122,19 +267,17 @@ export default function Leads() {
     setSelectedLeadIds([]);
   };
 
-  const handleBulkDelete = async () => {
-    setIsBulkDeleteDialogOpen(true);
-  };
+  const handleBulkDelete = () => setIsBulkDeleteDialogOpen(true);
 
   const confirmBulkDelete = async () => {
     await deleteMultipleClients(selectedLeadIds);
     setSelectedLeadIds([]);
   };
 
-  const handleDeleteLead = async (id: string) => {
+  const handleDeleteLead = useCallback((id: string) => {
     setLeadToDelete(id);
     setIsDeleteDialogOpen(true);
-  };
+  }, []);
 
   const confirmDeleteLead = async () => {
     if (leadToDelete) {
@@ -143,9 +286,7 @@ export default function Leads() {
     }
   };
 
-  const handleDeleteAllLeads = async () => {
-    setIsDeleteAllLeadsDialogOpen(true);
-  };
+  const handleDeleteAllLeads = () => setIsDeleteAllLeadsDialogOpen(true);
 
   const confirmDeleteAllLeads = async () => {
     const allLeadIds = allLeads.map(l => l.id);
@@ -153,19 +294,72 @@ export default function Leads() {
       await deleteMultipleClients(allLeadIds);
       setSelectedLeadIds([]);
     }
+    setIsDeleteAllLeadsDialogOpen(false);
   };
 
-  // Reset page when tab changes
+  const handleAddComment = () => {
+    if (selectedLead && newComment && currentUser) {
+      addComment(selectedLead.id, newComment, currentUser.name);
+      setNewComment('');
+    }
+  };
+
+  const handleAddLead = () => {
+    if (newLeadName && newLeadPhone) {
+      const newLead: Client = {
+        id: Math.random().toString(36).substr(2, 9) as any,
+        name: newLeadName,
+        phone: newLeadPhone,
+        status: 'Lead',
+        source: newLeadSource,
+        branch: newLeadBranch || undefined,
+        stage: 'New',
+        comments: [],
+        assignedTo: (currentUser?.role === 'rep' ? currentUser.id : undefined) as any,
+        lastContactDate: new Date().toISOString().split('T')[0],
+        nextReminderDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+      };
+      addClient(newLead);
+      setIsNewLeadOpen(false);
+      setNewLeadName('');
+      setNewLeadPhone('');
+      setNewLeadSource('Instagram');
+      setNewLeadBranch('');
+    }
+  };
+
+  const handleStageChange = useCallback((lead: Client, newStage: LeadStage) => {
+    if (newStage === 'Converted') {
+      setLeadToConvert(lead);
+      setIsConvertDialogOpen(true);
+    } else {
+      updateClient(lead.id, { stage: newStage });
+    }
+  }, [updateClient]);
+
+  const confirmConversion = () => {
+    if (leadToConvert) {
+      updateClient(leadToConvert.id, { 
+        stage: 'Converted', 
+        status: 'Active',
+        startDate: new Date().toISOString()
+      });
+      setIsConvertDialogOpen(false);
+      setLeadToConvert(null);
+    }
+  };
+
+  // Reset page when filters change
   React.useEffect(() => {
     setCurrentPage(1);
     setSelectedLeadIds([]);
-  }, [activeTab]);
+  }, [activeTab, searchTerm, filterBranch, filterStage, filterInterest, filterAssignedTo]);
 
   const exportToCSV = () => {
     const headers = ['Name', 'Phone', 'Branch', 'Source', 'Stage', 'Interest', 'Category', 'Trial Date', 'Last Contact', 'Next Reminder', 'Assigned To'];
     const csvRows = [
       headers.join(','),
-      ...leads.map(l => {
+      ...filteredLeads.map(l => {
         const assignedUser = users.find(u => u.id === l.assignedTo)?.name || 'Unassigned';
         return [
           `"${l.name}"`,
@@ -193,651 +387,477 @@ export default function Leads() {
     link.click();
     document.body.removeChild(link);
   };
-  
-  const handleAddComment = () => {
-    if (selectedLead && newComment && currentUser) {
-      addComment(selectedLead.id, newComment, currentUser.name);
-      setNewComment('');
-    }
-  };
-
-  const handleAddLead = () => {
-    if (newLeadName && newLeadPhone) {
-      const newLead: Client = {
-        id: Math.random().toString(36).substr(2, 9),
-        name: newLeadName,
-        phone: newLeadPhone,
-        status: 'Lead',
-        source: newLeadSource,
-        branch: newLeadBranch || undefined,
-        stage: 'New',
-        comments: [],
-        assignedTo: currentUser?.role === 'rep' ? currentUser.id : undefined,
-        lastContactDate: new Date().toISOString().split('T')[0],
-        nextReminderDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-      };
-      addClient(newLead);
-      setIsNewLeadOpen(false);
-      setNewLeadName('');
-      setNewLeadPhone('');
-      setNewLeadSource('Instagram');
-      setNewLeadBranch('');
-    }
-  };
-
-  const handleStageChange = (lead: Client, newStage: LeadStage) => {
-    if (newStage === 'Converted') {
-      setLeadToConvert(lead);
-      setIsConvertDialogOpen(true);
-    } else {
-      updateClient(lead.id, { stage: newStage });
-    }
-  };
-
-  const confirmConversion = () => {
-    if (leadToConvert) {
-      updateClient(leadToConvert.id, { 
-        stage: 'Converted', 
-        status: 'Active',
-        startDate: new Date().toISOString()
-      });
-      setIsConvertDialogOpen(false);
-      setLeadToConvert(null);
-    }
-  };
-
-  const getInterestBadge = (interest?: LeadInterest) => {
-    switch (interest) {
-      case 'Interested': return <Badge className="bg-green-500">Interested</Badge>;
-      case 'Not Interested': return <Badge variant="destructive">Not Interested</Badge>;
-      case 'Pending': return <Badge variant="secondary">Pending</Badge>;
-      default: return <Badge variant="outline">Unknown</Badge>;
-    }
-  };
-
-  // Check if reminder is due (overdue or due within the next 3 days)
-  const isReminderDue = (lead: Client) => {
-    if (!lead.nextReminderDate) return false;
-    const nextReminder = parseISO(lead.nextReminderDate);
-    const now = new Date();
-    const threeDaysFromNow = addDays(now, 3);
-    
-    return isBefore(nextReminder, threeDaysFromNow);
-  };
-
-  const renderLeadsTable = (leadsData: Client[]) => (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[50px]">
-              <Checkbox 
-                checked={selectedLeadIds.length === leadsData.length && leadsData.length > 0}
-                onCheckedChange={(checked) => handleSelectAll(!!checked)}
-              />
-            </TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead>Phone</TableHead>
-            <TableHead className="hidden md:table-cell">Branch</TableHead>
-            <TableHead className="hidden md:table-cell">Source</TableHead>
-            <TableHead>Stage</TableHead>
-            <TableHead className="hidden lg:table-cell">Interest</TableHead>
-            <TableHead className="hidden lg:table-cell">Category</TableHead>
-            <TableHead className="hidden xl:table-cell">Trial/Visit Date</TableHead>
-            <TableHead className="hidden md:table-cell">Last Contact</TableHead>
-            <TableHead>Next Reminder</TableHead>
-            {currentUser?.role === 'manager' && <TableHead className="hidden lg:table-cell">Assigned To</TableHead>}
-            <TableHead>Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {leadsData.map(lead => (
-            <TableRow key={lead.id} className={isReminderDue(lead) ? (isBefore(parseISO(lead.nextReminderDate!), new Date()) ? 'bg-red-50/50 dark:bg-red-900/10' : 'bg-amber-50/50 dark:bg-amber-900/10') : ''}>
-              <TableCell>
-                <Checkbox 
-                  checked={selectedLeadIds.includes(lead.id)}
-                  onCheckedChange={(checked) => handleSelectLead(lead.id, !!checked)}
-                />
-              </TableCell>
-              <TableCell className="font-medium">
-                {lead.name}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center">
-                  <Phone className="h-3 w-3 mr-2 text-muted-foreground" />
-                  {lead.phone}
-                </div>
-              </TableCell>
-              <TableCell className="hidden md:table-cell">
-                <Badge variant="secondary">{lead.branch || 'Unassigned'}</Badge>
-              </TableCell>
-              <TableCell className="hidden md:table-cell">
-                <Badge variant="outline">{lead.source || 'Unknown'}</Badge>
-              </TableCell>
-              <TableCell>
-                <Badge variant="secondary">{lead.stage || 'New'}</Badge>
-              </TableCell>
-              <TableCell className="hidden lg:table-cell">{getInterestBadge(lead.interest)}</TableCell>
-              <TableCell className="hidden lg:table-cell">
-                <Badge variant="outline">{lead.category || 'None'}</Badge>
-              </TableCell>
-              <TableCell className="hidden xl:table-cell">
-                {lead.trialDate || lead.expectedVisitDate ? (
-                  <div className="flex items-center">
-                    <Calendar className="h-3 w-3 mr-2 text-blue-500" />
-                    {format(parseISO((lead.trialDate || lead.expectedVisitDate)!), 'MMM d, yyyy')}
-                  </div>
-                ) : (
-                  <span className="text-muted-foreground text-sm">Not set</span>
-                )}
-              </TableCell>
-              <TableCell className="hidden md:table-cell">
-                {lead.lastContactDate ? format(parseISO(lead.lastContactDate), 'MMM d') : 'Never'}
-              </TableCell>
-               <TableCell>
-                {lead.nextReminderDate ? (
-                  <div className="flex flex-col space-y-1">
-                    <span className="text-sm">
-                      {format(parseISO(lead.nextReminderDate), 'MMM d, yyyy')}
-                    </span>
-                    {isBefore(parseISO(lead.nextReminderDate), new Date()) ? (
-                      <Badge variant="destructive" className="w-fit text-[10px] h-4 px-1">OVERDUE</Badge>
-                    ) : isBefore(parseISO(lead.nextReminderDate), addDays(new Date(), 3)) ? (
-                      <Badge className="bg-amber-500 hover:bg-amber-600 w-fit text-[10px] h-4 px-1">DUE SOON</Badge>
-                    ) : null}
-                  </div>
-                ) : (
-                  <span className="text-muted-foreground text-sm">Not set</span>
-                )}
-              </TableCell>
-              {(currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
-                <TableCell className="hidden lg:table-cell">
-                  <Select 
-                    defaultValue={lead.assignedTo || 'unassigned'}
-                    onValueChange={(v) => updateClient(lead.id, { assignedTo: v === 'unassigned' ? undefined : v })}
-                  >
-                    <SelectTrigger className="w-[130px] h-8 text-xs">
-                      <SelectValue placeholder="Assign rep" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unassigned">Unassigned</SelectItem>
-                      {users.filter(u => u.role === 'rep').map(rep => (
-                        <SelectItem key={rep.id} value={rep.id}>{rep.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-              )}
-                <TableCell>
-                  <Dialog>
-                    <DialogTrigger
-                      render={
-                        <Button variant="ghost" size="sm" onClick={() => setSelectedLead(lead)}>
-                          <MessageSquare className="h-4 w-4 mr-2" />
-                          <span className="hidden sm:inline">Log Activity</span>
-                        </Button>
-                      }
-                    />
-                  <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Lead Details: {lead.name}</DialogTitle>
-                    </DialogHeader>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 py-4">
-                      <div className="md:col-span-7 space-y-6">
-                        <h3 className="font-semibold text-base border-b pb-2">Update Status</h3>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                          <div className="space-y-2">
-                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Source</Label>
-                            <Select 
-                              defaultValue={lead.source} 
-                              onValueChange={(v) => updateClient(lead.id, { source: v as LeadSource })}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select source" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Instagram">Instagram</SelectItem>
-                                <SelectItem value="WhatsApp">WhatsApp</SelectItem>
-                                <SelectItem value="Walk-in">Walk-in</SelectItem>
-                                <SelectItem value="Social Media">Social Media</SelectItem>
-                                <SelectItem value="Other">Other</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Branch</Label>
-                            <Select 
-                              defaultValue={lead.branch || ''} 
-                              onValueChange={(v) => updateClient(lead.id, { branch: v as Branch })}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select branch" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="COMPLEX">COMPLEX</SelectItem>
-                                <SelectItem value="MIVIDA">MIVIDA</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                          <div className="space-y-2">
-                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Stage</Label>
-                            <Select 
-                              defaultValue={lead.stage} 
-                              onValueChange={(v) => handleStageChange(lead, v as LeadStage)}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select stage" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="New">New</SelectItem>
-                                <SelectItem value="Trial">Int. & Trial</SelectItem>
-                                <SelectItem value="Follow Up">Follow Up</SelectItem>
-                                <SelectItem value="Converted">Converted</SelectItem>
-                                <SelectItem value="Lost">Lost</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Interest Level</Label>
-                            <Select 
-                              defaultValue={lead.interest} 
-                              onValueChange={(v) => updateClient(lead.id, { interest: v as LeadInterest })}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select interest" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Interested">Interested</SelectItem>
-                                <SelectItem value="Pending">Pending</SelectItem>
-                                <SelectItem value="Not Interested">Not Interested</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Category / Reason</Label>
-                            <Select 
-                              defaultValue={lead.category}
-                              onValueChange={(v) => updateClient(lead.id, { category: v as LeadCategory })}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select category" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Out of area zone">Out of area zone</SelectItem>
-                                <SelectItem value="Social class">Social class</SelectItem>
-                                <SelectItem value="Price">Price</SelectItem>
-                                <SelectItem value="No answer">No answer</SelectItem>
-                                <SelectItem value="Other">Other</SelectItem>
-                                <SelectItem value="None">None</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                          <div className="space-y-2">
-                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Trial / Expected Visit Date</Label>
-                            <Input 
-                              type="date" 
-                              className="w-full"
-                              defaultValue={lead.trialDate || lead.expectedVisitDate ? format(parseISO((lead.trialDate || lead.expectedVisitDate)!), 'yyyy-MM-dd') : ''}
-                              onChange={(e) => updateClient(lead.id, { trialDate: new Date(e.target.value).toISOString(), expectedVisitDate: new Date(e.target.value).toISOString() })}
-                            />
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Next Reminder Date</Label>
-                            <Input 
-                              type="date" 
-                              className="w-full"
-                              defaultValue={lead.nextReminderDate ? format(parseISO(lead.nextReminderDate), 'yyyy-MM-dd') : ''}
-                              onChange={(e) => updateClient(lead.id, { nextReminderDate: new Date(e.target.value).toISOString() })}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="md:col-span-5 space-y-6 md:border-l md:pl-6">
-                        <h3 className="font-semibold text-base border-b pb-2">Audit Log & Comments</h3>
-                        <div className="h-[300px] overflow-y-auto space-y-3 pr-2">
-                          {lead.comments.length > 0 ? (
-                            lead.comments.map(comment => (
-                              <div key={comment.id} className="bg-muted/50 p-3 rounded-lg text-sm border border-border/50">
-                                <p className="leading-relaxed">{comment.text}</p>
-                                <div className="flex justify-between mt-2 text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
-                                  <span>{comment.author}</span>
-                                  <span>{format(parseISO(comment.date), 'MMM d, h:mm a')}</span>
-                                </div>
-                              </div>
-                            ))
-                          ) : (
-                            <div className="h-full flex items-center justify-center text-muted-foreground italic text-sm">
-                              No comments yet.
-                            </div>
-                          )}
-                        </div>
-                        
-                        <div className="space-y-3 pt-2">
-                          <Textarea 
-                            placeholder="Add a comment..." 
-                            className="min-h-[100px] resize-none"
-                            value={newComment}
-                            onChange={(e) => setNewComment(e.target.value)}
-                          />
-                          <Button className="w-full shadow-sm" onClick={handleAddComment}>Add Comment</Button>
-                        </div>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-                {isSuperUser && (
-                  <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteLead(lead.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
 
   return (
-    <div className="space-y-4 relative">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h2 className="text-2xl font-bold tracking-tight">Leads Follow-up</h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={exportToCSV}>
-            <Download className="mr-2 h-4 w-4" />
-            Export CSV
+    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
+        <div>
+            <h2 className="text-4xl font-black tracking-tighter uppercase mb-2">Intelligence Pipeline</h2>
+            <div className="flex items-center gap-4">
+                <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] tracking-widest px-3 py-1">OPERATIONAL</Badge>
+                <div className="flex items-center gap-1.5 opacity-40">
+                    <Target className="h-3.5 w-3.5" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">{filteredLeads.length} Targets Found</span>
+                </div>
+            </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+          <Button variant="outline" onClick={exportToCSV} className="h-12 px-6 rounded-2xl border-none bg-white dark:bg-zinc-900 font-black text-[10px] uppercase tracking-widest shadow-xl hover:shadow-2xl transition-all">
+            <Download className="mr-3 h-4 w-4" /> Export Intel
           </Button>
-          <ImportData type="Lead" />
-          <ImportHistory />
+          <div className="flex bg-white dark:bg-zinc-900 rounded-2xl p-1 shadow-xl">
+            <ImportData type="Lead" />
+            <div className="w-[1px] bg-zinc-100 dark:bg-zinc-800 my-2 mx-1" />
+            <ImportHistory />
+          </div>
           {isSuperUser && (
-            <Button variant="destructive" size="sm" onClick={handleDeleteAllLeads}>
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete All Leads
+            <Button variant="ghost" onClick={handleDeleteAllLeads} className="h-12 px-6 rounded-2xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 font-black text-[10px] uppercase tracking-widest">
+              <Trash2 className="mr-3 h-4 w-4" /> Purge Database
             </Button>
           )}
           <Dialog open={isNewLeadOpen} onOpenChange={setIsNewLeadOpen}>
-            <DialogTrigger
-              render={
-                <Button size="sm">
-                  <Plus className="mr-2 h-4 w-4" /> Add Lead
+            <DialogTrigger asChild>
+                <Button className="h-12 px-8 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
+                  <Plus className="mr-3 h-4 w-4" /> Register New Target
                 </Button>
-              }
-            />
-            <DialogContent className="w-[95vw] max-w-md max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Add New Lead</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Name</Label>
-                  <Input id="name" placeholder="Client Name" value={newLeadName} onChange={(e) => setNewLeadName(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Phone</Label>
-                  <Input id="phone" placeholder="+20 100..." value={newLeadPhone} onChange={(e) => setNewLeadPhone(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Source</Label>
-                  <Select value={newLeadSource} onValueChange={(v) => setNewLeadSource(v as LeadSource)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select source" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Instagram">Instagram</SelectItem>
-                      <SelectItem value="WhatsApp">WhatsApp</SelectItem>
-                      <SelectItem value="Walk-in">Walk-in</SelectItem>
-                      <SelectItem value="Social Media">Social Media</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Branch</Label>
-                  <Select value={newLeadBranch} onValueChange={(v) => setNewLeadBranch(v as Branch)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select branch" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="COMPLEX">COMPLEX</SelectItem>
-                      <SelectItem value="MIVIDA">MIVIDA</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button className="w-full" onClick={handleAddLead}>Save Lead</Button>
+            </DialogTrigger>
+            <DialogContent className="rounded-[40px] border-none shadow-[0_40px_100px_rgba(0,0,0,0.5)] p-0 overflow-hidden bg-white dark:bg-zinc-950">
+              <div className="p-10 space-y-8">
+                 <div className="flex items-center gap-4">
+                    <div className="h-14 w-14 bg-primary/10 rounded-2xl flex items-center justify-center">
+                        <UserPlus className="h-7 w-7 text-primary" />
+                    </div>
+                    <div>
+                        <DialogTitle className="text-3xl font-black tracking-tighter uppercase">New Intel</DialogTitle>
+                        <p className="text-zinc-500 font-bold text-xs uppercase tracking-widest">Initialize Target Identity</p>
+                    </div>
+                 </div>
+                 <div className="grid grid-cols-2 gap-8">
+                    <div className="space-y-3">
+                         <Label className="font-black text-[10px] uppercase tracking-widest opacity-40">Alias/Name</Label>
+                         <Input className="h-14 bg-zinc-100 dark:bg-zinc-900 border-none rounded-2xl font-black text-sm" value={newLeadName} onChange={(e) => setNewLeadName(e.target.value)} />
+                    </div>
+                    <div className="space-y-3">
+                         <Label className="font-black text-[10px] uppercase tracking-widest opacity-40">Communication Line</Label>
+                         <Input className="h-14 bg-zinc-100 dark:bg-zinc-900 border-none rounded-2xl font-black text-sm" value={newLeadPhone} onChange={(e) => setNewLeadPhone(e.target.value)} />
+                    </div>
+                 </div>
+                 <div className="space-y-3">
+                    <Label className="font-black text-[10px] uppercase tracking-widest opacity-40">Inbound Vector</Label>
+                    <Select value={newLeadSource} onValueChange={(v) => setNewLeadSource(v as LeadSource)}>
+                        <SelectTrigger className="h-14 bg-zinc-100 dark:bg-zinc-900 border-none rounded-2xl font-black text-sm px-6">
+                            <SelectValue placeholder="Protocol Source" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl border-none shadow-2xl">
+                            {['Instagram', 'WhatsApp', 'Walk-in', 'Social Media', 'Other'].map(s => (
+                                <SelectItem key={s} value={s} className="font-black text-sm uppercase p-4 italic">{s}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                 </div>
+                 <div className="space-y-3">
+                   <Label className="font-black text-[10px] uppercase tracking-widest opacity-40">Assigned Outpost</Label>
+                   <Select value={newLeadBranch} onValueChange={(v) => setNewLeadBranch(v as Branch)}>
+                       <SelectTrigger className="h-14 bg-zinc-100 dark:bg-zinc-900 border-none rounded-2xl font-black text-sm px-6">
+                           <SelectValue placeholder="Select Branch" />
+                       </SelectTrigger>
+                       <SelectContent className="rounded-2xl border-none shadow-2xl">
+                           {['COMPLEX', 'MIVIDA'].map(b => (
+                               <SelectItem key={b} value={b} className="font-black text-sm uppercase p-4 italic">{b}</SelectItem>
+                           ))}
+                       </SelectContent>
+                   </Select>
+                 </div>
+                 <Button onClick={handleAddLead} className="w-full h-16 rounded-2xl font-black text-xs uppercase tracking-[4px] shadow-2xl shadow-primary/30">Secure & Register</Button>
               </div>
             </DialogContent>
           </Dialog>
         </div>
       </div>
 
-      <Card className="p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="space-y-2">
-            <Label className="text-xs">Search Name/Phone</Label>
-            <Input 
-              placeholder="Search..." 
-              value={searchTerm} 
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-9"
-            />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+                { label: 'Total Intel', value: stats.total, icon: Target, color: 'text-zinc-500' },
+                { label: 'New Targets', value: stats.new, icon: Zap, color: 'text-zinc-900 dark:text-white' },
+                { label: 'Tactical Trials', value: stats.trials, icon: Calendar, color: 'text-blue-500' },
+                { label: 'Confirmed Interest', value: stats.interested, icon: Target, color: 'text-emerald-500' },
+            ].map((stat, i) => (
+                <Card key={i} className="rounded-[30px] border-none bg-white dark:bg-zinc-900 shadow-xl overflow-hidden hover:-translate-y-1 transition-all duration-300">
+                    <CardContent className="p-8">
+                        <div className="flex justify-between items-start mb-6">
+                            <div className={`p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-950 ${stat.color}`}>
+                                <stat.icon className="h-5 w-5" />
+                            </div>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-4xl font-black tracking-tighter mb-1">{stat.value}</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest opacity-40">{stat.label}</span>
+                        </div>
+                    </CardContent>
+                </Card>
+            ))}
+      </div>
+
+      <Card className="rounded-[40px] border-none bg-white dark:bg-zinc-900 shadow-[0_30px_100px_rgba(0,0,0,0.05)] dark:shadow-none p-8 space-y-8">
+        <div className="flex flex-col lg:flex-row gap-8">
+          <div className="flex-1 flex flex-col gap-3">
+            <Label className="text-[10px] font-black uppercase tracking-widest opacity-40 pl-4">Tactical Search</Label>
+            <div className="relative group">
+                <Search className="absolute left-6 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                <Input 
+                  placeholder="Identify target by alias or signature..." 
+                  value={searchTerm} 
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="h-16 pl-14 bg-zinc-50 dark:bg-zinc-950 border-none rounded-[20px] font-black text-sm shadow-inner"
+                />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label className="text-xs">Branch</Label>
-            <Select value={filterBranch} onValueChange={(v) => setFilterBranch(v as Branch | 'All')}>
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="All Branches" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All">All Branches</SelectItem>
-                <SelectItem value="COMPLEX">COMPLEX</SelectItem>
-                <SelectItem value="MIVIDA">MIVIDA</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs">Stage</Label>
-            <Select value={filterStage} onValueChange={(v) => setFilterStage(v as LeadStage | 'All')}>
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="All Stages" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All">All Stages</SelectItem>
-                <SelectItem value="New">New</SelectItem>
-                <SelectItem value="Follow Up">Follow Up</SelectItem>
-                <SelectItem value="Trial">Trial</SelectItem>
-                <SelectItem value="Interested">Interested</SelectItem>
-                <SelectItem value="Not Interested">Not Interested</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs">Interest</Label>
-            <Select value={filterInterest} onValueChange={(v) => setFilterInterest(v as LeadInterest | 'All')}>
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="All Interests" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All">All Interests</SelectItem>
-                <SelectItem value="Interested">Interested</SelectItem>
-                <SelectItem value="Not Interested">Not Interested</SelectItem>
-                <SelectItem value="Pending">Pending</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs">Assigned To</Label>
-            <Select value={filterAssignedTo} onValueChange={setFilterAssignedTo}>
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="All Reps" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All">All Reps</SelectItem>
-                <SelectItem value="unassigned">Unassigned</SelectItem>
-                {users.filter(u => u.role === 'rep').map(rep => (
-                  <SelectItem key={rep.id} value={rep.id}>{rep.name}</SelectItem>
+          <div className="flex flex-wrap gap-4 items-end">
+                {[
+                    { label: 'Branch', value: filterBranch, setter: setFilterBranch, options: ['All', 'COMPLEX', 'MIVIDA'] },
+                    { label: 'Stage', value: filterStage, setter: setFilterStage, options: ['All', 'New', 'Follow Up', 'Trial', 'Interested', 'Not Interested'] },
+                    { label: 'Intel Tier', value: filterInterest, setter: setFilterInterest, options: ['All', 'Interested', 'Pending', 'Not Interested'] },
+                ].map((filter, i) => (
+                    <div key={i} className="space-y-3">
+                        <Label className="text-[10px] font-black uppercase tracking-widest opacity-40 pl-2">{filter.label}</Label>
+                        <Select value={filter.value} onValueChange={(v) => filter.setter(v as any)}>
+                            <SelectTrigger className="h-14 w-[180px] bg-zinc-50 dark:bg-zinc-950 border-none rounded-[18px] font-black text-[10px] uppercase tracking-widest px-6 shadow-sm">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-2xl border-none shadow-2xl">
+                                {filter.options.map(opt => (
+                                    <SelectItem key={opt} value={opt} className="font-black text-[10px] uppercase tracking-widest p-4">{opt}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
                 ))}
-              </SelectContent>
-            </Select>
           </div>
         </div>
-      </Card>
 
-      {selectedLeadIds.length > 0 && (
-        <div className="sticky top-0 z-10 bg-primary text-primary-foreground p-3 rounded-lg shadow-lg flex flex-wrap items-center justify-between gap-4 animate-in slide-in-from-top-4 duration-300">
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="bg-primary-foreground text-primary">
-              {selectedLeadIds.length} selected
-            </Badge>
-            <Button variant="ghost" size="sm" className="text-primary-foreground hover:bg-primary-foreground/10" onClick={() => setSelectedLeadIds([])}>
-              Cancel
-            </Button>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 bg-primary-foreground/10 p-1 rounded-md">
-              <ArrowRight className="h-4 w-4" />
-              <Select onValueChange={(v) => handleBulkStageUpdate(v as LeadStage)}>
-                <SelectTrigger className="h-8 w-[140px] bg-transparent border-none text-primary-foreground">
-                  <SelectValue placeholder="Update Stage" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="New">New</SelectItem>
-                  <SelectItem value="Trial">Int. & Trial</SelectItem>
-                  <SelectItem value="Follow Up">Follow Up</SelectItem>
-                  <SelectItem value="Lost">Lost</SelectItem>
-                </SelectContent>
-              </Select>
+        <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+            <div className="flex justify-start border-b border-zinc-100 dark:border-zinc-800 pb-1">
+              <TabsList className="bg-transparent h-auto p-0 gap-8">
+                {['all', 'instagram', 'whatsapp', 'walkin', 'trials', 'followup'].map(tab => (
+                    <TabsTrigger key={tab} value={tab} className="h-12 bg-transparent border-b-4 border-transparent rounded-none px-0 font-black text-[10px] uppercase tracking-widest data-[state=active]:border-primary data-[state=active]:text-primary transition-all">
+                        {tab}
+                    </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+            
+            <div className="rounded-[28px] overflow-hidden border border-zinc-100 dark:border-zinc-800">
+              <Table>
+                <TableHeader className="bg-zinc-50 dark:bg-zinc-900/50">
+                  <TableRow className="border-none h-16">
+                    <TableHead className="w-[80px] pl-8">
+                      <Checkbox 
+                        checked={selectedLeadIds.length === paginatedLeads.length && paginatedLeads.length > 0}
+                        onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                      />
+                    </TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Identify</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Comms</TableHead>
+                    <TableHead className="hidden md:table-cell font-black text-[10px] uppercase tracking-widest">Sector</TableHead>
+                    <TableHead className="hidden md:table-cell font-black text-[10px] uppercase tracking-widest">Vector</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Pipeline</TableHead>
+                    <TabsTrigger value="none" className="hidden" /> {/* Tab Trigger placeholder if needed */}
+                    <TableHead className="hidden lg:table-cell font-black text-[10px] uppercase tracking-widest">Priority</TableHead>
+                    <TableHead className="hidden lg:table-cell font-black text-[10px] uppercase tracking-widest">Context</TableHead>
+                    <TableHead className="hidden xl:table-cell font-black text-[10px] uppercase tracking-widest">Deployment</TableHead>
+                    <TableHead className="hidden md:table-cell font-black text-[10px] uppercase tracking-widest">Last Intel</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Deadline</TableHead>
+                    {isAdmin(currentUser?.role) && <TableHead className="hidden lg:table-cell font-black text-[10px] uppercase tracking-widest">Handler</TableHead>}
+                    <TableHead className="pr-8 text-right font-black text-[10px] uppercase tracking-widest">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <AnimatePresence mode="popLayout">
+                    {paginatedLeads.map(lead => (
+                        <LeadTableRow 
+                          key={lead.id}
+                          lead={lead}
+                          isSelected={selectedLeadIds.includes(lead.id)}
+                          onSelect={handleSelectLead}
+                          onDelete={handleDeleteLead}
+                          onUpdate={updateClient}
+                          onLogActivity={setSelectedLead}
+                          onStageChange={handleStageChange}
+                          currentUser={currentUser}
+                          users={users}
+                          isSuperUser={isSuperUser}
+                        />
+                    ))}
+                  </AnimatePresence>
+                </TableBody>
+              </Table>
             </div>
 
-            {currentUser?.role === 'manager' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin' ? (
-              <div className="flex items-center gap-2 bg-primary-foreground/10 p-1 rounded-md">
-                <UserCheck className="h-4 w-4" />
-                <Select onValueChange={handleBulkAssign}>
-                  <SelectTrigger className="h-8 w-[140px] bg-transparent border-none text-primary-foreground">
-                    <SelectValue placeholder="Assign To" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {users.filter(u => u.role === 'rep').map(rep => (
-                      <SelectItem key={rep.id} value={rep.id}>{rep.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
-            {isSuperUser && (
-              <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
-                <Trash2 className="h-4 w-4 mr-2" /> Delete Selected
-              </Button>
+            {totalPages > 1 && (
+            <div className="flex items-center justify-between pb-4">
+                <p className="text-[10px] font-black uppercase tracking-widest opacity-40">
+                Synchronizing {Math.min(currentPage * itemsPerPage, filteredLeads.length)} of {filteredLeads.length} Tactical Units
+                </p>
+                <div className="flex items-center gap-4">
+                <Button 
+                    variant="outline" 
+                    size="icon" 
+                    className="h-10 w-10 rounded-xl border-none bg-zinc-100 dark:bg-zinc-800"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                >
+                    <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-[10px] font-black uppercase tracking-widest">Phase {currentPage} / {totalPages}</span>
+                <Button 
+                    variant="outline" 
+                    size="icon" 
+                    className="h-10 w-10 rounded-xl border-none bg-zinc-100 dark:bg-zinc-800"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                >
+                    <ChevronRight className="h-4 w-4" />
+                </Button>
+                </div>
+            </div>
             )}
-          </div>
-        </div>
-      )}
+        </Tabs>
+      </Card>
 
       <ConfirmDialog 
         isOpen={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
-        title="Delete Lead"
-        description="Are you sure you want to delete this lead? This action cannot be undone."
+        title="Destroy Target Record"
+        description="This will permanently nullify the target identity from the intelligence database. Continue with elimination?"
         onConfirm={confirmDeleteLead}
         variant="destructive"
-        confirmText="Delete"
+        confirmText="Confirm Purge"
       />
 
       <ConfirmDialog 
         isOpen={isBulkDeleteDialogOpen}
         onOpenChange={setIsBulkDeleteDialogOpen}
-        title="Delete Multiple Leads"
-        description={`Are you sure you want to delete ${selectedLeadIds.length} leads? This action cannot be undone.`}
+        title="Mass Target Removal"
+        description={`Confirm mass purge of ${selectedLeadIds.length} target records? This neural trace cannot be recovered.`}
         onConfirm={confirmBulkDelete}
         variant="destructive"
-        confirmText="Delete All Selected"
+        confirmText="Execute Purge"
       />
 
       <ConfirmDialog 
         isOpen={isDeleteAllLeadsDialogOpen}
         onOpenChange={setIsDeleteAllLeadsDialogOpen}
-        title="CRITICAL: Delete All Leads"
-        description="Are you sure you want to delete ALL leads in the system? This action is permanent and cannot be undone."
+        title="PROTOCOL ZERO: DATABASE PURGE"
+        description="You are about to initiate Protocol Zero. ALL target records will be vaporized. This action is irreversible."
         onConfirm={confirmDeleteAllLeads}
         variant="destructive"
-        confirmText="Yes, Delete Everything"
+        confirmText="INITIATE PROTOCOL ZERO"
       />
 
-      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
-        <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
-          <TabsList className="flex w-max sm:w-full bg-muted/50 rounded-lg p-1 justify-start sm:justify-center mb-4">
-            <TabsTrigger value="all" className="px-4 text-xs sm:text-sm">All</TabsTrigger>
-            <TabsTrigger value="instagram" className="px-4 text-xs sm:text-sm">Instagram</TabsTrigger>
-            <TabsTrigger value="whatsapp" className="px-4 text-xs sm:text-sm">WhatsApp</TabsTrigger>
-            <TabsTrigger value="walkin" className="px-4 text-xs sm:text-sm">Walk-in</TabsTrigger>
-            <TabsTrigger value="trials" className="px-4 text-xs sm:text-sm">Trials</TabsTrigger>
-            <TabsTrigger value="followup" className="px-4 text-xs sm:text-sm">Follow up</TabsTrigger>
-          </TabsList>
-        </div>
-        
-        <Card>
-          <CardContent className="p-0">
-            {renderLeadsTable(paginatedLeads)}
-          </CardContent>
-        </Card>
+      {selectedLead && (
+         <Dialog open={!!selectedLead} onOpenChange={(open) => !open && setSelectedLead(null)}>
+          <DialogContent className="max-w-6xl w-[95vw] rounded-[48px] border-none shadow-[0_50px_150px_rgba(0,0,0,0.6)] p-0 overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+            <div className="flex flex-col lg:flex-row h-full min-h-[700px]">
+                {/* Left Panel: Details & Status */}
+                <div className="flex-1 p-10 lg:p-14 space-y-12">
+                   <div className="flex items-center gap-6">
+                        <div className="h-20 w-20 rounded-3xl bg-primary flex items-center justify-center text-primary-foreground text-3xl font-black italic">
+                            {selectedLead.name.slice(0, 1)}
+                        </div>
+                        <div>
+                            <h2 className="text-4xl font-black tracking-tighter uppercase">{selectedLead.name}</h2>
+                            <div className="flex items-center gap-3">
+                                <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] tracking-widest px-3">LEAD ID: {selectedLead.id.slice(0, 8)}</Badge>
+                                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Protocol: {selectedLead.source}</span>
+                            </div>
+                        </div>
+                   </div>
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4">
-            <p className="text-sm text-muted-foreground">
-              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, leads.length)} of {leads.length} entries
-            </p>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm">Page {currentPage} of {totalPages}</span>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+                   <div className="grid grid-cols-2 gap-10">
+                        <div className="space-y-4">
+                            <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Tactical Sector</Label>
+                            <Select defaultValue={selectedLead.branch || ''} onValueChange={(v) => updateClient(selectedLead.id, { branch: v as Branch })}>
+                                <SelectTrigger className="h-16 bg-white dark:bg-zinc-900 border-none rounded-2xl font-black text-sm px-6 shadow-sm">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl border-none shadow-2xl">
+                                    {['COMPLEX', 'MIVIDA'].map(b => (
+                                        <SelectItem key={b} value={b} className="font-black text-sm uppercase p-4 italic">{b}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-4">
+                            <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Interest Tier</Label>
+                            <Select defaultValue={selectedLead.interest} onValueChange={(v) => updateClient(selectedLead.id, { interest: v as LeadInterest })}>
+                                <SelectTrigger className="h-16 bg-white dark:bg-zinc-900 border-none rounded-2xl font-black text-sm px-6 shadow-sm">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl border-none shadow-2xl">
+                                    {['Interested', 'Pending', 'Not Interested'].map(i => (
+                                        <SelectItem key={i} value={i} className="font-black text-sm uppercase p-4 italic">{i}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-4">
+                            <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Pipeline Stage</Label>
+                            <Select defaultValue={selectedLead.stage} onValueChange={(v) => handleStageChange(selectedLead, v as LeadStage)}>
+                                <SelectTrigger className="h-16 bg-white dark:bg-zinc-900 border-none rounded-2xl font-black text-sm px-6 shadow-sm">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl border-none shadow-2xl">
+                                    {['New', 'Trial', 'Follow Up', 'Converted', 'Lost'].map(s => (
+                                        <SelectItem key={s} value={s} className="font-black text-sm uppercase p-4 italic">{s}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-4">
+                            <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Rejection Reason</Label>
+                            <Select defaultValue={selectedLead.category} onValueChange={(v) => updateClient(selectedLead.id, { category: v as LeadCategory })}>
+                                <SelectTrigger className="h-16 bg-white dark:bg-zinc-900 border-none rounded-2xl font-black text-sm px-6 shadow-sm">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl border-none shadow-2xl">
+                                    {['Out of area zone', 'Social class', 'Price', 'No answer', 'Other', 'None'].map(c => (
+                                        <SelectItem key={c} value={c} className="font-black text-sm uppercase p-4 italic">{c}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                   </div>
+
+                   <div className="p-8 rounded-[32px] bg-zinc-100 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-zinc-800/50 space-y-4">
+                        <div className="flex items-center gap-3">
+                             <Phone className="h-5 w-5 text-primary" />
+                             <span className="text-xl font-black tracking-tight">{selectedLead.phone}</span>
+                        </div>
+                        <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">Active Line: Intelligence secured via {selectedLead.source}</p>
+                   </div>
+                </div>
+
+                {/* Right Panel: Feed */}
+                <div className="w-full lg:w-[450px] bg-white dark:bg-zinc-900 p-10 lg:p-14 border-l border-zinc-200 dark:border-zinc-800 flex flex-col">
+                    <h3 className="text-xl font-black uppercase tracking-tighter mb-8 flex items-center gap-3">
+                        <MessageSquare className="h-5 w-5 text-primary" /> Activity Intel
+                    </h3>
+                    
+                    <div className="flex-1 overflow-y-auto pr-4 mb-8 space-y-6 no-scrollbar">
+                        {selectedLead.comments && selectedLead.comments.length > 0 ? (
+                            selectedLead.comments.map((comment, idx) => (
+                                <motion.div 
+                                    initial={{ opacity: 0, x: 10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    key={idx} 
+                                    className="space-y-2 p-5 rounded-[22px] bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-100 dark:border-zinc-800"
+                                >
+                                    <div className="flex justify-between items-start">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-primary">{comment.author}</span>
+                                        <span className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest">{format(parseISO(comment.date), 'MMM d, HH:mm')}</span>
+                                    </div>
+                                    <p className="text-sm font-bold opacity-80 italic">"{comment.text}"</p>
+                                </motion.div>
+                            ))
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center opacity-20 grayscale">
+                                <MessageSquare className="h-10 w-10 mb-4" />
+                                <span className="text-[10px] font-black uppercase tracking-[4px]">Silent Feed</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-4">
+                        <Textarea 
+                            placeholder="Initialize strategic log..." 
+                            className="min-h-[120px] rounded-[24px] bg-zinc-100 dark:bg-zinc-950 border-none font-bold p-6 focus-visible:ring-primary shadow-inner"
+                            value={newComment}
+                            onChange={(e) => setNewComment(e.target.value)}
+                        />
+                        <Button 
+                            onClick={handleAddComment} 
+                            disabled={!newComment}
+                            className="w-full h-14 rounded-2xl font-black text-[10px] uppercase tracking-[4px] shadow-lg shadow-primary/20"
+                        >
+                            Log Transmission
+                        </Button>
+                    </div>
+                </div>
             </div>
-          </div>
-        )}
-      </Tabs>
+          </DialogContent>
+        </Dialog>
+      )}
 
-      <Dialog open={isConvertDialogOpen} onOpenChange={setIsConvertDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Convert Lead to Client?</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-muted-foreground">
-              Would you like to convert <strong>{leadToConvert?.name}</strong> into an active client record? 
-              This will move them from Leads to Members.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsConvertDialogOpen(false)}>Cancel</Button>
-            <Button onClick={confirmConversion}>Confirm Conversion</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Floating Action Menu for Selections */}
+      <AnimatePresence>
+        {selectedLeadIds.length > 0 && (
+            <motion.div 
+                initial={{ y: 100, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 100, opacity: 0 }}
+                className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 px-8 py-4 bg-zinc-950 text-white rounded-[32px] shadow-[0_40px_100px_rgba(0,0,0,0.5)] border border-white/10 flex items-center gap-10 min-w-[600px]"
+            >
+                <div className="flex items-center gap-4 border-r border-white/10 pr-10">
+                    <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center font-black text-sm italic">
+                        {selectedLeadIds.length}
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Targets Engaged</span>
+                </div>
+
+                <div className="flex items-center gap-6">
+                    <div className="group flex items-center gap-3">
+                        <ArrowRight className="h-4 w-4 text-primary group-hover:scale-125 transition-all" />
+                        <Select onValueChange={(v) => handleBulkStageUpdate(v as LeadStage)}>
+                          <SelectTrigger className="h-10 min-w-[140px] bg-transparent border-none text-[10px] font-black uppercase tracking-widest ring-0 focus:ring-0">
+                            <SelectValue placeholder="Advance Pipeline" />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-2xl bg-zinc-950 text-white border-white/10 shadow-2xl">
+                             {['New', 'Trial', 'Follow Up', 'Lost'].map(s => (
+                                <SelectItem key={s} value={s} className="font-black text-[10px] uppercase tracking-widest p-4">{s}</SelectItem>
+                             ))}
+                          </SelectContent>
+                        </Select>
+                    </div>
+
+                    {isAdmin(currentUser?.role) && (
+                        <div className="group flex items-center gap-3">
+                            <UserCheck className="h-4 w-4 text-primary group-hover:scale-125 transition-all" />
+                            <Select onValueChange={handleBulkAssign}>
+                              <SelectTrigger className="h-10 min-w-[140px] bg-transparent border-none text-[10px] font-black uppercase tracking-widest ring-0 focus:ring-0">
+                                <SelectValue placeholder="Delegate Handler" />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-2xl bg-zinc-950 text-white border-white/10 shadow-2xl">
+                                <SelectItem value="unassigned" className="font-black text-[10px] uppercase tracking-widest p-4">Unassigned</SelectItem>
+                                {users.filter(u => u.role === 'rep').map(rep => (
+                                  <SelectItem key={rep.id} value={rep.id} className="font-black text-[10px] uppercase tracking-widest p-4">{rep.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-3 pl-10 border-l border-white/10">
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedLeadIds([])} className="h-10 px-4 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white/5">
+                        Cancel
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={handleBulkDelete} className="h-10 px-4 rounded-xl text-rose-500 font-black text-[10px] uppercase tracking-widest hover:bg-rose-500/10 transition-colors">
+                        Purge
+                    </Button>
+                </div>
+            </motion.div>
+        )}
+      </AnimatePresence>
+
+      <ConfirmDialog 
+        isOpen={isConvertDialogOpen}
+        onOpenChange={setIsConvertDialogOpen}
+        title="Personnel Induction"
+        description="This target has reached Peak conversion potential. Confirm transition to Active Personnel database?"
+        onConfirm={confirmConversion}
+        confirmText="Induct Personnel"
+      />
     </div>
   );
 }
-
