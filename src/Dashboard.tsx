@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAppContext } from './context';
 import { differenceInDays, isSameDay, parseISO, isAfter, isBefore, addDays, subDays, subMonths, startOfMonth, endOfMonth, isWithinInterval, format } from 'date-fns';
 import { Target, Users, CalendarDays, AlertTriangle, Gift, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -50,9 +51,10 @@ function PaginatedList({ items, renderItem, itemsPerPage = 5 }: { items: any[], 
 }
 
 export default function Dashboard() {
-  const { clients, salesTarget, updateSalesTarget, currentUser, payments, userTargets } = useAppContext();
+  const { clients, salesTarget, updateSalesTarget, currentUser, payments, userTargets, users, canViewGlobalDashboard, canAccessSettings } = useAppContext();
   const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false);
   const [newTarget, setNewTarget] = useState(salesTarget.targetAmount.toString());
+  const [selectedRepId, setSelectedRepId] = useState<string>('all');
   
   const now = new Date();
   
@@ -105,13 +107,66 @@ export default function Dashboard() {
     }
   };
 
-  const totalCash = payments ? payments.filter(p => p.method === 'Cash').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0;
-  const totalVisa = payments ? payments.filter(p => p.method === 'Credit Card').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0;
-  const totalInstapay = payments ? payments.filter(p => p.method === 'Instapay').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0;
+  // Filtered statistics for rep performance view
+  const currentMonthStr = format(now, 'yyyy-MM');
+  const reps = users.filter(u => u.role === 'rep');
+  
+  const filteredSalesData = React.useMemo(() => {
+    let targetAmount = salesTarget.targetAmount;
+    let privateTarget = salesTarget.privateTarget;
+    let groupTarget = salesTarget.groupTarget;
+    
+    let relevantPayments = payments.filter(p => format(parseISO(p.date), 'yyyy-MM') === currentMonthStr);
+    
+    if (canViewGlobalDashboard && selectedRepId !== 'all') {
+      // Filter for specific rep
+      const repTarget = userTargets.find(t => t.userId === selectedRepId && t.month === currentMonthStr);
+      if (repTarget) {
+        targetAmount = repTarget.targetAmount;
+        privateTarget = repTarget.privateTarget || 0;
+        groupTarget = repTarget.groupTarget || 0;
+      } else {
+        targetAmount = 0; // Or some default
+        privateTarget = 0;
+        groupTarget = 0;
+      }
+      
+      const repVisibleClients = clients.filter(c => c.assignedTo === selectedRepId);
+      const repClientIds = new Set(repVisibleClients.map(c => c.id));
+      
+      relevantPayments = relevantPayments.filter(p => 
+        repClientIds.has(p.clientId) || p.recordedBy === selectedRepId || p.sales_rep_id === selectedRepId
+      );
+    }
 
-  const totalSessionsSold = salesTarget.privateSessionsSold + salesTarget.groupSessionsSold;
-  const privatePercentage = totalSessionsSold > 0 ? Math.round((salesTarget.privateSessionsSold / totalSessionsSold) * 100) : 0;
-  const groupPercentage = totalSessionsSold > 0 ? Math.round((salesTarget.groupSessionsSold / totalSessionsSold) * 100) : 0;
+    const currentAmount = relevantPayments.reduce((acc, p) => acc + p.amount, 0);
+    const privateSessionsSold = relevantPayments.filter(p => p.packageType.toLowerCase().includes('private')).length;
+    const groupSessionsSold = relevantPayments.filter(p => p.packageType.toLowerCase().includes('group') || p.packageType.toLowerCase().includes('gt')).length;
+    const cash = relevantPayments.filter(p => p.method === 'Cash').reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+    const visa = relevantPayments.filter(p => p.method === 'Credit Card').reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+    const instapay = relevantPayments.filter(p => p.method === 'Instapay').reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+
+    return {
+      targetAmount,
+      currentAmount,
+      privateSessionsSold,
+      groupSessionsSold,
+      privateTarget,
+      groupTarget,
+      cash,
+      visa,
+      instapay,
+      percentage: targetAmount > 0 ? Math.round((currentAmount / targetAmount) * 100) : 0
+    };
+  }, [payments, selectedRepId, canViewGlobalDashboard, salesTarget, userTargets, currentMonthStr, clients]);
+
+  const totalCash = canViewGlobalDashboard && selectedRepId !== 'all' ? filteredSalesData.cash : (payments ? payments.filter(p => p.method === 'Cash').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0);
+  const totalVisa = canViewGlobalDashboard && selectedRepId !== 'all' ? filteredSalesData.visa : (payments ? payments.filter(p => p.method === 'Credit Card').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0);
+  const totalInstapay = canViewGlobalDashboard && selectedRepId !== 'all' ? filteredSalesData.instapay : (payments ? payments.filter(p => p.method === 'Instapay').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0);
+
+  const totalSessionsSold = filteredSalesData.privateSessionsSold + filteredSalesData.groupSessionsSold;
+  const privatePercentage = totalSessionsSold > 0 ? Math.round((filteredSalesData.privateSessionsSold / totalSessionsSold) * 100) : 0;
+  const groupPercentage = totalSessionsSold > 0 ? Math.round((filteredSalesData.groupSessionsSold / totalSessionsSold) * 100) : 0;
 
   // Chart Data
   const chartData = React.useMemo(() => {
@@ -158,6 +213,27 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {canViewGlobalDashboard && (
+        <div className="flex items-center space-x-4 bg-muted/30 p-4 rounded-lg border border-border/50">
+          <Users className="h-5 w-5 text-muted-foreground" />
+          <div className="flex-1">
+            <h3 className="text-sm font-medium">Representative Performance</h3>
+            <p className="text-xs text-muted-foreground">Filter statistics by sales representative</p>
+          </div>
+          <Select value={selectedRepId} onValueChange={setSelectedRepId}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Select representative" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Representatives</SelectItem>
+              {reps.map(rep => (
+                <SelectItem key={rep.id} value={rep.id}>{rep.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         {currentUser?.role === 'admin' ? (
           <Card>
@@ -165,7 +241,7 @@ export default function Dashboard() {
               <CardTitle className="text-sm font-medium">Total Payments</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{salesTarget.currentAmount.toLocaleString()} LE</div>
+              <div className="text-2xl font-bold">{filteredSalesData.currentAmount.toLocaleString()} LE</div>
               <div className="mt-4 space-y-2 text-sm text-muted-foreground">
                 <div className="flex justify-between">
                   <span>Cash:</span>
@@ -186,7 +262,7 @@ export default function Dashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Sales Target</CardTitle>
-              {(currentUser?.role === 'manager' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
+              {canAccessSettings && (
                 <CardAction>
                   <Dialog open={isTargetDialogOpen} onOpenChange={setIsTargetDialogOpen}>
                     <DialogTrigger
@@ -217,9 +293,9 @@ export default function Dashboard() {
               )}
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{salesTarget.currentAmount.toLocaleString()} LE</div>
+              <div className="text-2xl font-bold">{filteredSalesData.currentAmount.toLocaleString()} LE</div>
               <p className="text-xs text-muted-foreground">
-                {targetPercentage}% of {salesTarget.targetAmount.toLocaleString()} LE target
+                {filteredSalesData.percentage}% of {filteredSalesData.targetAmount.toLocaleString()} LE target
               </p>
               <div className="mt-4 h-2 w-full bg-secondary rounded-full overflow-hidden">
                 <div 
@@ -228,25 +304,46 @@ export default function Dashboard() {
                 />
               </div>
 
-              {currentUser?.role === 'rep' && (
-                <div className="mt-4 pt-3 border-t">
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-2">Sessions Breakdown</span>
-                  <div className="space-y-2 text-sm">
+              <div className="mt-4 pt-3 border-t">
+                <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-2">Sessions Breakdown</span>
+                <div className="space-y-3 text-sm">
+                  <div className="space-y-1">
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Private:</span>
                       <span className="font-medium">
-                        {salesTarget.privateSessionsSold} <span className="text-xs text-muted-foreground ml-1">({privatePercentage}%)</span>
+                        {filteredSalesData.privateSessionsSold} achieved
+                        {filteredSalesData.privateTarget > 0 && <span className="text-xs text-muted-foreground ml-1">of {filteredSalesData.privateTarget}</span>}
                       </span>
                     </div>
+                    {filteredSalesData.privateTarget > 0 && (
+                      <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-blue-500" 
+                          style={{ width: `${Math.min((filteredSalesData.privateSessionsSold / filteredSalesData.privateTarget) * 100, 100)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-1">
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Group:</span>
                       <span className="font-medium">
-                        {salesTarget.groupSessionsSold} <span className="text-xs text-muted-foreground ml-1">({groupPercentage}%)</span>
+                        {filteredSalesData.groupSessionsSold} achieved
+                        {filteredSalesData.groupTarget > 0 && <span className="text-xs text-muted-foreground ml-1">of {filteredSalesData.groupTarget}</span>}
                       </span>
                     </div>
+                    {filteredSalesData.groupTarget > 0 && (
+                      <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-emerald-500" 
+                          style={{ width: `${Math.min((filteredSalesData.groupSessionsSold / filteredSalesData.groupTarget) * 100, 100)}%` }}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
+              </div>
             </CardContent>
           </Card>
         )}

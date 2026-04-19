@@ -12,7 +12,7 @@ import Packages from './Packages';
 import Coaches from './Coaches';
 
 export default function Settings() {
-  const { branding, updateBranding, currentUser, wipeSystem } = useAppContext();
+  const { branding, updateBranding, currentUser, wipeSystem, canAccessSettings } = useAppContext();
   const [companyName, setCompanyName] = useState(branding.companyName);
   const [logoUrl, setLogoUrl] = useState(branding.logoUrl);
   const [isSaving, setIsSaving] = useState(false);
@@ -22,7 +22,7 @@ export default function Settings() {
   const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [isWiping, setIsWiping] = useState(false);
 
-  const canWipe = currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin' || currentUser?.email === 'michaelmitry13@gmail.com';
+  const canWipe = canAccessSettings || currentUser?.email === 'michaelmitry13@gmail.com';
 
   React.useEffect(() => {
     setCompanyName(branding.companyName);
@@ -37,6 +37,19 @@ export default function Settings() {
       setIsSaving(false);
     }
   };
+
+  if (!canAccessSettings) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+        <ShieldAlert className="h-16 w-16 text-destructive opacity-20" />
+        <h2 className="text-2xl font-bold">Access Restricted</h2>
+        <p className="text-muted-foreground max-w-md">
+          This section is exclusively managed by Atef (Sales Manager). 
+          Please contact him for any system configuration or history access.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

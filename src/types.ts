@@ -4,7 +4,7 @@ export type LeadCategory = 'Out of area zone' | 'Social class' | 'Price' | 'No a
 export type LeadSource = 'Instagram' | 'WhatsApp' | 'Walk-in' | 'TikTok' | 'Other';
 export type LeadStage = 'New' | 'Trial' | 'Follow Up' | 'Converted' | 'Lost';
 export type SessionType = 'Private' | 'Group';
-export type UserRole = 'manager' | 'rep' | 'admin' | 'super_admin' | 'crm_admin';
+export type UserRole = 'manager' | 'rep' | 'admin' | 'super_admin' | 'crm_admin' | 'sales_manager' | 'sales_rep';
 export type Branch = 'COMPLEX' | 'MIVIDA' | 'Strike IMPACT';
 
 export interface Package {
@@ -39,6 +39,9 @@ export interface User {
   role: UserRole;
   email: string;
   salesTarget?: number;
+  can_delete_payments?: boolean;
+  can_view_global_dashboard?: boolean;
+  can_access_settings_and_history?: boolean;
 }
 
 export interface PrivateSession {
@@ -72,14 +75,21 @@ export interface AuditLog {
 export interface Payment {
   id: string;
   clientId: string;
+  client_name: string;
   amount: number;
+  amount_paid: number;
   date: string; // ISO string
   method: 'Cash' | 'Credit Card' | 'Bank Transfer' | 'Instapay' | 'Other';
   instapayRef?: string; // 12 digits
   packageType: string;
+  session_type: 'Private Training' | 'Group Training';
   coachName?: string; // Optional coach name for PT packages
+  coach_name?: string; // Aligning with requested schema
   notes?: string;
   recordedBy?: string; // userId
+  sales_rep_id: string;
+  created_at: string; // ISO string
+  deleted_at?: string | null; // ISO string (soft delete)
 }
 
 export interface Client {
@@ -146,13 +156,21 @@ export interface SalesTarget {
   currentAmount: number;
   privateSessionsSold: number;
   groupSessionsSold: number;
+  privateTarget: number;
+  groupTarget: number;
 }
 
 export interface UserSalesTarget {
   id: string;
   userId: string;
+  sales_rep_id: string;
   month: string; // 'YYYY-MM'
+  month_year: string; // 'YYYY-MM'
   targetAmount: number;
+  target_total_private: number;
+  target_total_group: number;
+  privateTarget: number;
+  groupTarget: number;
   setBy: string; // manager userId
   createdAt: string; // ISO string
 }

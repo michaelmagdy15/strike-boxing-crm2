@@ -18,7 +18,7 @@ import ImportData from './ImportData';
 import ImportHistory from './ImportHistory';
 
 export default function Clients() {
-  const { clients, addClient, updateClient, deleteMultipleClients, deleteClient, currentUser, users, payments } = useAppContext();
+  const { clients, addClient, updateClient, deleteMultipleClients, deleteClient, currentUser, users, payments, canViewGlobalDashboard, canDeleteRecords } = useAppContext();
   const [activeTab, setActiveTab] = useState('active');
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -224,8 +224,8 @@ export default function Clients() {
             <TableHead>Sessions</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="hidden sm:table-cell">Expiry Date</TableHead>
-            {(currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && <TableHead className="hidden lg:table-cell">Total Paid</TableHead>}
-            {(currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && <TableHead className="hidden xl:table-cell">Assigned To</TableHead>}
+            {canViewGlobalDashboard && <TableHead className="hidden lg:table-cell">Total Paid</TableHead>}
+            {canViewGlobalDashboard && <TableHead className="hidden xl:table-cell">Assigned To</TableHead>}
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -285,12 +285,12 @@ export default function Clients() {
                   <span className="text-muted-foreground text-sm">Not set</span>
                 )}
               </TableCell>
-              {(currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
+              {canViewGlobalDashboard && (
                 <TableCell className="font-medium text-green-600 hidden lg:table-cell">
                   {totalPaid.toLocaleString()} LE
                 </TableCell>
               )}
-              {(currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
+              {canViewGlobalDashboard && (
                 <TableCell className="hidden xl:table-cell">
                   <select 
                     className="flex h-8 w-[130px] items-center justify-between rounded-md border border-input bg-background px-3 py-1 text-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -425,7 +425,7 @@ export default function Clients() {
                     </div>
                   </DialogContent>
                 </Dialog>
-                {(currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
+                {canDeleteRecords && (
                   <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteClient(client.id)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -553,7 +553,7 @@ export default function Clients() {
               </Button>
             </div>
             <div className="flex items-center gap-2">
-              {(currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
+              {canDeleteRecords && (
                 <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
                   <Trash2 className="h-4 w-4 mr-2" /> Delete Selected
                 </Button>

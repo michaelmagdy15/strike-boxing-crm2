@@ -10,11 +10,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, parseISO, addDays } from 'date-fns';
 import { Payment } from './types';
-import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search } from 'lucide-react';
+import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search, Trash2 } from 'lucide-react';
 import { AlertDialog } from './components/AlertDialog';
 
 export default function Payments() {
-  const { payments, clients, users, packages, coaches, addPayment, updateClient, currentUser, branding } = useAppContext();
+  const { payments, clients, users, packages, coaches, addPayment, deletePayment, updateClient, currentUser, branding, canViewGlobalDashboard, canDeletePayments } = useAppContext();
   const [isNewPaymentOpen, setIsNewPaymentOpen] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
@@ -32,6 +32,14 @@ export default function Payments() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMethod, setFilterMethod] = useState('All');
   const [filterBranch, setFilterBranch] = useState('All');
+  
+  const canDeletePayment = canDeletePayments;
+
+  const handleDeletePayment = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this payment record? This action cannot be undone.')) {
+      await deletePayment(id);
+    }
+  };
 
   const handlePackageChange = (val: string) => {
     setPackageType(val);
@@ -51,7 +59,7 @@ export default function Payments() {
         return;
       }
 
-      const isPT = /\\bpt\\b/i.test(finalPackageType);
+      const isPT = /\bpt\b/i.test(finalPackageType);
       if (isPT && !coachName) {
         setAlertTitle('Missing Information');
         setAlertDescription('Please select a coach for this PT package.');
@@ -398,7 +406,7 @@ export default function Payments() {
                   <TableHead>Amount</TableHead>
                   <TableHead className="hidden sm:table-cell">Method</TableHead>
                   <TableHead className="hidden md:table-cell">Package</TableHead>
-                  {(currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && <TableHead className="hidden lg:table-cell">Recorded By</TableHead>}
+                  {canViewGlobalDashboard && <TableHead className="hidden lg:table-cell">Recorded By</TableHead>}
                   <TableHead className="hidden xl:table-cell">Notes</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -439,16 +447,29 @@ export default function Payments() {
                             )}
                           </div>
                         </TableCell>
-                        {(currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
+                        {canViewGlobalDashboard && (
                           <TableCell className="text-muted-foreground text-xs sm:text-sm hidden lg:table-cell">
                             {recordedByUser?.name || 'Unknown'}
                           </TableCell>
                         )}
                         <TableCell className="text-muted-foreground text-xs hidden xl:table-cell">{payment.notes || '-'}</TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" onClick={() => printInvoice(payment, client)}>
-                            <Printer className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => printInvoice(payment, client)} title="Print Invoice">
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                            {canDeletePayment && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-destructive hover:bg-destructive/10" 
+                                onClick={() => handleDeletePayment(payment.id)}
+                                title="Delete Payment"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );

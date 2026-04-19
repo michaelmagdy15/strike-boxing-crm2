@@ -5,11 +5,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { format, parseISO } from 'date-fns';
 import { AuditLog, Branch } from './types';
-import { MapPin, Search, Filter } from 'lucide-react';
+import { MapPin, Search, Filter, ShieldAlert, History } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
 export default function AuditLogs() {
-  const { auditLogs, users } = useAppContext();
+  const { auditLogs, users, canAccessSettings } = useAppContext();
   const [entityFilter, setEntityFilter] = useState('ALL');
   const [branchFilter, setBranchFilter] = useState<Branch | 'ALL'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,6 +41,18 @@ export default function AuditLogs() {
       default: return <Badge variant="outline">{entity}</Badge>;
     }
   };
+
+  if (!canAccessSettings) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+        <ShieldAlert className="h-16 w-16 text-destructive opacity-20" />
+        <h2 className="text-2xl font-bold">Access Restricted</h2>
+        <p className="text-muted-foreground max-w-md">
+          System history is exclusively visible to Atef (Sales Manager).
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

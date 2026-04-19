@@ -8,40 +8,61 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    // New granular permission helpers matching context.tsx
+    function canDeletePayments() {
+      let data = getUserData();
+      return isAuthenticated() && (
+        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
+        data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
+        (data.role == 'admin' && data.name.lower().contains('sama')) ||
+        data.can_delete_payments == true
+      );
+    }
+
+    function canAccessSettings() {
+      let data = getUserData();
+      return isAuthenticated() && (
+        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
+        data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
+        data.name.lower().contains('atef') ||
+        data.can_access_settings_and_history == true
+      );
+    }
+
+    function canViewGlobalDashboard() {
+      let data = getUserData();
+      return isAuthenticated() && (
+        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
+        data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
+        (data.role == 'admin' && data.name.lower().contains('sama')) ||
+        data.can_view_global_dashboard == true
+      );
+    }
+
+    // Keep isAdmin for administrative tasks (user management, etc.)
     function isAdmin() {
+      let data = getUserData();
       return isAuthenticated() && (
         (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'manager', 'super_admin', 'crm_admin']
+        data.role in ['admin', 'super_admin', 'crm_admin', 'sales_manager', 'manager']
       );
     }
 
-    function isSuperAdmin() {
-      return isAuthenticated() && (
-        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'crm_admin']
-      );
+    function isSalesManager() {
+      return canViewGlobalDashboard();
     }
 
-    function isRep() {
-      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'rep';
-    }
-
-    function hasRequiredFields(fields) {
-      return request.resource.data.keys().hasAll(fields);
-    }
-
-    function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
-    }
-
-    function isValidString(field, min, max) {
-      return request.resource.data[field] is string && 
-             request.resource.data[field].size() >= min && 
-             request.resource.data[field].size() <= max;
+    function isSalesRep() {
+      let data = getUserData();
+      return isAuthenticated() && (data.role == 'sales_rep' || data.role == 'rep');
     }
 
     // ===============================================================
@@ -51,63 +72,62 @@ service cloud.firestore {
     function isValidClient(data) {
       return data.name is string && data.name.size() > 0 &&
              data.phone is string && data.phone.size() > 0 &&
-             data.status in ["Lead", "Active", "Nearly Expired", "Expired"];
+             data.status in ["Lead", "Active", "Nearly Expired", "Expired", "Hold"];
     }
 
     function isValidPayment(data) {
       return data.clientId is string &&
-             data.amount is number && data.amount >= 0 &&
-             data.method in ["Cash", "Credit Card", "Bank Transfer", "Instapay", "Other"] &&
-             (!('instapayRef' in data) || (data.instapayRef is string && data.instapayRef.matches("^[0-9]{12}$"))) &&
-             data.packageType is string;
-    }
-
-    function isValidSession(data) {
-      return data.clientId is string &&
-             data.status in ["Scheduled", "Attended", "No Show", "Cancelled"];
-    }
-
-    function isValidAuditLog(data) {
-      return data.userId is string &&
-             data.action in ["CREATE", "UPDATE", "DELETE"] &&
-             data.entityType in ["CLIENT", "PAYMENT", "SESSION", "LEAD", "TARGET", "ATTENDANCE", "COACH"] &&
-             data.entityId is string;
-    }
-
-    function isValidTask(data) {
-      return data.title is string && data.title.size() > 0 &&
-             data.dueDate is string &&
-             data.status in ["Pending", "In Progress", "Completed"] &&
-             data.priority in ["Low", "Medium", "High"] &&
-             data.assignedTo is string &&
-             data.createdBy is string &&
-             data.createdAt is string;
+             data.amount_paid is number && data.amount_paid >= 0 &&
+             data.sales_rep_id is string;
     }
 
     // ===============================================================
     // Rules
     // ===============================================================
 
-    match /{path=**}/comments/{commentId} {
+    match /users/{userId} {
       allow read: if isAuthenticated();
+      allow create: if isOwner(userId) || isAdmin();
+      allow update: if isOwner(userId) || isAdmin();
       allow delete: if isAdmin();
     }
 
-    match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isOwner(userId) || 
-                    isSuperAdmin() || 
-                    (isAdmin() && request.resource.data.role in ['rep', 'manager', 'admin']);
-      allow update: if isOwner(userId) || 
-                    isSuperAdmin() || 
-                    (isAdmin() && resource.data.role in ['rep', 'manager', 'admin'] && (!('role' in request.resource.data) || request.resource.data.role in ['rep', 'manager', 'admin']));
-      allow delete: if (isAuthenticated() && resource.data.email == request.auth.token.email) || 
-                    isSuperAdmin() || 
-                    (isAdmin() && resource.data.role in ['rep', 'manager', 'admin']);
+    match /targets/{targetId} {
+      allow read: if canViewGlobalDashboard() || (isSalesRep() && resource.data.sales_rep_id == request.auth.uid);
+      allow write: if isSalesManager();
     }
 
-    match /counters/{counterId} {
-      allow read, write: if isAuthenticated();
+    match /userTargets/{targetId} {
+      allow read: if canViewGlobalDashboard() || (isSalesRep() && resource.data.userId == request.auth.uid);
+      allow write: if isSalesManager();
+    }
+
+    match /payments/{paymentId} {
+      allow read: if canViewGlobalDashboard() || (isSalesRep() && resource.data.sales_rep_id == request.auth.uid);
+      allow create: if isAuthenticated() && isValidPayment(request.resource.data);
+      allow update, delete: if canDeletePayments();
+    }
+
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if canAccessSettings();
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if canAccessSettings();
+      allow create: if isAuthenticated();
+      allow delete: if canAccessSettings();
+    }
+
+    match /clients/{clientId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidClient(request.resource.data);
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+
+      match /comments/{commentId} {
+        allow read, create: if isAuthenticated();
+      }
     }
 
     match /packages/{packageId} {
@@ -120,64 +140,23 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    match /userTargets/{targetId} {
+    match /sessions/{sessionId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
     }
 
-    match /importBatches/{batchId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
+    match /attendance/{attendanceId} {
+      allow read, create: if isAuthenticated();
+      allow delete: if isAdmin();
     }
 
     match /tasks/{taskId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidTask(request.resource.data);
-      allow update: if isAuthenticated() && isValidTask(request.resource.data);
-      allow delete: if isAuthenticated(); // Or isAdmin() if only admins should delete
-    }
-
-    match /clients/{clientId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidClient(request.resource.data);
-      allow update: if isAuthenticated() && isValidClient(request.resource.data);
-      allow delete: if isAdmin();
-
-      match /comments/{commentId} {
-        allow read: if isAuthenticated();
-        allow create: if isAuthenticated();
-      }
-    }
-
-    match /payments/{paymentId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidPayment(request.resource.data);
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /sessions/{sessionId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidSession(request.resource.data);
-      allow update: if isAuthenticated() && isValidSession(request.resource.data);
-      allow delete: if isAdmin();
-    }
-
-    match /auditLogs/{logId} {
-      allow read: if isAdmin();
-      allow create: if isAuthenticated() && isValidAuditLog(request.resource.data);
-      allow delete: if isAdmin();
-    }
-
-    match /settings/{settingId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow read, write: if isAuthenticated();
     }
     
-    match /attendance/{attendanceId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow delete: if isAdmin();
+    match /counters/{counterId} {
+      allow read, write: if isAuthenticated();
     }
   }
 }

@@ -20,7 +20,7 @@ import { Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ConfirmDialog } from './components/ConfirmDialog';
 
 export default function Leads() {
-  const { clients, addClient, updateClient, deleteMultipleClients, deleteClient, addComment, currentUser, users } = useAppContext();
+  const { clients, addClient, updateClient, deleteMultipleClients, deleteClient, addComment, currentUser, users, canAssignLeads, canDeleteRecords } = useAppContext();
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [selectedLead, setSelectedLead] = useState<Client | null>(null);
   const [newComment, setNewComment] = useState('');
@@ -48,7 +48,6 @@ export default function Leads() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
-  const canAssignLeads = currentUser?.role === 'manager' || currentUser?.role === 'crm_admin' || currentUser?.role === 'super_admin';
 
   const allLeads = clients.filter(c => c.status === 'Lead');
   
@@ -565,7 +564,7 @@ export default function Leads() {
                     </div>
                   </DialogContent>
                 </Dialog>
-                {(currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
+                {canDeleteRecords && (
                   <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteLead(lead.id)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -589,7 +588,7 @@ export default function Leads() {
           </Button>
           <ImportData type="Lead" />
           <ImportHistory />
-          {(currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
+          {canDeleteRecords && (
             <Button variant="destructive" size="sm" onClick={handleDeleteAllLeads}>
               <Trash2 className="mr-2 h-4 w-4" />
               Delete All Leads
@@ -762,7 +761,7 @@ export default function Leads() {
                 </Select>
               </div>
             ) : null}
-            {(currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
+            {canDeleteRecords && (
               <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
                 <Trash2 className="h-4 w-4 mr-2" /> Delete Selected
               </Button>

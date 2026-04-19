@@ -46,15 +46,33 @@
       "properties": {
         "id": { "type": "string" },
         "clientId": { "type": "string" },
+        "client_name": { "type": "string" },
         "amount": { "type": "number" },
+        "amount_paid": { "type": "number" },
         "date": { "type": "string", "format": "date-time" },
         "method": { "type": "string", "enum": ["Cash", "Credit Card", "Bank Transfer", "Instapay", "Other"] },
         "instapayRef": { "type": "string", "description": "12-digit reference number for Instapay" },
         "packageType": { "type": "string" },
-        "notes": { "type": "string" },
-        "recordedBy": { "type": "string" }
+        "session_type": { "type": "string", "enum": ["Private Training", "Group Training"] },
+        "coach_name": { "type": "string", "description": "Required if session_type is Private Training" },
+        "sales_rep_id": { "type": "string", "description": "User ID of the rep who made the sale" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "deleted_at": { "type": "string", "format": "date-time", "description": "Timestamp for soft deletion" }
       },
-      "required": ["clientId", "amount", "date", "method", "packageType"]
+      "required": ["clientId", "client_name", "amount", "amount_paid", "date", "method", "packageType", "session_type", "sales_rep_id", "created_at"]
+    },
+    "Target": {
+      "title": "Target",
+      "description": "Staff monthly sales targets",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sales_rep_id": { "type": "string" },
+        "month_year": { "type": "string", "description": "Format: YYYY-MM" },
+        "target_total_private": { "type": "number" },
+        "target_total_group": { "type": "number" }
+      },
+      "required": ["sales_rep_id", "month_year", "target_total_private", "target_total_group"]
     },
     "PrivateSession": {
       "title": "PrivateSession",
@@ -91,8 +109,11 @@
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
-        "role": { "type": "string", "enum": ["manager", "rep", "admin"] },
-        "email": { "type": "string", "format": "email" }
+        "role": { "type": "string", "enum": ["admin", "sales_manager", "sales_rep", "manager", "rep"] },
+        "email": { "type": "string", "format": "email" },
+        "can_delete_payments": { "type": "boolean" },
+        "can_view_global_dashboard": { "type": "boolean" },
+        "can_access_settings_and_history": { "type": "boolean" }
       },
       "required": ["name", "role", "email"]
     }
@@ -109,6 +130,10 @@
     "/payments/{paymentId}": {
       "schema": { "$ref": "Payment" },
       "description": "Collection of payment records"
+    },
+    "/targets/{targetId}": {
+      "schema": { "$ref": "Target" },
+      "description": "Collection of staff sales targets"
     },
     "/sessions/{sessionId}": {
       "schema": { "$ref": "PrivateSession" },

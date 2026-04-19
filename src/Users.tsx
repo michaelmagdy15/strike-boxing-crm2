@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { UserRole, User } from './types';
 import { Shield, User as UserIcon, Plus, Trash2, Edit, BarChart } from 'lucide-react';
 import { UserPerformanceDialog } from './components/UserPerformanceDialog';
@@ -22,10 +23,13 @@ export default function Users() {
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editTarget, setEditTarget] = useState('');
+  const [editCanDeletePayments, setEditCanDeletePayments] = useState(false);
+  const [editCanViewGlobalDashboard, setEditCanViewGlobalDashboard] = useState(false);
+  const [editCanAccessSettings, setEditCanAccessSettings] = useState(false);
 
   const [performanceUser, setPerformanceUser] = useState<User | null>(null);
 
-  if (currentUser?.role !== 'manager' && currentUser?.role !== 'admin' && currentUser?.role !== 'super_admin' && currentUser?.role !== 'crm_admin') {
+  if (currentUser?.role !== 'manager' && currentUser?.role !== 'admin' && currentUser?.role !== 'super_admin' && currentUser?.role !== 'crm_admin' && currentUser?.role !== 'sales_manager') {
     return (
       <div className="flex items-center justify-center h-[400px]">
         <p className="text-muted-foreground">You do not have permission to view this page.</p>
@@ -33,8 +37,8 @@ export default function Users() {
     );
   }
 
-  const canChangeRoles = currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin';
-  const canInviteUsers = canChangeRoles || currentUser?.role === 'manager';
+  const canChangeRoles = currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin' || currentUser?.role === 'admin';
+  const canInviteUsers = canChangeRoles || currentUser?.role === 'manager' || currentUser?.role === 'sales_manager';
 
   const handleRoleChange = (userId: string, newRole: UserRole) => {
     updateUser(userId, { role: newRole });
@@ -45,6 +49,9 @@ export default function Users() {
     setEditName(user.name);
     setEditEmail(user.email);
     setEditTarget(user.salesTarget?.toString() || '');
+    setEditCanDeletePayments(user.can_delete_payments || false);
+    setEditCanViewGlobalDashboard(user.can_view_global_dashboard || false);
+    setEditCanAccessSettings(user.can_access_settings_and_history || false);
   };
 
   const handleUpdateUserDetails = () => {
@@ -52,7 +59,10 @@ export default function Users() {
       updateUser(editingUser.id, { 
         name: editName, 
         email: editEmail,
-        salesTarget: editTarget ? parseFloat(editTarget) : undefined
+        salesTarget: editTarget ? parseFloat(editTarget) : undefined,
+        can_delete_payments: editCanDeletePayments,
+        can_view_global_dashboard: editCanViewGlobalDashboard,
+        can_access_settings_and_history: editCanAccessSettings
       });
       setEditingUser(null);
     }
@@ -66,11 +76,13 @@ export default function Users() {
 
   const getRoleBadge = (role: UserRole) => {
     switch (role) {
-      case 'manager': return <Badge className="bg-purple-500"><Shield className="w-3 h-3 mr-1" /> Manager</Badge>;
+      case 'manager':
+      case 'sales_manager': return <Badge className="bg-purple-500"><Shield className="w-3 h-3 mr-1" /> Sales Manager</Badge>;
       case 'admin': return <Badge className="bg-blue-500">Admin</Badge>;
       case 'super_admin': return <Badge className="bg-red-500"><Shield className="w-3 h-3 mr-1" /> Super Admin</Badge>;
       case 'crm_admin': return <Badge className="bg-emerald-500"><Shield className="w-3 h-3 mr-1" /> CRM Admin</Badge>;
-      case 'rep': return <Badge variant="secondary">Sales Rep</Badge>;
+      case 'rep':
+      case 'sales_rep': return <Badge variant="secondary">Sales Rep</Badge>;
       default: return <Badge variant="outline">{role}</Badge>;
     }
   };
@@ -114,13 +126,14 @@ export default function Users() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="rep">Sales Rep</SelectItem>
+                      <SelectItem value="sales_rep">Sales Rep</SelectItem>
+                      <SelectItem value="sales_manager">Sales Manager</SelectItem>
                       {canInviteUsers && (
                         <SelectItem value="admin">Admin</SelectItem>
                       )}
                       {canChangeRoles && (
                         <>
-                          <SelectItem value="manager">Manager</SelectItem>
+                          <SelectItem value="manager">Old Manager</SelectItem>
                           <SelectItem value="crm_admin">CRM Admin</SelectItem>
                           <SelectItem value="super_admin">Super Admin</SelectItem>
                         </>
@@ -173,11 +186,13 @@ export default function Users() {
                           <SelectValue placeholder="Select role" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="sales_rep">Sales Rep</SelectItem>
+                          <SelectItem value="sales_manager">Sales Manager</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
                           <SelectItem value="crm_admin">CRM Admin</SelectItem>
                           <SelectItem value="super_admin">Super Admin</SelectItem>
-                          <SelectItem value="manager">Manager</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
-                          <SelectItem value="rep">Sales Rep</SelectItem>
+                          <SelectItem value="manager">Old Manager</SelectItem>
+                          <SelectItem value="rep">Old Rep</SelectItem>
                         </SelectContent>
                       </Select>
                     ) : (
@@ -256,6 +271,33 @@ export default function Users() {
                 onChange={(e) => setEditTarget(e.target.value)} 
                 placeholder="Leave blank to use global target"
               />
+            </div>
+            <div className="space-y-4 pt-4 border-t">
+              <Label className="text-base">Granular Permissions</Label>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="can_delete" 
+                  checked={editCanDeletePayments} 
+                  onCheckedChange={(checked) => setEditCanDeletePayments(!!checked)} 
+                />
+                <Label htmlFor="can_delete" className="font-normal cursor-pointer">Can delete payments</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="can_global" 
+                  checked={editCanViewGlobalDashboard} 
+                  onCheckedChange={(checked) => setEditCanViewGlobalDashboard(!!checked)} 
+                />
+                <Label htmlFor="can_global" className="font-normal cursor-pointer">Can view global dashboard</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="can_settings" 
+                  checked={editCanAccessSettings} 
+                  onCheckedChange={(checked) => setEditCanAccessSettings(!!checked)} 
+                />
+                <Label htmlFor="can_settings" className="font-normal cursor-pointer">Can access settings & history logs</Label>
+              </div>
             </div>
             <p className="text-xs text-muted-foreground pt-2">
               Note: Updating their email here allows them to login with the new email address if they haven't registered yet. If they already login via Google, it just updates their display email.

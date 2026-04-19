@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function Coaches() {
-  const { coaches, addCoach, updateCoach, deleteCoach, currentUser } = useAppContext();
+  const { coaches, addCoach, updateCoach, deleteCoach, currentUser, canAccessSettings } = useAppContext();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
@@ -23,7 +23,7 @@ export default function Coaches() {
   const [name, setName] = useState('');
   const [active, setActive] = useState(true);
 
-  if (currentUser?.role !== 'manager' && currentUser?.role !== 'admin' && currentUser?.role !== 'super_admin' && currentUser?.role !== 'crm_admin') {
+  if (!canAccessSettings) {
     return (
       <div className="flex items-center justify-center h-full">
         <p className="text-muted-foreground">You do not have permission to view this page.</p>

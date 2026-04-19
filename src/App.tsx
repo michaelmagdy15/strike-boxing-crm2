@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 function AppContent() {
-  const { currentUser, logout, isAuthReady, previewRole, setPreviewRole, searchQuery, setSearchQuery, branding } = useAppContext();
+  const { currentUser, logout, isAuthReady, previewRole, setPreviewRole, searchQuery, setSearchQuery, branding, canAccessSettings } = useAppContext();
 
   if (!isAuthReady) {
     return (
@@ -149,28 +149,25 @@ function AppContent() {
                 </TabsTrigger>
               )}
               
-              {(currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') && (
+              <TabsTrigger value="payments" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
+                <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                Payments
+              </TabsTrigger>
+              <TabsTrigger value="attendance" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
+                <Scan className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                Attendance
+              </TabsTrigger>
+
+              {canAccessSettings && (
                 <>
-                  <TabsTrigger value="payments" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                    <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                    Payments
+                  <TabsTrigger value="audit" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
+                    <History className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                    History
                   </TabsTrigger>
-                  <TabsTrigger value="attendance" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                    <Scan className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                    Attendance
+                  <TabsTrigger value="settings" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
+                    <SettingsIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                    Settings
                   </TabsTrigger>
-                  {currentUser.role !== 'admin' && (
-                    <>
-                      <TabsTrigger value="audit" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                        <History className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                        History
-                      </TabsTrigger>
-                      <TabsTrigger value="settings" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                        <SettingsIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                        Settings
-                      </TabsTrigger>
-                    </>
-                  )}
                 </>
               )}
             </TabsList>
@@ -196,26 +193,22 @@ function AppContent() {
             </TabsContent>
           )}
 
-          {(currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') && (
+          <TabsContent value="payments" className="m-0 animate-in fade-in-50 duration-500">
+            <Payments />
+          </TabsContent>
+
+          <TabsContent value="attendance" className="m-0 animate-in fade-in-50 duration-500">
+            <Attendance />
+          </TabsContent>
+
+          {canAccessSettings && (
             <>
-              <TabsContent value="payments" className="m-0 animate-in fade-in-50 duration-500">
-                <Payments />
+              <TabsContent value="audit" className="m-0 animate-in fade-in-50 duration-500">
+                <AuditLogs />
               </TabsContent>
-
-              <TabsContent value="attendance" className="m-0 animate-in fade-in-50 duration-500">
-                <Attendance />
+              <TabsContent value="settings" className="m-0 animate-in fade-in-50 duration-500">
+                <Settings />
               </TabsContent>
-
-              {currentUser.role !== 'admin' && (
-                <>
-                  <TabsContent value="audit" className="m-0 animate-in fade-in-50 duration-500">
-                    <AuditLogs />
-                  </TabsContent>
-                  <TabsContent value="settings" className="m-0 animate-in fade-in-50 duration-500">
-                    <Settings />
-                  </TabsContent>
-                </>
-              )}
             </>
           )}
         </Tabs>

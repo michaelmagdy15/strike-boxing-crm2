@@ -21,11 +21,16 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
   const currentMonthStr = format(new Date(), 'yyyy-MM');
   const existingCurrentTarget = userTargets.find(t => t.userId === user.id && t.month === currentMonthStr);
   const [newTarget, setNewTarget] = useState(existingCurrentTarget?.targetAmount.toString() || '');
+  const [newPrivateTarget, setNewPrivateTarget] = useState(existingCurrentTarget?.privateTarget?.toString() || '0');
+  const [newGroupTarget, setNewGroupTarget] = useState(existingCurrentTarget?.groupTarget?.toString() || '0');
   
   const handleSaveTarget = () => {
-    const targetAmt = parseFloat(newTarget);
-    if (!isNaN(targetAmt) && targetAmt >= 0) {
-      updateUserTarget(user.id, currentMonthStr, targetAmt);
+    const totalAmt = parseFloat(newTarget);
+    const privateAmt = parseFloat(newPrivateTarget);
+    const groupAmt = parseFloat(newGroupTarget);
+
+    if (!isNaN(totalAmt) && totalAmt >= 0) {
+      updateUserTarget(user.id, currentMonthStr, totalAmt, privateAmt, groupAmt);
     }
   };
 
@@ -40,6 +45,8 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
       
       const targetDoc = userTargets.find(t => t.userId === user.id && t.month === monthStr);
       const targetAmount = targetDoc ? targetDoc.targetAmount : 0;
+      const privateTarget = targetDoc ? (targetDoc.privateTarget || 0) : 0;
+      const groupTarget = targetDoc ? (targetDoc.groupTarget || 0) : 0;
       
       // Calculate achieved by getting payments in this month attributed to this user
       const monthPayments = payments.filter(p => {
@@ -67,6 +74,8 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
         achievedAmount,
         privateSessionsSold,
         groupSessionsSold,
+        privateTarget,
+        groupTarget,
         isTargetMet: targetAmount > 0 && achievedAmount >= targetAmount
       };
     });
@@ -84,19 +93,42 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
         
         <div className="space-y-6 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-3 p-4 border rounded-md bg-muted/20">
-              <h4 className="font-semibold text-sm">Set Target ({format(new Date(), 'MMM yyyy')})</h4>
-              <div className="space-y-2">
-                <Label>Monthly Target Amount (LE)</Label>
-                <div className="flex gap-2">
+            <div className="space-y-4 p-4 border rounded-md bg-muted/20">
+              <h4 className="font-semibold text-sm">Set Targets ({format(new Date(), 'MMM yyyy')})</h4>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Monthly Total Amount (LE)</Label>
                   <Input 
                     type="number" 
                     value={newTarget} 
                     onChange={e => setNewTarget(e.target.value)}
                     placeholder="e.g. 50000"
+                    className="h-8"
                   />
-                  <Button onClick={handleSaveTarget}>Save</Button>
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Private Target</Label>
+                    <Input 
+                      type="number" 
+                      value={newPrivateTarget} 
+                      onChange={e => setNewPrivateTarget(e.target.value)}
+                      placeholder="0"
+                      className="h-8"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Group Target</Label>
+                    <Input 
+                      type="number" 
+                      value={newGroupTarget} 
+                      onChange={e => setNewGroupTarget(e.target.value)}
+                      placeholder="0"
+                      className="h-8"
+                    />
+                  </div>
+                </div>
+                <Button onClick={handleSaveTarget} className="w-full mt-2">Save Targets</Button>
               </div>
             </div>
             
@@ -118,11 +150,17 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
                   <span className="text-xs uppercase font-bold text-muted-foreground">Session Breakdown</span>
                   <div className="flex justify-between mt-1">
                     <span className="text-sm text-muted-foreground">Private:</span>
-                    <span className="font-medium">{currentMonthData?.privateSessionsSold} sold</span>
+                    <div className="text-right">
+                      <span className="font-medium">{currentMonthData?.privateSessionsSold} achieved</span>
+                      {currentMonthData?.privateTarget > 0 && <span className="text-xs text-muted-foreground block">of {currentMonthData.privateTarget} target</span>}
+                    </div>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between mt-1">
                     <span className="text-sm text-muted-foreground">Group:</span>
-                    <span className="font-medium">{currentMonthData?.groupSessionsSold} sold</span>
+                    <div className="text-right">
+                      <span className="font-medium">{currentMonthData?.groupSessionsSold} achieved</span>
+                      {currentMonthData?.groupTarget > 0 && <span className="text-xs text-muted-foreground block">of {currentMonthData.groupTarget} target</span>}
+                    </div>
                   </div>
                 </div>
               </div>

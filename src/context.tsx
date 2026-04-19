@@ -100,7 +100,7 @@ interface AppContextType {
   addComment: (clientId: string, text: string, author: string) => Promise<void>;
   addPayment: (payment: Omit<Payment, 'id'>) => Promise<void>;
   updateSalesTarget: (target: number) => Promise<void>;
-  updateUserTarget: (userId: string, month: string, amount: number) => Promise<void>;
+  updateUserTarget: (userId: string, month: string, total: number, privateTarget: number, groupTarget: number) => Promise<void>;
   addPrivateSession: (session: Omit<PrivateSession, 'id'>) => Promise<void>;
   updatePrivateSession: (id: string, updates: Partial<PrivateSession>) => Promise<void>;
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'createdBy'>) => Promise<void>;
@@ -121,7 +121,13 @@ interface AppContextType {
   setPreviewRole: (role: UserRole | null) => void;
   attendances: Attendance[];
   recordAttendance: (clientId: string, branch: Branch) => Promise<void>;
+  deletePayment: (id: string) => Promise<void>;
   wipeSystem: () => Promise<void>;
+  canDeletePayments: boolean;
+  canAccessSettings: boolean;
+  canViewGlobalDashboard: boolean;
+  canDeleteRecords: boolean;
+  canAssignLeads: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -172,6 +178,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return currentUser?.role;
   }, [currentUser, previewRole]);
+  const isManagerOrSama = useMemo(() => {
+    if (!currentUser) return false;
+    const role = effectiveRole;
+    if (role === 'admin' && currentUser.name.toLowerCase().includes('sama')) return true;
+    return role === 'manager' || role === 'sales_manager' || role === 'admin' || role === 'super_admin' || role === 'crm_admin';
+  }, [currentUser, effectiveRole]);
+
+  const isAtefStrict = useMemo(() => {
+    if (!currentUser) return false;
+    const role = effectiveRole;
+    const nameMatch = currentUser.name.toLowerCase().includes('atef');
+    const roleMatch = role === 'manager' || role === 'sales_manager';
+    return nameMatch && roleMatch;
+  }, [currentUser, effectiveRole]);
+
+  const canDeletePayments = useMemo(() => {
+    if (!currentUser) return false;
+    const role = effectiveRole;
+    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager') return true;
+    if (role === 'admin' && currentUser.name.toLowerCase().includes('sama')) return true;
+    return !!currentUser.can_delete_payments;
+  }, [currentUser, effectiveRole]);
+
+  const canAccessSettings = useMemo(() => {
+    if (!currentUser) return false;
+    const role = effectiveRole;
+    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager') return true;
+    if (currentUser.name.toLowerCase().includes('atef')) return true;
+    return !!currentUser.can_access_settings_and_history;
+  }, [currentUser, effectiveRole]);
+
+  const canViewGlobalDashboard = useMemo(() => {
+    if (!currentUser) return false;
+    const role = effectiveRole;
+    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager' || role === 'admin') return true;
+    return !!currentUser.can_view_global_dashboard;
+  }, [currentUser, effectiveRole]);
+
+  const canDeleteRecords = useMemo(() => {
+    if (!currentUser) return false;
+    const role = effectiveRole;
+    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager') return true;
+    return !!currentUser.can_delete_records || !!currentUser.can_delete_payments;
+  }, [currentUser, effectiveRole]);
+
+  const canAssignLeads = useMemo(() => {
+    if (!currentUser) return false;
+    const role = effectiveRole;
+    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager') return true;
+    return !!currentUser.can_assign_leads || !!currentUser.can_access_settings_and_history;
+  }, [currentUser, effectiveRole]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -289,10 +346,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'coaches'));
 
     let unsubTargets: (() => void) | undefined;
-    if (currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') {
-      unsubTargets = onSnapshot(collection(db, 'userTargets'), (snapshot) => {
+    if (currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin' || currentUser.role === 'sales_manager') {
+      unsubTargets = onSnapshot(collection(db, 'targets'), (snapshot) => {
         setUserTargets(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as UserSalesTarget)));
-      }, (error) => handleFirestoreError(error, OperationType.LIST, 'userTargets'));
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'targets'));
     }
 
     const unsubBatches = onSnapshot(query(collection(db, 'importBatches'), orderBy('date', 'desc')), (snapshot) => {
@@ -329,7 +386,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Seed initial coaches if none exist
   useEffect(() => {
     const seedInitialCoaches = async () => {
-      if (currentUser && (currentUser.role === 'manager' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin')) {
+      if (currentUser && (currentUser.role === 'manager' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin' || currentUser.role === 'sales_manager')) {
         try {
           const snapshot = await getDocs(collection(db, 'coaches'));
           if (snapshot.empty) {
@@ -568,12 +625,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addPayment = async (payment: Omit<Payment, 'id'>) => {
+    if (!currentUser) return;
     try {
-      const docRef = await addDoc(collection(db, 'payments'), cleanData(payment));
-      const clientName = clients.find(c => c.id === payment.clientId)?.name || payment.clientId;
+      const client = clients.find(c => c.id === payment.clientId);
+      const clientName = client?.name || payment.clientId;
+      
+      const paymentData = {
+        ...payment,
+        client_name: clientName,
+        amount_paid: payment.amount,
+        sales_rep_id: currentUser.id,
+        created_at: new Date().toISOString(),
+        session_type: payment.packageType.toLowerCase().includes('pt') || payment.packageType.toLowerCase().includes('private') 
+          ? 'Private Training' 
+          : 'Group Training',
+        deleted_at: null
+      };
+
+      const docRef = await addDoc(collection(db, 'payments'), cleanData(paymentData));
       await addAuditLog('CREATE', 'PAYMENT', docRef.id, `Recorded payment of ${payment.amount} LE for ${clientName}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'payments');
+    }
+  };
+
+  const deletePayment = async (id: string) => {
+    if (!canDeletePayments) {
+      throw new Error("Unauthorized: You do not have permission to delete payments.");
+    }
+    try {
+      const payment = payments.find(p => p.id === id);
+      const clientName = payment ? (clients.find(c => c.id === payment.clientId)?.name || payment.clientId) : id;
+      const amount = payment?.amount || 'unknown';
+      
+      await deleteDoc(doc(db, 'payments', id));
+      await addAuditLog('DELETE', 'PAYMENT', id, `Deleted payment of ${amount} LE for ${clientName}`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `payments/${id}`);
     }
   };
 
@@ -582,26 +670,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await addAuditLog('UPDATE', 'TARGET', 'sales-target', `Updated sales target to ${target}`);
   };
 
-  const updateUserTarget = async (userId: string, month: string, amount: number) => {
+  const updateUserTarget = async (userId: string, month: string, total: number, privateTarget: number, groupTarget: number) => {
     if (!currentUser) return;
     try {
-      // Find existing target for this user and month
-      const existing = userTargets.find(t => t.userId === userId && t.month === month);
+      // Find existing target for this user and month in 'targets' collection
+      const existing = userTargets.find(t => (t.userId === userId || t.sales_rep_id === userId) && (t.month === month || t.month_year === month));
+      const targetData = {
+        userId,
+        sales_rep_id: userId,
+        month,
+        month_year: month,
+        targetAmount: total,
+        target_total_private: privateTarget,
+        target_total_group: groupTarget,
+        privateTarget,
+        groupTarget,
+        setBy: currentUser.id,
+        createdAt: new Date().toISOString()
+      };
+
       if (existing) {
-        await updateDoc(doc(db, 'userTargets', existing.id), { targetAmount: amount, setBy: currentUser.id });
-        await addAuditLog('UPDATE', 'TARGET', existing.id, `Updated user target for ${month} to ${amount}`);
+        await updateDoc(doc(db, 'targets', existing.id), cleanData(targetData));
+        await addAuditLog('UPDATE', 'TARGET', existing.id, `Updated user target for ${month}: Total ${total}, Private ${privateTarget}, Group ${groupTarget}`);
       } else {
-        const docRef = await addDoc(collection(db, 'userTargets'), {
-          userId,
-          month,
-          targetAmount: amount,
-          setBy: currentUser.id,
-          createdAt: new Date().toISOString()
-        });
-        await addAuditLog('CREATE', 'TARGET', docRef.id, `Created user target for ${month} with ${amount}`);
+        const docRef = await addDoc(collection(db, 'targets'), cleanData(targetData));
+        await addAuditLog('CREATE', 'TARGET', docRef.id, `Created user target for ${month}: Total ${total}, Private ${privateTarget}, Group ${groupTarget}`);
       }
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'userTargets');
+      handleFirestoreError(error, OperationType.UPDATE, 'targets');
     }
   };
 
@@ -759,7 +855,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const visibleClients = useMemo(() => {
     if (!currentUser) return [];
     let filtered = clients;
-    if (effectiveRole !== 'manager' && effectiveRole !== 'admin' && effectiveRole !== 'super_admin' && effectiveRole !== 'crm_admin') {
+    if (!canViewGlobalDashboard) {
       filtered = clients.filter(c => c.assignedTo === currentUser.id);
     }
     if (searchQuery) {
@@ -776,10 +872,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Filter payments based on visible clients
   const visiblePayments = useMemo(() => {
     if (!currentUser) return [];
-    if (effectiveRole === 'manager' || effectiveRole === 'admin') return payments;
+    if (canViewGlobalDashboard) return payments;
+    
     const visibleClientIds = new Set(visibleClients.map(c => c.id));
-    return payments.filter(p => visibleClientIds.has(p.clientId));
-  }, [payments, visibleClients, currentUser, effectiveRole]);
+    return payments.filter(p => 
+      visibleClientIds.has(p.clientId) || 
+      p.recordedBy === currentUser.id ||
+      p.sales_rep_id === currentUser.id
+    );
+  }, [payments, visibleClients, currentUser, canViewGlobalDashboard]);
 
   // Filter tasks based on user role
   const visibleTasks = useMemo(() => {
@@ -793,17 +894,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const privateSold = visiblePayments.filter(p => p.packageType.toLowerCase().includes('private')).length;
     const groupSold = visiblePayments.filter(p => p.packageType.toLowerCase().includes('group') || p.packageType.toLowerCase().includes('gt')).length;
     
-    const targetAmount = (currentUser?.role === 'rep' && currentUser?.salesTarget) 
-      ? currentUser.salesTarget 
-      : globalSalesTarget;
+    // Month string for current targets
+    const currentMonthStr = new Date().toISOString().substring(0, 7); // 'YYYY-MM'
+
+    let targetAmount = globalSalesTarget;
+    let privateTarget = 0;
+    let groupTarget = 0;
+
+    if (currentUser?.role === 'rep') {
+      const personalTarget = userTargets.find(t => t.userId === currentUser.id && t.month === currentMonthStr);
+      if (personalTarget) {
+        targetAmount = personalTarget.targetAmount;
+        privateTarget = personalTarget.privateTarget || 0;
+        groupTarget = personalTarget.groupTarget || 0;
+      } else if (currentUser.salesTarget) {
+        targetAmount = currentUser.salesTarget;
+      }
+    } else {
+      // For managers, we could sum all targets for this month or use global
+      const allMonthTargets = userTargets.filter(t => t.month === currentMonthStr);
+      if (allMonthTargets.length > 0) {
+        targetAmount = allMonthTargets.reduce((sum, t) => sum + t.targetAmount, 0);
+        privateTarget = allMonthTargets.reduce((sum, t) => sum + (t.privateTarget || 0), 0);
+        groupTarget = allMonthTargets.reduce((sum, t) => sum + (t.groupTarget || 0), 0);
+      }
+    }
 
     return {
       targetAmount,
       currentAmount: total,
       privateSessionsSold: privateSold,
-      groupSessionsSold: groupSold
+      groupSessionsSold: groupSold,
+      privateTarget,
+      groupTarget
     };
-  }, [visiblePayments, globalSalesTarget, currentUser]);
+  }, [visiblePayments, globalSalesTarget, currentUser, userTargets]);
 
   const contextValue = useMemo(() => ({ 
     currentUser: currentUser ? { ...currentUser, role: effectiveRole as any } : null, 
@@ -832,6 +957,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     inviteUser,
     addComment, 
     addPayment, 
+    deletePayment,
     updateSalesTarget,
     updateUserTarget,
     addPrivateSession,
@@ -881,6 +1007,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     isAuthReady,
     previewRole,
     setPreviewRole,
+    isManagerOrSama,
+    isAtefStrict,
+    canDeletePayments,
+    canAccessSettings,
+    canViewGlobalDashboard,
+    canDeleteRecords,
+    canAssignLeads,
     wipeSystem: async () => {
       if (!currentUser || (currentUser.role !== 'super_admin' && currentUser.role !== 'crm_admin' && currentUser.email !== 'michaelmitry13@gmail.com')) {
         throw new Error("Unauthorized: Only super admins can wipe the system.");
@@ -960,7 +1093,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     searchQuery,
     isAuthReady, 
     previewRole,
-    attendances
+    attendances,
+    canDeletePayments,
+    canAccessSettings,
+    canViewGlobalDashboard
   ]);
 
   return (
