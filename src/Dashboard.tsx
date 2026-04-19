@@ -6,8 +6,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAppContext } from './context';
-import { differenceInDays, isSameDay, parseISO, isAfter, isBefore, addDays, subDays } from 'date-fns';
+import { differenceInDays, isSameDay, parseISO, isAfter, isBefore, addDays, subDays, subMonths, startOfMonth, endOfMonth, isWithinInterval, format } from 'date-fns';
 import { Target, Users, CalendarDays, AlertTriangle, Gift, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 function PaginatedList({ items, renderItem, itemsPerPage = 5 }: { items: any[], renderItem: (item: any) => React.ReactNode, itemsPerPage?: number }) {
   const [currentPage, setCurrentPage] = useState(1);
@@ -49,7 +50,7 @@ function PaginatedList({ items, renderItem, itemsPerPage = 5 }: { items: any[], 
 }
 
 export default function Dashboard() {
-  const { clients, salesTarget, updateSalesTarget, currentUser, payments } = useAppContext();
+  const { clients, salesTarget, updateSalesTarget, currentUser, payments, userTargets } = useAppContext();
   const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false);
   const [newTarget, setNewTarget] = useState(salesTarget.targetAmount.toString());
   
@@ -107,6 +108,53 @@ export default function Dashboard() {
   const totalCash = payments ? payments.filter(p => p.method === 'Cash').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0;
   const totalVisa = payments ? payments.filter(p => p.method === 'Credit Card').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0;
   const totalInstapay = payments ? payments.filter(p => p.method === 'Instapay').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0;
+
+  const totalSessionsSold = salesTarget.privateSessionsSold + salesTarget.groupSessionsSold;
+  const privatePercentage = totalSessionsSold > 0 ? Math.round((salesTarget.privateSessionsSold / totalSessionsSold) * 100) : 0;
+  const groupPercentage = totalSessionsSold > 0 ? Math.round((salesTarget.groupSessionsSold / totalSessionsSold) * 100) : 0;
+
+  // Chart Data
+  const chartData = React.useMemo(() => {
+    const months = Array.from({ length: 6 }).map((_, i) => subMonths(now, 5 - i));
+    
+    return months.map(date => {
+      const monthStr = format(date, 'yyyy-MM');
+      const start = startOfMonth(date);
+      const end = endOfMonth(date);
+      
+      let targetAmount = 0;
+      if (currentUser?.role === 'rep') {
+        const targetDoc = userTargets.find(t => t.userId === currentUser.id && t.month === monthStr);
+        targetAmount = targetDoc ? targetDoc.targetAmount : 0;
+      }
+
+      const monthPayments = payments.filter(p => {
+        const pDate = parseISO(p.date);
+        if (!isWithinInterval(pDate, { start, end })) return false;
+        
+        // For reps, only count their own sales
+        if (currentUser?.role === 'rep') {
+          if (p.recordedBy === currentUser.id) return true;
+          if (!p.recordedBy) {
+            const client = clients.find(c => c.id === p.clientId);
+            if (client && client.assignedTo === currentUser.id) return true;
+          }
+          return false;
+        }
+        
+        // Admins/Managers see everything
+        return true;
+      });
+
+      const achievedAmount = monthPayments.reduce((sum, p) => sum + p.amount, 0);
+
+      return {
+        month: format(date, 'MMM yyyy'),
+        targetAmount,
+        achievedAmount,
+      };
+    });
+  }, [userTargets, payments, clients, currentUser]);
 
   return (
     <div className="space-y-6">
@@ -179,6 +227,26 @@ export default function Dashboard() {
                   style={{ width: `${Math.min(targetPercentage, 100)}%` }}
                 />
               </div>
+
+              {currentUser?.role === 'rep' && (
+                <div className="mt-4 pt-3 border-t">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-2">Sessions Breakdown</span>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Private:</span>
+                      <span className="font-medium">
+                        {salesTarget.privateSessionsSold} <span className="text-xs text-muted-foreground ml-1">({privatePercentage}%)</span>
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Group:</span>
+                      <span className="font-medium">
+                        {salesTarget.groupSessionsSold} <span className="text-xs text-muted-foreground ml-1">({groupPercentage}%)</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -236,24 +304,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Session Breakdown</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Private Sessions</span>
-                <span className="text-sm font-bold">{salesTarget.privateSessionsSold}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Group Sessions</span>
-                <span className="text-sm font-bold">{salesTarget.groupSessionsSold}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
 
         <Card>
           <CardHeader>

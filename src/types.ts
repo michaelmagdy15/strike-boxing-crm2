@@ -62,7 +62,7 @@ export interface AuditLog {
   id: string;
   userId: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE';
-  entityType: 'CLIENT' | 'PAYMENT' | 'SESSION' | 'LEAD' | 'TARGET' | 'ATTENDANCE';
+  entityType: 'CLIENT' | 'PAYMENT' | 'SESSION' | 'LEAD' | 'TARGET' | 'ATTENDANCE' | 'COACH';
   entityId: string;
   details: string;
   timestamp: string;

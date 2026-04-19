@@ -117,8 +117,8 @@ interface AppContextType {
   isAuthReady: boolean;
   branding: BrandingSettings;
   updateBranding: (branding: Partial<BrandingSettings>) => Promise<void>;
-  previewRole: 'manager' | 'rep' | null;
-  setPreviewRole: (role: 'manager' | 'rep' | null) => void;
+  previewRole: UserRole | null;
+  setPreviewRole: (role: UserRole | null) => void;
   attendances: Attendance[];
   recordAttendance: (clientId: string, branch: Branch) => Promise<void>;
   wipeSystem: () => Promise<void>;
@@ -164,10 +164,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [previewRole, setPreviewRole] = useState<'manager' | 'rep' | null>(null);
+  const [previewRole, setPreviewRole] = useState<UserRole | null>(null);
 
   const effectiveRole = useMemo(() => {
-    if (currentUser?.role === 'manager' && previewRole) {
+    if ((currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && previewRole) {
       return previewRole;
     }
     return currentUser?.role;
@@ -695,7 +695,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addCoach = async (coach: Omit<Coach, 'id'>) => {
     try {
       const docRef = await addDoc(collection(db, 'coaches'), cleanData(coach));
-      await addAuditLog('CREATE', 'CLIENT', docRef.id, `Created coach: ${coach.name}`);
+      await addAuditLog('CREATE', 'COACH', docRef.id, `Created coach: ${coach.name}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'coaches');
     }
@@ -705,7 +705,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await updateDoc(doc(db, 'coaches', id), cleanData(updates));
       const coachName = coaches.find(c => c.id === id)?.name || id;
-      await addAuditLog('UPDATE', 'CLIENT', id, `Updated coach: ${coachName}`);
+      await addAuditLog('UPDATE', 'COACH', id, `Updated coach: ${coachName}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `coaches/${id}`);
     }
@@ -715,7 +715,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const coachName = coaches.find(c => c.id === id)?.name || id;
       await deleteDoc(doc(db, 'coaches', id));
-      await addAuditLog('DELETE', 'CLIENT', id, `Deleted coach: ${coachName}`);
+      await addAuditLog('DELETE', 'COACH', id, `Deleted coach: ${coachName}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `coaches/${id}`);
     }
@@ -955,6 +955,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     packages,
     coaches,
     importBatches,
+    userTargets,
     branding,
     searchQuery,
     isAuthReady, 

@@ -70,7 +70,7 @@ service cloud.firestore {
     function isValidAuditLog(data) {
       return data.userId is string &&
              data.action in ["CREATE", "UPDATE", "DELETE"] &&
-             data.entityType in ["CLIENT", "PAYMENT", "SESSION", "LEAD", "TARGET", "ATTENDANCE"] &&
+             data.entityType in ["CLIENT", "PAYMENT", "SESSION", "LEAD", "TARGET", "ATTENDANCE", "COACH"] &&
              data.entityId is string;
     }
 
@@ -95,8 +95,15 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isOwner(userId) || isSuperAdmin();
-      allow delete: if isAuthenticated() && resource.data.email == request.auth.token.email;
+      allow create: if isOwner(userId) || 
+                    isSuperAdmin() || 
+                    (isAdmin() && request.resource.data.role in ['rep', 'manager', 'admin']);
+      allow update: if isOwner(userId) || 
+                    isSuperAdmin() || 
+                    (isAdmin() && resource.data.role in ['rep', 'manager', 'admin'] && (!('role' in request.resource.data) || request.resource.data.role in ['rep', 'manager', 'admin']));
+      allow delete: if (isAuthenticated() && resource.data.email == request.auth.token.email) || 
+                    isSuperAdmin() || 
+                    (isAdmin() && resource.data.role in ['rep', 'manager', 'admin']);
     }
 
     match /counters/{counterId} {
@@ -104,6 +111,16 @@ service cloud.firestore {
     }
 
     match /packages/{packageId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /coaches/{coachId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /userTargets/{targetId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }

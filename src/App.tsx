@@ -19,6 +19,7 @@ import Settings from './Settings';
 import Login from './Login';
 import { Activity, Users, UserPlus, CreditCard, LogOut, Calendar as CalendarIcon, ShieldAlert, Settings as SettingsIcon, Eye, EyeOff, CheckSquare, Package, Search, Scan, History } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 function AppContent() {
   const { currentUser, logout, isAuthReady, previewRole, setPreviewRole, searchQuery, setSearchQuery, branding } = useAppContext();
@@ -34,8 +35,6 @@ function AppContent() {
   if (!currentUser) {
     return <Login />;
   }
-
-  const isPreviewing = previewRole === 'rep';
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
@@ -67,15 +66,27 @@ function AppContent() {
               />
             </div>
             {currentUser.email === "michaelmitry13@gmail.com" && (
-              <Button 
-                variant={isPreviewing ? "default" : "outline"} 
-                size="sm" 
-                onClick={() => setPreviewRole(isPreviewing ? null : 'rep')}
-                className="hidden sm:flex items-center space-x-2 h-8"
-              >
-                {isPreviewing ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                <span>{isPreviewing ? "Exit Preview" : "Preview Rep View"}</span>
-              </Button>
+              <div className="hidden sm:flex items-center space-x-2 h-8">
+                <Select 
+                  value={previewRole || "none"} 
+                  onValueChange={(v) => setPreviewRole(v === "none" ? null : v as any)}
+                >
+                  <SelectTrigger className={`h-8 w-[150px] text-xs ${previewRole ? 'border-amber-500 text-amber-600 font-medium' : ''}`}>
+                    <div className="flex items-center">
+                       {previewRole ? <Eye className="h-3.5 w-3.5 mr-2" /> : <EyeOff className="h-3.5 w-3.5 mr-2" />}
+                       <SelectValue placeholder="Preview Role" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Exit Preview</SelectItem>
+                    <SelectItem value="crm_admin">CRM Admin</SelectItem>
+                    <SelectItem value="super_admin">Super Admin</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="rep">Sales Rep</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             )}
           </div>
           <div className="flex items-center space-x-2 sm:space-x-4 ml-auto">
@@ -89,8 +100,8 @@ function AppContent() {
             </div>
             <div className="text-xs sm:text-sm font-medium text-muted-foreground flex flex-col items-end">
               <span className="font-bold text-foreground truncate max-w-[120px] sm:max-w-none">{currentUser.name}</span>
-              <span className={`text-[10px] sm:text-xs uppercase tracking-wider ${isPreviewing ? 'text-amber-500 font-bold' : ''}`}>
-                {isPreviewing ? 'Preview: Sales Rep' : currentUser.role}
+              <span className={`text-[10px] sm:text-xs uppercase tracking-wider ${previewRole ? 'text-amber-500 font-bold' : ''}`}>
+                {previewRole ? `PREVIEW: ${previewRole}` : currentUser.role}
               </span>
             </div>
             <Button variant="ghost" size="icon" onClick={logout} title="Logout" className="h-8 w-8 sm:h-10 sm:w-10">

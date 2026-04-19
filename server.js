@@ -8,6 +8,10 @@ var __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const PORT = 3e3;
+  app.use((req, res, next) => {
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+    next();
+  });
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
   });
