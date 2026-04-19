@@ -196,7 +196,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const canDeletePayments = useMemo(() => {
     if (!currentUser) return false;
     const role = effectiveRole;
-    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager') return true;
+    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager' || role === 'admin') return true;
     if (role === 'admin' && currentUser.name.toLowerCase().includes('sama')) return true;
     return !!currentUser.can_delete_payments;
   }, [currentUser, effectiveRole]);
@@ -204,7 +204,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const canAccessSettings = useMemo(() => {
     if (!currentUser) return false;
     const role = effectiveRole;
-    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager') return true;
+    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager' || role === 'admin') return true;
     if (currentUser.name.toLowerCase().includes('atef')) return true;
     return !!currentUser.can_access_settings_and_history;
   }, [currentUser, effectiveRole]);
@@ -219,14 +219,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const canDeleteRecords = useMemo(() => {
     if (!currentUser) return false;
     const role = effectiveRole;
-    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager') return true;
+    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager' || role === 'admin') return true;
     return !!currentUser.can_delete_records || !!currentUser.can_delete_payments;
   }, [currentUser, effectiveRole]);
 
   const canAssignLeads = useMemo(() => {
     if (!currentUser) return false;
     const role = effectiveRole;
-    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager') return true;
+    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager' || role === 'admin') return true;
     return !!currentUser.can_assign_leads || !!currentUser.can_access_settings_and_history;
   }, [currentUser, effectiveRole]);
 

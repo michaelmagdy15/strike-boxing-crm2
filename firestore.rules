@@ -9,7 +9,14 @@ service cloud.firestore {
     }
 
     function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(userPath) ? get(userPath).data : {
+        "role": "none", 
+        "name": "Anonymous",
+        "can_delete_payments": false,
+        "can_access_settings_and_history": false,
+        "can_view_global_dashboard": false
+      };
     }
 
     function isOwner(userId) {
@@ -18,9 +25,10 @@ service cloud.firestore {
 
     // New granular permission helpers matching context.tsx
     function canDeletePayments() {
+      if (!isAuthenticated()) return false;
+      
       let data = getUserData();
-      return isAuthenticated() && (
-        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
+      return (
         data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
         (data.role == 'admin' && data.name.lower().matches('.*sama.*')) ||
         data.can_delete_payments == true
@@ -28,9 +36,10 @@ service cloud.firestore {
     }
 
     function canAccessSettings() {
+      if (!isAuthenticated()) return false;
+      
       let data = getUserData();
-      return isAuthenticated() && (
-        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
+      return (
         data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
         data.name.lower().matches('.*atef.*') ||
         data.can_access_settings_and_history == true
@@ -38,9 +47,10 @@ service cloud.firestore {
     }
 
     function canViewGlobalDashboard() {
+      if (!isAuthenticated()) return false;
+      
       let data = getUserData();
-      return isAuthenticated() && (
-        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
+      return (
         data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
         (data.role == 'admin' && data.name.lower().matches('.*sama.*')) ||
         data.can_view_global_dashboard == true
@@ -49,9 +59,10 @@ service cloud.firestore {
 
     // Keep isAdmin for administrative tasks (user management, etc.)
     function isAdmin() {
+      if (!isAuthenticated()) return false;
+      
       let data = getUserData();
-      return isAuthenticated() && (
-        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
+      return (
         data.role in ['admin', 'super_admin', 'crm_admin', 'sales_manager', 'manager']
       );
     }
