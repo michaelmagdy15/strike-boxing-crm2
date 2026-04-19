@@ -5,10 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Save, Building2, Image as ImageIcon, Users, Package, AlertTriangle, ShieldAlert, Trash2 } from 'lucide-react';
+import { Save, Building2, Image as ImageIcon, Users, Package, AlertTriangle, ShieldAlert, Trash2, Dumbbell } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import UsersManagement from './Users';
 import Packages from './Packages';
+import Coaches from './Coaches';
 
 export default function Settings() {
   const { branding, updateBranding, currentUser, wipeSystem } = useAppContext();
@@ -56,6 +57,10 @@ export default function Settings() {
           <TabsTrigger value="packages" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
             Packages
+          </TabsTrigger>
+          <TabsTrigger value="coaches" className="flex items-center gap-2">
+            <Dumbbell className="h-4 w-4" />
+            Coaches
           </TabsTrigger>
           {canWipe && (
             <TabsTrigger value="danger" className="flex items-center gap-2 text-destructive data-[state=active]:bg-destructive data-[state=active]:text-destructive-foreground">
@@ -156,6 +161,10 @@ export default function Settings() {
 
         <TabsContent value="packages" className="animate-in fade-in-50 duration-500">
           <Packages />
+        </TabsContent>
+
+        <TabsContent value="coaches" className="animate-in fade-in-50 duration-500">
+          <Coaches />
         </TabsContent>
 
         {canWipe && (

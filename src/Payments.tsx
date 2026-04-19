@@ -14,7 +14,7 @@ import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, 
 import { AlertDialog } from './components/AlertDialog';
 
 export default function Payments() {
-  const { payments, clients, users, packages, addPayment, updateClient, currentUser, branding } = useAppContext();
+  const { payments, clients, users, packages, coaches, addPayment, updateClient, currentUser, branding } = useAppContext();
   const [isNewPaymentOpen, setIsNewPaymentOpen] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
@@ -26,6 +26,7 @@ export default function Payments() {
   const [instapayRef, setInstapayRef] = useState('');
   const [packageType, setPackageType] = useState('');
   const [customPackage, setCustomPackage] = useState('');
+  const [coachName, setCoachName] = useState('');
   const [notes, setNotes] = useState('');
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,6 +51,14 @@ export default function Payments() {
         return;
       }
 
+      const isPT = /\\bpt\\b/i.test(finalPackageType);
+      if (isPT && !coachName) {
+        setAlertTitle('Missing Information');
+        setAlertDescription('Please select a coach for this PT package.');
+        setAlertOpen(true);
+        return;
+      }
+
       addPayment({
         clientId,
         amount: parseFloat(amount),
@@ -57,6 +66,7 @@ export default function Payments() {
         method,
         instapayRef: method === 'Instapay' ? instapayRef : undefined,
         packageType: finalPackageType,
+        coachName: isPT ? coachName : undefined,
         notes,
         recordedBy: currentUser?.id
       });
@@ -86,6 +96,7 @@ export default function Payments() {
       setInstapayRef('');
       setPackageType('');
       setCustomPackage('');
+      setCoachName('');
       setNotes('');
     }
   };
@@ -154,7 +165,7 @@ export default function Payments() {
             </thead>
             <tbody>
               <tr>
-                <td>${payment.packageType}</td>
+                <td>${payment.packageType} ${payment.coachName ? `<br><span style="font-size: 12px; color: #888;">Coach: ${payment.coachName}</span>` : ''}</td>
                 <td style="text-align: right;">${payment.amount.toLocaleString()} LE</td>
               </tr>
               <tr class="total-row">
@@ -302,6 +313,21 @@ export default function Payments() {
                   />
                 </div>
               )}
+              {((packageType && packageType !== 'Custom' && /\\bpt\\b/i.test(packageType)) || (packageType === 'Custom' && /\\bpt\\b/i.test(customPackage))) && (
+                <div className="space-y-2">
+                  <Label>Coach</Label>
+                  <Select value={coachName} onValueChange={setCoachName}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a coach" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {coaches.filter(c => c.active).map(coach => (
+                        <SelectItem key={coach.id} value={coach.name}>{coach.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Notes (Optional)</Label>
                 <Input 
@@ -404,7 +430,14 @@ export default function Payments() {
                           </div>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
-                          <Badge variant="outline" className="text-[10px] sm:text-xs">{payment.packageType}</Badge>
+                          <div className="flex flex-col gap-1 items-start">
+                            <Badge variant="outline" className="text-[10px] sm:text-xs">{payment.packageType}</Badge>
+                            {payment.coachName && (
+                              <span className="text-[10px] text-muted-foreground flex items-center">
+                                <span className="font-medium">Coach:</span> <span className="ml-1">{payment.coachName}</span>
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         {(currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
                           <TableCell className="text-muted-foreground text-xs sm:text-sm hidden lg:table-cell">

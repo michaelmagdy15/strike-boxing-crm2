@@ -49,7 +49,7 @@ function PaginatedList({ items, renderItem, itemsPerPage = 5 }: { items: any[], 
 }
 
 export default function Dashboard() {
-  const { clients, salesTarget, updateSalesTarget, currentUser } = useAppContext();
+  const { clients, salesTarget, updateSalesTarget, currentUser, payments } = useAppContext();
   const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false);
   const [newTarget, setNewTarget] = useState(salesTarget.targetAmount.toString());
   
@@ -81,6 +81,19 @@ export default function Dashboard() {
     return isAfter(dobThisYear, subDays(now, 1)) && isBefore(dobThisYear, addDays(now, 7));
   });
 
+  const attentionLeads = clients.filter(c => {
+    if (c.status !== 'Lead' || c.paid) return false;
+    if (c.assignedTo !== currentUser?.id) return false;
+    if (!c.comments || c.comments.length === 0) return false;
+    
+    const latestComment = c.comments.reduce((latest, current) => {
+      return isAfter(parseISO(current.date), parseISO(latest.date)) ? current : latest;
+    }, c.comments[0]);
+
+    const daysSinceComment = differenceInDays(now, parseISO(latestComment.date));
+    return daysSinceComment >= 7;
+  });
+
   const targetPercentage = Math.round((salesTarget.currentAmount / salesTarget.targetAmount) * 100);
 
   const handleUpdateTarget = () => {
@@ -91,55 +104,84 @@ export default function Dashboard() {
     }
   };
 
+  const totalCash = payments ? payments.filter(p => p.method === 'Cash').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0;
+  const totalVisa = payments ? payments.filter(p => p.method === 'Credit Card').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0;
+  const totalInstapay = payments ? payments.filter(p => p.method === 'Instapay').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0;
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sales Target</CardTitle>
-            {(currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
-              <CardAction>
-        <Dialog open={isTargetDialogOpen} onOpenChange={setIsTargetDialogOpen}>
-                  <DialogTrigger
-                    render={
-                      <Button variant="ghost" size="icon" className="h-6 w-6">
-                        <Settings className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    }
-                  />
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Update Sales Target</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <Label>New Target Amount (LE)</Label>
-                        <Input 
-                          type="number" 
-                          value={newTarget} 
-                          onChange={(e) => setNewTarget(e.target.value)} 
-                        />
+        {currentUser?.role === 'admin' ? (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Payments</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{salesTarget.currentAmount.toLocaleString()} LE</div>
+              <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+                <div className="flex justify-between">
+                  <span>Cash:</span>
+                  <span className="font-medium text-foreground">{totalCash.toLocaleString()} LE</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Visa:</span>
+                  <span className="font-medium text-foreground">{totalVisa.toLocaleString()} LE</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Instapay:</span>
+                  <span className="font-medium text-foreground">{totalInstapay.toLocaleString()} LE</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Sales Target</CardTitle>
+              {(currentUser?.role === 'manager' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
+                <CardAction>
+                  <Dialog open={isTargetDialogOpen} onOpenChange={setIsTargetDialogOpen}>
+                    <DialogTrigger
+                      render={
+                        <Button variant="ghost" size="icon" className="h-6 w-6">
+                          <Settings className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      }
+                    />
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Update Sales Target</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <Label>New Target Amount (LE)</Label>
+                          <Input 
+                            type="number" 
+                            value={newTarget} 
+                            onChange={(e) => setNewTarget(e.target.value)} 
+                          />
+                        </div>
+                        <Button onClick={handleUpdateTarget} className="w-full">Save Target</Button>
                       </div>
-                      <Button onClick={handleUpdateTarget} className="w-full">Save Target</Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </CardAction>
-            )}
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{salesTarget.currentAmount.toLocaleString()} LE</div>
-            <p className="text-xs text-muted-foreground">
-              {targetPercentage}% of {salesTarget.targetAmount.toLocaleString()} LE target
-            </p>
-            <div className="mt-4 h-2 w-full bg-secondary rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-primary" 
-                style={{ width: `${Math.min(targetPercentage, 100)}%` }}
-              />
-            </div>
-          </CardContent>
-        </Card>
+                    </DialogContent>
+                  </Dialog>
+                </CardAction>
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{salesTarget.currentAmount.toLocaleString()} LE</div>
+              <p className="text-xs text-muted-foreground">
+                {targetPercentage}% of {salesTarget.targetAmount.toLocaleString()} LE target
+              </p>
+              <div className="mt-4 h-2 w-full bg-secondary rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-primary" 
+                  style={{ width: `${Math.min(targetPercentage, 100)}%` }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -330,7 +372,26 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {upcomingVisits.length === 0 && nearlyExpiredList.length === 0 && (
+              {attentionLeads.length > 0 && (
+                <div className="space-y-2 mt-4">
+                  <h4 className="text-sm font-semibold text-purple-600 flex items-center">
+                    <AlertTriangle className="h-4 w-4 mr-1" /> Leads Needing Attention
+                  </h4>
+                  <PaginatedList 
+                    items={attentionLeads} 
+                    renderItem={(client) => (
+                      <div key={client.id} className="flex items-center justify-between p-2 border border-purple-200 bg-purple-50 dark:bg-purple-900/10 rounded-md">
+                        <div>
+                          <p className="font-medium text-sm">{client.name}</p>
+                          <p className="text-xs text-muted-foreground">Last comment {differenceInDays(now, parseISO(client.comments.reduce((latest: any, current: any) => isAfter(parseISO(current.date), parseISO(latest.date)) ? current : latest, client.comments[0]).date))} days ago</p>
+                        </div>
+                      </div>
+                    )} 
+                  />
+                </div>
+              )}
+
+              {upcomingVisits.length === 0 && nearlyExpiredList.length === 0 && attentionLeads.length === 0 && (
                 <p className="text-sm text-muted-foreground">No urgent reminders at this time.</p>
               )}
             </div>

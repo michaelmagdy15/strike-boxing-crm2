@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
-import { Client, SalesTarget, Payment, User, PrivateSession, AuditLog, Comment, Task, UserRole, Package, ImportBatch, BrandingSettings, Attendance, Branch } from './types';
+import { Client, SalesTarget, Payment, User, PrivateSession, AuditLog, Comment, Task, UserRole, Package, ImportBatch, BrandingSettings, Attendance, Branch, Coach, UserSalesTarget } from './types';
 import { auth, db, signInWithGoogle, logOut } from './firebase';
 import { 
   collection, 
@@ -84,7 +84,9 @@ interface AppContextType {
   auditLogs: AuditLog[];
   tasks: Task[];
   packages: Package[];
+  coaches: Coach[];
   importBatches: ImportBatch[];
+  userTargets: UserSalesTarget[];
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   addClient: (client: Client) => Promise<void>;
@@ -98,6 +100,7 @@ interface AppContextType {
   addComment: (clientId: string, text: string, author: string) => Promise<void>;
   addPayment: (payment: Omit<Payment, 'id'>) => Promise<void>;
   updateSalesTarget: (target: number) => Promise<void>;
+  updateUserTarget: (userId: string, month: string, amount: number) => Promise<void>;
   addPrivateSession: (session: Omit<PrivateSession, 'id'>) => Promise<void>;
   updatePrivateSession: (id: string, updates: Partial<PrivateSession>) => Promise<void>;
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'createdBy'>) => Promise<void>;
@@ -106,6 +109,9 @@ interface AppContextType {
   addPackage: (pkg: Omit<Package, 'id'>) => Promise<void>;
   updatePackage: (id: string, updates: Partial<Package>) => Promise<void>;
   deletePackage: (id: string) => Promise<void>;
+  addCoach: (coach: Omit<Coach, 'id'>) => Promise<void>;
+  updateCoach: (id: string, updates: Partial<Coach>) => Promise<void>;
+  deleteCoach: (id: string) => Promise<void>;
   addImportBatch: (batch: Omit<ImportBatch, 'id'>) => Promise<string>;
   rollbackImport: (batchId: string) => Promise<void>;
   isAuthReady: boolean;
@@ -142,19 +148,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       comments: allComments[c.id] || []
     })) as Client[];
   }, [baseClients, allComments]);
-  const [salesTarget, setSalesTarget] = useState<SalesTarget>({
-    targetAmount: 50000,
-    currentAmount: 0,
-    privateSessionsSold: 0,
-    groupSessionsSold: 0,
-  });
   const [payments, setPayments] = useState<Payment[]>([]);
   const [privateSessions, setPrivateSessions] = useState<PrivateSession[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
+  const [coaches, setCoaches] = useState<Coach[]>([]);
   const [importBatches, setImportBatches] = useState<ImportBatch[]>([]);
+  const [userTargets, setUserTargets] = useState<UserSalesTarget[]>([]);
   const [attendances, setAttendances] = useState<Attendance[]>([]);
+  const [globalSalesTarget, setGlobalSalesTarget] = useState(50000);
   const [branding, setBranding] = useState<BrandingSettings>({
     companyName: 'Strike',
     logoUrl: '/strikelogo.png'
@@ -260,18 +263,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubPayments = onSnapshot(collection(db, 'payments'), (snapshot) => {
       const paymentsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment));
       setPayments(paymentsData);
-      
-      // Calculate current sales from payments
-      const total = paymentsData.reduce((acc, p) => acc + p.amount, 0);
-      const privateSold = paymentsData.filter(p => p.packageType.toLowerCase().includes('private')).length;
-      const groupSold = paymentsData.filter(p => p.packageType.toLowerCase().includes('group') || p.packageType.toLowerCase().includes('gt')).length;
-      
-      setSalesTarget(prev => ({
-        ...prev,
-        currentAmount: total,
-        privateSessionsSold: privateSold,
-        groupSessionsSold: groupSold
-      }));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'payments'));
 
     const unsubSessions = onSnapshot(collection(db, 'sessions'), (snapshot) => {
@@ -292,6 +283,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubPackages = onSnapshot(collection(db, 'packages'), (snapshot) => {
       setPackages(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Package)));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'packages'));
+
+    const unsubCoaches = onSnapshot(collection(db, 'coaches'), (snapshot) => {
+      setCoaches(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Coach)));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'coaches'));
+
+    let unsubTargets: (() => void) | undefined;
+    if (currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') {
+      unsubTargets = onSnapshot(collection(db, 'userTargets'), (snapshot) => {
+        setUserTargets(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as UserSalesTarget)));
+      }, (error) => handleFirestoreError(error, OperationType.LIST, 'userTargets'));
+    }
 
     const unsubBatches = onSnapshot(query(collection(db, 'importBatches'), orderBy('date', 'desc')), (snapshot) => {
       setImportBatches(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ImportBatch)));
@@ -316,11 +318,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (unsubAudit) unsubAudit();
       unsubTasks();
       unsubPackages();
+      unsubCoaches();
+      if (unsubTargets) unsubTargets();
       unsubBatches();
       unsubAttendances();
       unsubBranding();
     };
   }, [currentUser]);
+
+  // Seed initial coaches if none exist
+  useEffect(() => {
+    const seedInitialCoaches = async () => {
+      if (currentUser && (currentUser.role === 'manager' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin')) {
+        try {
+          const snapshot = await getDocs(collection(db, 'coaches'));
+          if (snapshot.empty) {
+            const initialCoaches = ['SHADY YOUSSEF', 'OMAR KHALED', 'ALI YASSER', 'SEIF', 'MOHAMED ABD EL SATTAR'];
+            for (const name of initialCoaches) {
+              await addDoc(collection(db, 'coaches'), { name, active: true });
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to seed coaches:", e);
+        }
+      }
+    };
+    if (isAuthReady) {
+      seedInitialCoaches();
+    }
+  }, [isAuthReady, currentUser]);
 
   const login = async () => {
     await signInWithGoogle();
@@ -370,6 +396,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addClient = async (client: Client) => {
     try {
       const { id, comments, ...clientData } = client;
+      if (clientData.paid === undefined) clientData.paid = false;
       
       if (clientData.status === 'Active' && !clientData.memberId) {
         clientData.memberId = await generateMemberId();
@@ -431,6 +458,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           batch = writeBatch(db);
           operationCount = 0;
         }
+        if (clientData.paid === undefined) clientData.paid = false;
+        
         successCount++;
       } catch (err) {
         failedCount++;
@@ -549,8 +578,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSalesTarget = async (target: number) => {
-    setSalesTarget(prev => ({ ...prev, targetAmount: target }));
+    setGlobalSalesTarget(target);
     await addAuditLog('UPDATE', 'TARGET', 'sales-target', `Updated sales target to ${target}`);
+  };
+
+  const updateUserTarget = async (userId: string, month: string, amount: number) => {
+    if (!currentUser) return;
+    try {
+      // Find existing target for this user and month
+      const existing = userTargets.find(t => t.userId === userId && t.month === month);
+      if (existing) {
+        await updateDoc(doc(db, 'userTargets', existing.id), { targetAmount: amount, setBy: currentUser.id });
+        await addAuditLog('UPDATE', 'TARGET', existing.id, `Updated user target for ${month} to ${amount}`);
+      } else {
+        const docRef = await addDoc(collection(db, 'userTargets'), {
+          userId,
+          month,
+          targetAmount: amount,
+          setBy: currentUser.id,
+          createdAt: new Date().toISOString()
+        });
+        await addAuditLog('CREATE', 'TARGET', docRef.id, `Created user target for ${month} with ${amount}`);
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'userTargets');
+    }
   };
 
   const addPrivateSession = async (session: Omit<PrivateSession, 'id'>) => {
@@ -640,6 +692,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addCoach = async (coach: Omit<Coach, 'id'>) => {
+    try {
+      const docRef = await addDoc(collection(db, 'coaches'), cleanData(coach));
+      await addAuditLog('CREATE', 'CLIENT', docRef.id, `Created coach: ${coach.name}`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'coaches');
+    }
+  };
+
+  const updateCoach = async (id: string, updates: Partial<Coach>) => {
+    try {
+      await updateDoc(doc(db, 'coaches', id), cleanData(updates));
+      const coachName = coaches.find(c => c.id === id)?.name || id;
+      await addAuditLog('UPDATE', 'CLIENT', id, `Updated coach: ${coachName}`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `coaches/${id}`);
+    }
+  };
+
+  const deleteCoach = async (id: string) => {
+    try {
+      const coachName = coaches.find(c => c.id === id)?.name || id;
+      await deleteDoc(doc(db, 'coaches', id));
+      await addAuditLog('DELETE', 'CLIENT', id, `Deleted coach: ${coachName}`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `coaches/${id}`);
+    }
+  };
+
   const addImportBatch = async (batch: Omit<ImportBatch, 'id'>) => {
     try {
       const docRef = await addDoc(collection(db, 'importBatches'), cleanData(batch));
@@ -707,19 +788,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return tasks.filter(t => t.assignedTo === currentUser.id || t.createdBy === currentUser.id);
   }, [tasks, currentUser, effectiveRole]);
 
+  const salesStats = useMemo(() => {
+    const total = visiblePayments.reduce((acc, p) => acc + p.amount, 0);
+    const privateSold = visiblePayments.filter(p => p.packageType.toLowerCase().includes('private')).length;
+    const groupSold = visiblePayments.filter(p => p.packageType.toLowerCase().includes('group') || p.packageType.toLowerCase().includes('gt')).length;
+    
+    const targetAmount = (currentUser?.role === 'rep' && currentUser?.salesTarget) 
+      ? currentUser.salesTarget 
+      : globalSalesTarget;
+
+    return {
+      targetAmount,
+      currentAmount: total,
+      privateSessionsSold: privateSold,
+      groupSessionsSold: groupSold
+    };
+  }, [visiblePayments, globalSalesTarget, currentUser]);
+
   const contextValue = useMemo(() => ({ 
     currentUser: currentUser ? { ...currentUser, role: effectiveRole as any } : null, 
     users,
     login, 
     logout,
     clients: visibleClients, 
-    salesTarget, 
+    salesTarget: salesStats, 
     payments: visiblePayments, 
     privateSessions,
     auditLogs,
     tasks: visibleTasks,
     packages,
+    coaches,
     importBatches,
+    userTargets,
     searchQuery,
     setSearchQuery,
     addClient, 
@@ -733,6 +833,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addComment, 
     addPayment, 
     updateSalesTarget,
+    updateUserTarget,
     addPrivateSession,
     updatePrivateSession,
     addTask,
@@ -741,6 +842,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addPackage,
     updatePackage,
     deletePackage,
+    addCoach,
+    updateCoach,
+    deleteCoach,
     addImportBatch,
     rollbackImport,
     attendances,
@@ -843,12 +947,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     effectiveRole,
     users, 
     visibleClients, 
-    salesTarget, 
+    salesStats, 
     visiblePayments, 
     privateSessions, 
     auditLogs,
     visibleTasks,
     packages,
+    coaches,
     importBatches,
     branding,
     searchQuery,

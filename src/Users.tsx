@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { UserRole, User } from './types';
-import { Shield, User as UserIcon, Plus, Trash2, Edit } from 'lucide-react';
+import { Shield, User as UserIcon, Plus, Trash2, Edit, BarChart } from 'lucide-react';
+import { UserPerformanceDialog } from './components/UserPerformanceDialog';
 
 export default function Users() {
   const { users, currentUser, updateUser, inviteUser, deleteUser } = useAppContext();
@@ -20,6 +21,9 @@ export default function Users() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editTarget, setEditTarget] = useState('');
+
+  const [performanceUser, setPerformanceUser] = useState<User | null>(null);
 
   if (currentUser?.role !== 'manager' && currentUser?.role !== 'admin' && currentUser?.role !== 'super_admin' && currentUser?.role !== 'crm_admin') {
     return (
@@ -30,6 +34,7 @@ export default function Users() {
   }
 
   const canChangeRoles = currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin';
+  const canInviteUsers = canChangeRoles || currentUser?.role === 'manager';
 
   const handleRoleChange = (userId: string, newRole: UserRole) => {
     updateUser(userId, { role: newRole });
@@ -39,11 +44,16 @@ export default function Users() {
     setEditingUser(user);
     setEditName(user.name);
     setEditEmail(user.email);
+    setEditTarget(user.salesTarget?.toString() || '');
   };
 
   const handleUpdateUserDetails = () => {
     if (editingUser) {
-      updateUser(editingUser.id, { name: editName, email: editEmail });
+      updateUser(editingUser.id, { 
+        name: editName, 
+        email: editEmail,
+        salesTarget: editTarget ? parseFloat(editTarget) : undefined
+      });
       setEditingUser(null);
     }
   };
@@ -78,7 +88,7 @@ export default function Users() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold tracking-tight">User Management</h2>
-        {canChangeRoles && (
+        {canInviteUsers && (
           <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
             <DialogTrigger render={<Button />}>
               <Plus className="mr-2 h-4 w-4" /> Invite User
@@ -105,10 +115,16 @@ export default function Users() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="rep">Sales Rep</SelectItem>
-                      <SelectItem value="manager">Manager</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="crm_admin">CRM Admin</SelectItem>
-                      <SelectItem value="super_admin">Super Admin</SelectItem>
+                      {canInviteUsers && (
+                        <SelectItem value="admin">Admin</SelectItem>
+                      )}
+                      {canChangeRoles && (
+                        <>
+                          <SelectItem value="manager">Manager</SelectItem>
+                          <SelectItem value="crm_admin">CRM Admin</SelectItem>
+                          <SelectItem value="super_admin">Super Admin</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -169,26 +185,38 @@ export default function Users() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    {canChangeRoles && user.id !== currentUser.id && (
-                      <div className="flex items-center justify-end gap-1">
+                    <div className="flex items-center justify-end gap-1">
+                      {user.role === 'rep' && (
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => openEditDialog(user)}
+                          onClick={() => setPerformanceUser(user)}
+                          title="View Performance & Save Targets"
                         >
-                          <Edit className="h-4 w-4 text-muted-foreground" />
+                          <BarChart className="h-4 w-4 text-blue-500" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive hover:bg-destructive/10"
-                          onClick={() => handleDeleteUser(user.id)}
-                          disabled={user.role === 'super_admin'}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
+                      )}
+                      {canChangeRoles && user.id !== currentUser.id && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEditDialog(user)}
+                          >
+                            <Edit className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteUser(user.id)}
+                            disabled={user.role === 'super_admin'}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
              ))}
@@ -220,6 +248,15 @@ export default function Users() {
                 placeholder="User's email"
               />
             </div>
+            <div className="space-y-2">
+              <Label>Personal Sales Target (Optional)</Label>
+              <Input 
+                type="number"
+                value={editTarget} 
+                onChange={(e) => setEditTarget(e.target.value)} 
+                placeholder="Leave blank to use global target"
+              />
+            </div>
             <p className="text-xs text-muted-foreground pt-2">
               Note: Updating their email here allows them to login with the new email address if they haven't registered yet. If they already login via Google, it just updates their display email.
             </p>
@@ -230,6 +267,14 @@ export default function Users() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {performanceUser && (
+        <UserPerformanceDialog
+          user={performanceUser}
+          isOpen={!!performanceUser}
+          onClose={() => setPerformanceUser(null)}
+        />
+      )}
     </div>
   );
 }

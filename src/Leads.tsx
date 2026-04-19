@@ -48,6 +48,8 @@ export default function Leads() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
+  const canAssignLeads = currentUser?.role === 'manager' || currentUser?.role === 'crm_admin' || currentUser?.role === 'super_admin';
+
   const allLeads = clients.filter(c => c.status === 'Lead');
   
   const getFilteredLeads = () => {
@@ -55,6 +57,7 @@ export default function Leads() {
     
     // Tab filtering
     switch (activeTab) {
+      case 'unassigned': filtered = filtered.filter(l => !l.assignedTo); break;
       case 'instagram': filtered = filtered.filter(l => l.source === 'Instagram'); break;
       case 'whatsapp': filtered = filtered.filter(l => l.source === 'WhatsApp'); break;
       case 'walkin': filtered = filtered.filter(l => l.source === 'Walk-in'); break;
@@ -82,7 +85,7 @@ export default function Leads() {
       filtered = filtered.filter(l => l.interest === filterInterest);
     }
     if (filterAssignedTo !== 'All') {
-      filtered = filtered.filter(l => l.assignedTo === (filterAssignedTo === 'unassigned' ? undefined : filterAssignedTo));
+      filtered = filtered.filter(l => filterAssignedTo === 'unassigned' ? !l.assignedTo : l.assignedTo === filterAssignedTo);
     }
 
     return filtered;
@@ -117,7 +120,7 @@ export default function Leads() {
 
   const handleBulkAssign = async (userId: string) => {
     for (const id of selectedLeadIds) {
-      await updateClient(id, { assignedTo: userId === 'unassigned' ? undefined : userId });
+      await updateClient(id, { assignedTo: userId === 'unassigned' ? '' : userId });
     }
     setSelectedLeadIds([]);
   };
@@ -234,6 +237,14 @@ export default function Leads() {
     }
   };
 
+  const handleInterestChange = (lead: Client, newInterest: LeadInterest) => {
+    if (newInterest === 'Not Interested') {
+      updateClient(lead.id, { interest: newInterest, assignedTo: '' });
+    } else {
+      updateClient(lead.id, { interest: newInterest });
+    }
+  };
+
   const confirmConversion = () => {
     if (leadToConvert) {
       updateClient(leadToConvert.id, { 
@@ -281,12 +292,13 @@ export default function Leads() {
             <TableHead className="hidden md:table-cell">Branch</TableHead>
             <TableHead className="hidden md:table-cell">Source</TableHead>
             <TableHead>Stage</TableHead>
+            <TableHead>Paid Status</TableHead>
             <TableHead className="hidden lg:table-cell">Interest</TableHead>
             <TableHead className="hidden lg:table-cell">Category</TableHead>
             <TableHead className="hidden xl:table-cell">Trial/Visit Date</TableHead>
             <TableHead className="hidden md:table-cell">Last Contact</TableHead>
             <TableHead>Next Reminder</TableHead>
-            {(currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && <TableHead className="hidden lg:table-cell">Assigned To</TableHead>}
+            {canAssignLeads && <TableHead className="hidden lg:table-cell">Assigned To</TableHead>}
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -305,7 +317,7 @@ export default function Leads() {
               <TableCell>
                 <div className="flex items-center">
                   <Phone className="h-3 w-3 mr-2 text-muted-foreground" />
-                  {lead.phone}
+                  {currentUser?.role === 'rep' && lead.assignedTo !== currentUser.id ? '**********' : lead.phone}
                 </div>
               </TableCell>
               <TableCell className="hidden md:table-cell">
@@ -316,6 +328,15 @@ export default function Leads() {
               </TableCell>
               <TableCell>
                 <Badge variant="secondary">{lead.stage || 'New'}</Badge>
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <Checkbox 
+                    checked={lead.paid || false} 
+                    onCheckedChange={(checked) => updateClient(lead.id, { paid: !!checked })}
+                  />
+                  <span className="text-xs">{lead.paid ? 'Paid' : 'Not Paid'}</span>
+                </div>
               </TableCell>
               <TableCell className="hidden lg:table-cell">{getInterestBadge(lead.interest)}</TableCell>
               <TableCell className="hidden lg:table-cell">
@@ -350,11 +371,11 @@ export default function Leads() {
                   <span className="text-muted-foreground text-sm">Not set</span>
                 )}
               </TableCell>
-              {(currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && (
+              {canAssignLeads && (
                 <TableCell className="hidden lg:table-cell">
                   <Select 
                     defaultValue={lead.assignedTo || 'unassigned'}
-                    onValueChange={(v) => updateClient(lead.id, { assignedTo: v === 'unassigned' ? undefined : v })}
+                    onValueChange={(v) => updateClient(lead.id, { assignedTo: v === 'unassigned' ? '' : v })}
                   >
                     <SelectTrigger className="w-[130px] h-8 text-xs">
                       <SelectValue placeholder="Assign rep" />
@@ -397,7 +418,7 @@ export default function Leads() {
                                 <SelectItem value="Instagram">Instagram</SelectItem>
                                 <SelectItem value="WhatsApp">WhatsApp</SelectItem>
                                 <SelectItem value="Walk-in">Walk-in</SelectItem>
-                                <SelectItem value="Social Media">Social Media</SelectItem>
+                                <SelectItem value="TikTok">TikTok</SelectItem>
                                 <SelectItem value="Other">Other</SelectItem>
                               </SelectContent>
                             </Select>
@@ -443,7 +464,7 @@ export default function Leads() {
                             <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Interest Level</Label>
                             <Select 
                               defaultValue={lead.interest} 
-                              onValueChange={(v) => updateClient(lead.id, { interest: v as LeadInterest })}
+                              onValueChange={(v) => handleInterestChange(lead, v as LeadInterest)}
                             >
                               <SelectTrigger className="w-full">
                                 <SelectValue placeholder="Select interest" />
@@ -470,6 +491,8 @@ export default function Leads() {
                                 <SelectItem value="Social class">Social class</SelectItem>
                                 <SelectItem value="Price">Price</SelectItem>
                                 <SelectItem value="No answer">No answer</SelectItem>
+                                <SelectItem value="Ladies only">Ladies only</SelectItem>
+                                <SelectItem value="Morning session">Morning session</SelectItem>
                                 <SelectItem value="Other">Other</SelectItem>
                                 <SelectItem value="None">None</SelectItem>
                               </SelectContent>
@@ -496,6 +519,15 @@ export default function Leads() {
                               defaultValue={lead.nextReminderDate ? format(parseISO(lead.nextReminderDate), 'yyyy-MM-dd') : ''}
                               onChange={(e) => updateClient(lead.id, { nextReminderDate: new Date(e.target.value).toISOString() })}
                             />
+                          </div>
+
+                          <div className="flex items-center space-x-2 pt-4">
+                            <Checkbox 
+                              id={`paid-detail-${lead.id}`}
+                              checked={lead.paid || false} 
+                              onCheckedChange={(checked) => updateClient(lead.id, { paid: !!checked })}
+                            />
+                            <Label htmlFor={`paid-detail-${lead.id}`} className="text-sm font-medium">Payment Received (Paid)</Label>
                           </div>
                         </div>
                       </div>
@@ -590,7 +622,7 @@ export default function Leads() {
                       <SelectItem value="Instagram">Instagram</SelectItem>
                       <SelectItem value="WhatsApp">WhatsApp</SelectItem>
                       <SelectItem value="Walk-in">Walk-in</SelectItem>
-                      <SelectItem value="Social Media">Social Media</SelectItem>
+                      <SelectItem value="TikTok">TikTok</SelectItem>
                       <SelectItem value="Other">Other</SelectItem>
                     </SelectContent>
                   </Select>
@@ -714,7 +746,7 @@ export default function Leads() {
               </Select>
             </div>
 
-            {currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin' ? (
+            {canAssignLeads ? (
               <div className="flex items-center gap-2 bg-primary-foreground/10 p-1 rounded-md">
                 <UserCheck className="h-4 w-4" />
                 <Select onValueChange={handleBulkAssign}>
@@ -773,6 +805,7 @@ export default function Leads() {
         <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
           <TabsList className="flex w-max sm:w-full bg-muted/50 rounded-lg p-1 justify-start sm:justify-center mb-4">
             <TabsTrigger value="all" className="px-4 text-xs sm:text-sm">All</TabsTrigger>
+            <TabsTrigger value="unassigned" className="px-4 text-xs sm:text-sm text-amber-600 font-bold dark:text-amber-500">Unassigned</TabsTrigger>
             <TabsTrigger value="instagram" className="px-4 text-xs sm:text-sm">Instagram</TabsTrigger>
             <TabsTrigger value="whatsapp" className="px-4 text-xs sm:text-sm">WhatsApp</TabsTrigger>
             <TabsTrigger value="walkin" className="px-4 text-xs sm:text-sm">Walk-in</TabsTrigger>

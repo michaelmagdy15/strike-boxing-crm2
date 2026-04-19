@@ -62,10 +62,9 @@ export default function Clients() {
   const members = clients.filter(c => c.status !== 'Lead');
   
   const activeMembers = members.filter(c => c.status === 'Active');
-  
   const nearlyExpired = members.filter(c => c.status === 'Nearly Expired');
-  
   const expired = members.filter(c => c.status === 'Expired');
+  const onHold = members.filter(c => c.status === 'Hold');
   
   const upcomingBirthdays = members.filter(c => {
     if (!c.dateOfBirth) return false;
@@ -78,6 +77,7 @@ export default function Clients() {
     let base = [];
     switch (activeTab) {
       case 'active': base = [...activeMembers, ...nearlyExpired]; break;
+      case 'hold': base = onHold; break;
       case 'expired': base = expired; break;
       default: base = [...activeMembers, ...nearlyExpired]; break;
     }
@@ -200,6 +200,7 @@ export default function Clients() {
       case 'Active': return <Badge className="bg-green-500"><CheckCircle className="w-3 h-3 mr-1" /> Active</Badge>;
       case 'Nearly Expired': return <Badge className="bg-amber-500"><AlertTriangle className="w-3 h-3 mr-1" /> Expiring Soon</Badge>;
       case 'Expired': return <Badge variant="destructive">Expired</Badge>;
+      case 'Hold': return <Badge className="bg-blue-500 text-white border-blue-500">Hold</Badge>;
       default: return <Badge variant="outline">{status}</Badge>;
     }
   };
@@ -253,7 +254,7 @@ export default function Clients() {
               <TableCell>
                 <div className="flex items-center">
                   <Phone className="h-3 w-3 mr-2 text-muted-foreground" />
-                  {client.phone}
+                  {currentUser?.role === 'rep' && client.assignedTo !== currentUser.id ? '**********' : client.phone}
                 </div>
               </TableCell>
               <TableCell className="hidden md:table-cell">
@@ -294,7 +295,7 @@ export default function Clients() {
                   <select 
                     className="flex h-8 w-[130px] items-center justify-between rounded-md border border-input bg-background px-3 py-1 text-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     defaultValue={client.assignedTo || 'unassigned'}
-                    onChange={(e) => updateClient(client.id, { assignedTo: e.target.value === 'unassigned' ? undefined : e.target.value })}
+                    onChange={(e) => updateClient(client.id, { assignedTo: e.target.value === 'unassigned' ? '' : e.target.value })}
                   >
                     <option value="unassigned">Unassigned</option>
                     {users.filter(u => u.role === 'rep').map(rep => (
@@ -325,6 +326,7 @@ export default function Clients() {
                             <option value="Active">Active</option>
                             <option value="Nearly Expired">Nearly Expired</option>
                             <option value="Expired">Expired</option>
+                            <option value="Hold">Hold</option>
                           </select>
                         </div>
                         <div className="space-y-2">
@@ -535,6 +537,7 @@ export default function Clients() {
         <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
           <TabsList className="flex w-max sm:w-full bg-muted/50 rounded-lg p-1 justify-start sm:justify-center">
             <TabsTrigger value="active" className="px-4 text-xs sm:text-sm">Active ({activeMembers.length + nearlyExpired.length})</TabsTrigger>
+            <TabsTrigger value="hold" className="px-4 text-xs sm:text-sm">Hold ({onHold.length})</TabsTrigger>
             <TabsTrigger value="expired" className="px-4 text-xs sm:text-sm">Expired ({expired.length})</TabsTrigger>
           </TabsList>
         </div>

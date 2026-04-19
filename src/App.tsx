@@ -131,10 +131,12 @@ function AppContent() {
                 Members
               </TabsTrigger>
 
-              <TabsTrigger value="tasks" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                <CheckSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                Tasks
-              </TabsTrigger>
+              {currentUser.role !== 'admin' && (
+                <TabsTrigger value="tasks" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
+                  <CheckSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                  Tasks
+                </TabsTrigger>
+              )}
               
               {(currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') && (
                 <>
@@ -146,14 +148,18 @@ function AppContent() {
                     <Scan className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
                     Attendance
                   </TabsTrigger>
-                  <TabsTrigger value="audit" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                    <History className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                    History
-                  </TabsTrigger>
-                  <TabsTrigger value="settings" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                    <SettingsIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                    Settings
-                  </TabsTrigger>
+                  {currentUser.role !== 'admin' && (
+                    <>
+                      <TabsTrigger value="audit" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
+                        <History className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                        History
+                      </TabsTrigger>
+                      <TabsTrigger value="settings" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
+                        <SettingsIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                        Settings
+                      </TabsTrigger>
+                    </>
+                  )}
                 </>
               )}
             </TabsList>
@@ -173,9 +179,11 @@ function AppContent() {
             <Clients />
           </TabsContent>
 
-          <TabsContent value="tasks" className="m-0 animate-in fade-in-50 duration-500">
-            <Tasks />
-          </TabsContent>
+          {currentUser.role !== 'admin' && (
+            <TabsContent value="tasks" className="m-0 animate-in fade-in-50 duration-500">
+              <Tasks />
+            </TabsContent>
+          )}
 
           {(currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') && (
             <>
@@ -187,12 +195,16 @@ function AppContent() {
                 <Attendance />
               </TabsContent>
 
-              <TabsContent value="audit" className="m-0 animate-in fade-in-50 duration-500">
-                <AuditLogs />
-              </TabsContent>
-              <TabsContent value="settings" className="m-0 animate-in fade-in-50 duration-500">
-                <Settings />
-              </TabsContent>
+              {currentUser.role !== 'admin' && (
+                <>
+                  <TabsContent value="audit" className="m-0 animate-in fade-in-50 duration-500">
+                    <AuditLogs />
+                  </TabsContent>
+                  <TabsContent value="settings" className="m-0 animate-in fade-in-50 duration-500">
+                    <Settings />
+                  </TabsContent>
+                </>
+              )}
             </>
           )}
         </Tabs>

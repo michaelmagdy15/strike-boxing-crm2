@@ -1,7 +1,7 @@
-export type ClientStatus = 'Lead' | 'Active' | 'Nearly Expired' | 'Expired';
+export type ClientStatus = 'Lead' | 'Active' | 'Nearly Expired' | 'Expired' | 'Hold';
 export type LeadInterest = 'Interested' | 'Not Interested' | 'Pending';
-export type LeadCategory = 'Out of area zone' | 'Social class' | 'Price' | 'No answer' | 'Other' | 'None';
-export type LeadSource = 'Instagram' | 'WhatsApp' | 'Walk-in' | 'Social Media' | 'Other';
+export type LeadCategory = 'Out of area zone' | 'Social class' | 'Price' | 'No answer' | 'Ladies only' | 'Morning session' | 'Other' | 'None';
+export type LeadSource = 'Instagram' | 'WhatsApp' | 'Walk-in' | 'TikTok' | 'Other';
 export type LeadStage = 'New' | 'Trial' | 'Follow Up' | 'Converted' | 'Lost';
 export type SessionType = 'Private' | 'Group';
 export type UserRole = 'manager' | 'rep' | 'admin' | 'super_admin' | 'crm_admin';
@@ -15,6 +15,12 @@ export interface Package {
   expiryDays: number;
   branch: Branch | 'ALL';
   type: 'Private' | 'Group' | 'Other';
+}
+
+export interface Coach {
+  id: string;
+  name: string;
+  active: boolean;
 }
 
 export interface ImportBatch {
@@ -32,6 +38,7 @@ export interface User {
   name: string;
   role: UserRole;
   email: string;
+  salesTarget?: number;
 }
 
 export interface PrivateSession {
@@ -70,6 +77,7 @@ export interface Payment {
   method: 'Cash' | 'Credit Card' | 'Bank Transfer' | 'Instapay' | 'Other';
   instapayRef?: string; // 12 digits
   packageType: string;
+  coachName?: string; // Optional coach name for PT packages
   notes?: string;
   recordedBy?: string; // userId
 }
@@ -99,10 +107,13 @@ export interface Client {
   membershipExpiry?: string; // ISO string (End Date)
   dateOfBirth?: string; // ISO string
   points?: number;
+  typeOfClient?: string;
+  salesName?: string;
   
   comments: Comment[];
   lastContactDate: string; // ISO string
   nextReminderDate?: string; // ISO string
+  paid?: boolean;
 }
 
 export interface Attendance {
@@ -135,6 +146,15 @@ export interface SalesTarget {
   currentAmount: number;
   privateSessionsSold: number;
   groupSessionsSold: number;
+}
+
+export interface UserSalesTarget {
+  id: string;
+  userId: string;
+  month: string; // 'YYYY-MM'
+  targetAmount: number;
+  setBy: string; // manager userId
+  createdAt: string; // ISO string
 }
 
 export interface BrandingSettings {

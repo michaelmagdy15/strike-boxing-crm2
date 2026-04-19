@@ -33,12 +33,16 @@ export default function ImportData({ type }: ImportDataProps) {
 
   const fields = [
     { key: 'name', label: 'Name (Required)', required: true },
-    { key: 'phone', label: 'Phone (Required)', required: true },
-    { key: 'branch', label: 'Branch' },
-    { key: 'source', label: 'Source' },
+    { key: 'phone', label: 'Phone / Number (Required)', required: true },
+    { key: 'startDate', label: 'Start Date' },
+    { key: 'membershipExpiry', label: 'Expiry Date' },
     { key: 'packageType', label: 'Package Type' },
     { key: 'sessionsRemaining', label: 'Sessions Remaining' },
-    { key: 'membershipExpiry', label: 'Expiry Date' },
+    { key: 'paid', label: 'Payment' },
+    { key: 'typeOfClient', label: 'Type Of Client' },
+    { key: 'branch', label: 'Branch' },
+    { key: 'salesName', label: 'Sales Name' },
+    { key: 'source', label: 'Source' },
   ];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,11 +107,15 @@ export default function ImportData({ type }: ImportDataProps) {
     const fieldAliases: Record<string, string[]> = {
       name: ['name', 'full name', 'client', 'customer', 'member', 'lead', 'اسم'],
       phone: ['phone', 'mobile', 'number', 'tel', 'contact', 'whatsapp', 'رقم', 'تليفون'],
-      branch: ['branch', 'location', 'gym', 'فرع'],
-      source: ['source', 'how did you hear', 'referral', 'origin', 'مصدر'],
-      packageType: ['package', 'plan', 'membership', 'type', 'subscription', 'باقة'],
       sessionsRemaining: ['session', 'remaining', 'left', 'balance', 'count', 'جلسات'],
-      membershipExpiry: ['expiry', 'end date', 'valid until', 'expires', 'date', 'انتهاء']
+      startDate: ['start date', 'start', 'begin', 'بداية'],
+      membershipExpiry: ['expiry', 'end date', 'valid until', 'expires', 'date', 'انتهاء'],
+      packageType: ['package', 'plan', 'membership', 'type', 'subscription', 'باقة'],
+      typeOfClient: ['type of client', 'client type', 'category', 'نوع'],
+      branch: ['branch', 'location', 'gym', 'فرع'],
+      salesName: ['sales name', 'sales', 'rep', 'assigned to', 'agent', 'مبيعات'],
+      paid: ['payment', 'paid', 'is paid', 'status paid', 'دفع'],
+      source: ['source', 'how did you hear', 'referral', 'origin', 'مصدر'],
     };
 
     fields.forEach(field => {
@@ -167,11 +175,15 @@ export default function ImportData({ type }: ImportDataProps) {
           const fieldAliases: Record<string, string[]> = {
             name: ['name', 'full name', 'client', 'customer', 'member', 'lead', 'اسم'],
             phone: ['phone', 'mobile', 'number', 'tel', 'contact', 'whatsapp', 'رقم', 'تليفون'],
-            branch: ['branch', 'location', 'gym', 'فرع'],
-            source: ['source', 'how did you hear', 'referral', 'origin', 'مصدر'],
-            packageType: ['package', 'plan', 'membership', 'type', 'subscription', 'باقة'],
             sessionsRemaining: ['session', 'remaining', 'left', 'balance', 'count', 'جلسات'],
-            membershipExpiry: ['expiry', 'end date', 'valid until', 'expires', 'date', 'انتهاء']
+            startDate: ['start date', 'start', 'begin', 'بداية'],
+            membershipExpiry: ['expiry', 'end date', 'valid until', 'expires', 'date', 'انتهاء'],
+            packageType: ['package', 'plan', 'membership', 'type', 'subscription', 'باقة'],
+            typeOfClient: ['type of client', 'client type', 'category', 'نوع'],
+            branch: ['branch', 'location', 'gym', 'فرع'],
+            salesName: ['sales name', 'sales', 'rep', 'assigned to', 'agent', 'مبيعات'],
+            paid: ['payment', 'paid', 'is paid', 'status paid', 'دفع'],
+            source: ['source', 'how did you hear', 'referral', 'origin', 'مصدر'],
           };
 
           fields.forEach(field => {
@@ -234,7 +246,11 @@ export default function ImportData({ type }: ImportDataProps) {
         let source = (row[importMapping['source']] || 'Other').toString().trim();
         let packageType = (row[importMapping['packageType']] || '').toString().trim();
         let sessionsRemainingRaw = row[importMapping['sessionsRemaining']];
+        let startDateRaw = row[importMapping['startDate']];
         let membershipExpiryRaw = row[importMapping['membershipExpiry']];
+        let paidRaw = row[importMapping['paid']];
+        let typeOfClient = (row[importMapping['typeOfClient']] || '').toString().trim();
+        let salesName = (row[importMapping['salesName']] || '').toString().trim();
 
         if (!name || !phone) {
           failedCount++;
@@ -253,18 +269,31 @@ export default function ImportData({ type }: ImportDataProps) {
           if (pkg) sessionsRemainingRaw = pkg.sessions;
         }
 
+        let isHold = false;
+        if (startDateRaw && startDateRaw.toString().toLowerCase().trim() === 'hold') isHold = true;
+        if (membershipExpiryRaw && membershipExpiryRaw.toString().toLowerCase().trim() === 'hold') isHold = true;
+
+        let startDate: string | undefined;
         let membershipExpiry: string | undefined;
-        if (membershipExpiryRaw) {
+
+        if (startDateRaw && !isHold) {
+          const date = new Date(startDateRaw);
+          if (!isNaN(date.getTime())) startDate = date.toISOString();
+        }
+
+        if (membershipExpiryRaw && !isHold) {
           const date = new Date(membershipExpiryRaw);
           if (!isNaN(date.getTime())) membershipExpiry = date.toISOString();
         }
 
-        if (!membershipExpiry && packageType) {
+        if (!membershipExpiry && !isHold && packageType) {
           membershipExpiry = addDays(now, 30).toISOString();
         }
 
         let status: any = type;
-        if (membershipExpiry) {
+        if (isHold) {
+          status = 'Hold';
+        } else if (membershipExpiry) {
           const expiryDate = parseISO(membershipExpiry);
           if (isBefore(expiryDate, now)) status = 'Expired';
           else if (isBefore(expiryDate, addDays(now, 30))) status = 'Nearly Expired';
@@ -282,14 +311,22 @@ export default function ImportData({ type }: ImportDataProps) {
         else if (branchRaw.includes('MIVIDA')) branch = 'MIVIDA';
         else if (branchRaw.includes('STRIKE IMPACT') || branchRaw.includes('IMPACT')) branch = 'Strike IMPACT';
 
+        let paid = false;
+        if (paidRaw) {
+          const p = paidRaw.toString().toLowerCase();
+          paid = p === 'yes' || p === 'paid' || p === 'true' || p === '1' || p === 'تم الدفع';
+        }
+
         clientsToImport.push({
           id: Math.random().toString(36).substr(2, 9),
           name, phone, status: status as any, source, branch,
           packageType: packageType || 'Unknown',
-          sessionsRemaining, membershipExpiry,
+          sessionsRemaining, membershipExpiry, startDate,
+          typeOfClient, salesName,
           comments: [], lastContactDate: now.toISOString(),
           assignedTo: currentUser?.role === 'rep' ? currentUser.id : undefined,
-          importBatchId: batchId
+          importBatchId: batchId,
+          paid: paid
         });
       } catch (err) {
         failedCount++;
