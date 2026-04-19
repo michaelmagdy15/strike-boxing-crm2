@@ -15,6 +15,8 @@ export const mockPrivateSessions: import('./types').PrivateSession[] = [];
 export const mockSalesTarget: SalesTarget = {
   targetAmount: 50000,
   currentAmount: 32500,
+  privateTarget: 25000,
+  groupTarget: 25000,
   privateSessionsSold: 45,
   groupSessionsSold: 120,
 };

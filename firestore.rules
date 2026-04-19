@@ -22,7 +22,7 @@ service cloud.firestore {
       return isAuthenticated() && (
         (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
         data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
-        (data.role == 'admin' && data.name.lower().contains('sama')) ||
+        (data.role == 'admin' && data.name.lower().matches('.*sama.*')) ||
         data.can_delete_payments == true
       );
     }
@@ -32,7 +32,7 @@ service cloud.firestore {
       return isAuthenticated() && (
         (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
         data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
-        data.name.lower().contains('atef') ||
+        data.name.lower().matches('.*atef.*') ||
         data.can_access_settings_and_history == true
       );
     }
@@ -42,7 +42,7 @@ service cloud.firestore {
       return isAuthenticated() && (
         (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
         data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
-        (data.role == 'admin' && data.name.lower().contains('sama')) ||
+        (data.role == 'admin' && data.name.lower().matches('.*sama.*')) ||
         data.can_view_global_dashboard == true
       );
     }

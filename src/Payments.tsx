@@ -321,7 +321,7 @@ export default function Payments() {
                   />
                 </div>
               )}
-              {((packageType && packageType !== 'Custom' && /\\bpt\\b/i.test(packageType)) || (packageType === 'Custom' && /\\bpt\\b/i.test(customPackage))) && (
+              {((packageType && packageType !== 'Custom' && /\bpt\b/i.test(packageType)) || (packageType === 'Custom' && /\bpt\b/i.test(customPackage))) && (
                 <div className="space-y-2">
                   <Label>Coach</Label>
                   <Select value={coachName} onValueChange={setCoachName}>
