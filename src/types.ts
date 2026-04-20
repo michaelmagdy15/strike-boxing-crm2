@@ -1,41 +1,14 @@
-/**
- * Branded types for IDs to prevent accidental mixing of different ID types.
- * @see https://egghead.io/blog/using-branded-types-in-typescript
- */
-export type ClientId = string & { readonly __brand: 'ClientId' };
-export type UserId = string & { readonly __brand: 'UserId' };
-export type PackageId = string & { readonly __brand: 'PackageId' };
-export type PaymentId = string & { readonly __brand: 'PaymentId' };
-export type SessionId = string & { readonly __brand: 'SessionId' };
-export type CommentId = string & { readonly __brand: 'CommentId' };
-export type AuditLogId = string & { readonly __brand: 'AuditLogId' };
-export type ImportBatchId = string & { readonly __brand: 'ImportBatchId' };
-export type TaskId = string & { readonly __brand: 'TaskId' };
-
-export type ClientStatus = 'Lead' | 'Active' | 'Nearly Expired' | 'Expired';
+export type ClientStatus = 'Lead' | 'Active' | 'Nearly Expired' | 'Expired' | 'Hold';
 export type LeadInterest = 'Interested' | 'Not Interested' | 'Pending';
-export type LeadCategory = 'Out of area zone' | 'Social class' | 'Price' | 'No answer' | 'Other' | 'None';
-export type LeadSource = 'Instagram' | 'WhatsApp' | 'Walk-in' | 'Social Media' | 'Other';
+export type LeadCategory = 'Out of area zone' | 'Social class' | 'Price' | 'No answer' | 'Ladies only' | 'Morning session' | 'Other' | 'None';
+export type LeadSource = 'Instagram' | 'WhatsApp' | 'Walk-in' | 'TikTok' | 'Other';
 export type LeadStage = 'New' | 'Trial' | 'Follow Up' | 'Converted' | 'Lost';
 export type SessionType = 'Private' | 'Group';
 export type UserRole = 'manager' | 'rep' | 'admin' | 'super_admin' | 'crm_admin';
-
-/**
- * Type guard to check if a user has admin privileges.
- */
-export const isAdmin = (role: UserRole | undefined): boolean => 
-  role === 'manager' || role === 'admin' || role === 'super_admin' || role === 'crm_admin';
-
-/**
- * Type guard to check if a user has super admin privileges.
- */
-export const isSuperAdmin = (role: UserRole | undefined): boolean => 
-  role === 'super_admin' || role === 'crm_admin';
-
-export type Branch = 'COMPLEX' | 'MIVIDA';
+export type Branch = 'COMPLEX' | 'MIVIDA' | 'Strike IMPACT';
 
 export interface Package {
-  id: PackageId;
+  id: string;
   name: string;
   price: number;
   sessions: number;
@@ -44,9 +17,15 @@ export interface Package {
   type: 'Private' | 'Group' | 'Other';
 }
 
+export interface Coach {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
 export interface ImportBatch {
-  id: ImportBatchId;
-  date: string; // ISO string
+  id: string;
+  date: string;
   fileName: string;
   importedCount: number;
   failedCount: number;
@@ -55,122 +34,120 @@ export interface ImportBatch {
 }
 
 export interface User {
-  id: UserId;
+  id: string;
   name: string;
   role: UserRole;
   email: string;
+  salesTarget?: number;
+  can_delete_payments?: boolean;
+  can_view_global_dashboard?: boolean;
+  can_access_settings_and_history?: boolean;
 }
 
 export interface PrivateSession {
-  id: SessionId;
-  clientId: ClientId;
+  id: string;
+  clientId: string;
   date: string; // ISO string
   status: 'Scheduled' | 'Attended' | 'No Show' | 'Cancelled';
   notes?: string;
+  trainerId?: string; // userId
+  branch?: Branch;
 }
 
 export interface Comment {
-  id: CommentId;
+  id: string;
   text: string;
   date: string; // ISO string
-  author: string; // userId or name
+  author: string;
 }
 
 export interface AuditLog {
-  id: AuditLogId;
-  userId: UserId;
+  id: string;
+  userId: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE';
-  entityType: 'CLIENT' | 'PAYMENT' | 'SESSION' | 'LEAD' | 'TARGET';
+  entityType: 'CLIENT' | 'PAYMENT' | 'SESSION' | 'LEAD' | 'TARGET' | 'ATTENDANCE' | 'COACH';
   entityId: string;
   details: string;
-  timestamp: string; // ISO string
+  timestamp: string;
+  branch?: Branch;
 }
 
 export interface Payment {
-  id: PaymentId;
-  clientId: ClientId;
+  id: string;
+  clientId: string;
+  client_name: string;
   amount: number;
+  amount_paid: number;
   date: string; // ISO string
   method: 'Cash' | 'Credit Card' | 'Bank Transfer' | 'Instapay' | 'Other';
   instapayRef?: string; // 12 digits
   packageType: string;
+  session_type: 'Private Training' | 'Group Training';
+  coachName?: string; // Optional coach name for PT packages
+  coach_name?: string; // Aligning with requested schema
   notes?: string;
-  recordedBy?: UserId;
+  recordedBy?: string; // userId
+  sales_rep_id: string;
+  created_at: string; // ISO string
+  deleted_at?: string | null; // ISO string (soft delete)
 }
 
-/**
- * Base properties shared by all client types.
- */
-interface BaseClient {
-  id: ClientId;
+export interface Client {
+  id: string;
   name: string;
   phone: string;
   status: ClientStatus;
-  assignedTo?: UserId;
+  assignedTo?: string; // userId
   branch?: Branch;
-  importBatchId?: ImportBatchId;
-  comments: Comment[];
-  lastContactDate: string; // ISO string
-  nextReminderDate?: string; // ISO string
-  memberId?: string;
-  packageType?: string;
-  sessionsRemaining?: number | string;
-  startDate?: string; // ISO string
-  membershipExpiry?: string; // ISO string
-  dateOfBirth?: string; // ISO string
-  points?: number;
-}
-
-/**
- * Represents a potential customer in the lead stage.
- */
-export interface LeadClient extends BaseClient {
-  status: 'Lead';
+  memberId?: string; // Sequential ID for members
+  importBatchId?: string; // ID of the import batch this client was created in
+  
+  // Lead specific
   interest?: LeadInterest;
   category?: LeadCategory;
   source?: LeadSource;
   stage?: LeadStage;
   expectedVisitDate?: string; // ISO string
   trialDate?: string; // ISO string
+  
+  // Member specific
+  packageType?: string; // e.g., "10 S GT Adults", "30 session adult"
+  sessionsRemaining?: number | string; // e.g., 6, 0, -3, or "no attend"
+  startDate?: string; // ISO string
+  membershipExpiry?: string; // ISO string (End Date)
+  dateOfBirth?: string; // ISO string
+  points?: number;
+  typeOfClient?: string;
+  salesName?: string;
+  
+  comments: Comment[];
+  lastContactDate: string; // ISO string
+  nextReminderDate?: string; // ISO string
+  paid?: boolean;
 }
 
-/**
- * Represents an active or expired member with membership details.
- */
-export interface MemberClient extends BaseClient {
-  status: 'Active' | 'Nearly Expired' | 'Expired';
-  memberId: string; // Required for members
-  packageType: string;
-  sessionsRemaining: number | string;
-  startDate: string;
-  membershipExpiry: string;
+export interface Attendance {
+  id: string;
+  clientId: string;
+  branch: Branch;
+  date: string; // ISO string
+  recordedBy: string; // userId
+  packageName?: string;
 }
-
-/**
- * Discriminated union for Client to ensure type safety based on status.
- */
-export type Client = LeadClient | MemberClient;
-
-/**
- * Type used for updating clients. It allows properties from both LeadClient and MemberClient
- * to be passed during updates, ignoring the status literal conflict.
- */
-export type ClientUpdates = Partial<Omit<LeadClient, 'status'> & Omit<MemberClient, 'status'>> & { status?: ClientStatus };
-
 
 export type TaskStatus = 'Pending' | 'In Progress' | 'Completed';
 export type TaskPriority = 'Low' | 'Medium' | 'High';
 
 export interface Task {
-  id: TaskId;
+  id: string;
   title: string;
   description?: string;
   dueDate: string; // ISO string
   status: TaskStatus;
   priority: TaskPriority;
-  clientId?: ClientId;
-  assignedTo: UserId;
-  createdBy: UserId;
+  clientId?: string;
+  assignedTo: string; // userId
+  createdBy: string; // userId
   createdAt: string; // ISO string
 }
 
@@ -179,6 +156,23 @@ export interface SalesTarget {
   currentAmount: number;
   privateSessionsSold: number;
   groupSessionsSold: number;
+  privateTarget: number;
+  groupTarget: number;
+}
+
+export interface UserSalesTarget {
+  id: string;
+  userId: string;
+  sales_rep_id: string;
+  month: string; // 'YYYY-MM'
+  month_year: string; // 'YYYY-MM'
+  targetAmount: number;
+  target_total_private: number;
+  target_total_group: number;
+  privateTarget: number;
+  groupTarget: number;
+  setBy: string; // manager userId
+  createdAt: string; // ISO string
 }
 
 export interface BrandingSettings {
