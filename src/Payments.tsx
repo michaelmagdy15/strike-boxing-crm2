@@ -27,6 +27,7 @@ export default function Payments() {
   const [packageType, setPackageType] = useState('');
   const [customPackage, setCustomPackage] = useState('');
   const [coachName, setCoachName] = useState('');
+  const [customCoachName, setCustomCoachName] = useState('');
   const [notes, setNotes] = useState('');
   const [recordedById, setRecordedById] = useState('');
 
@@ -75,9 +76,10 @@ export default function Payments() {
       }
 
       const isPT = /\bpt\b/i.test(finalPackageType);
-      if (isPT && !coachName) {
+      const resolvedCoachName = coachName === '__custom__' ? customCoachName.trim() : coachName;
+      if (isPT && !resolvedCoachName) {
         setAlertTitle('Missing Information');
-        setAlertDescription('Please select a coach for this PT package.');
+        setAlertDescription('Please select or enter a coach for this PT package.');
         setAlertOpen(true);
         return;
       }
@@ -89,7 +91,7 @@ export default function Payments() {
         method,
         instapayRef: method === 'Instapay' ? instapayRef : undefined,
         packageType: finalPackageType,
-        coachName: isPT ? coachName : undefined,
+        coachName: isPT ? resolvedCoachName : undefined,
         notes,
         recordedBy: recordedById || currentUser?.id
       });
@@ -120,6 +122,7 @@ export default function Payments() {
       setPackageType('');
       setCustomPackage('');
       setCoachName('');
+      setCustomCoachName('');
       setNotes('');
       const sama = users.find(u => u.name?.toLowerCase().includes('sama'));
       setRecordedById(sama?.id || currentUser?.id || '');
@@ -367,7 +370,7 @@ export default function Payments() {
               {((packageType && packageType !== 'Custom' && /\bpt\b/i.test(packageType)) || (packageType === 'Custom' && /\bpt\b/i.test(customPackage))) && (
                 <div className="space-y-2">
                   <Label>Coach</Label>
-                  <Select value={coachName} onValueChange={setCoachName}>
+                  <Select value={coachName} onValueChange={(v) => { setCoachName(v); if (v !== '__custom__') setCustomCoachName(''); }}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a coach" />
                     </SelectTrigger>
@@ -375,8 +378,16 @@ export default function Payments() {
                       {coaches.filter(c => c.active).map(coach => (
                         <SelectItem key={coach.id} value={coach.name}>{coach.name}</SelectItem>
                       ))}
+                      <SelectItem value="__custom__">Other (type name…)</SelectItem>
                     </SelectContent>
                   </Select>
+                  {coachName === '__custom__' && (
+                    <Input
+                      placeholder="Enter coach name"
+                      value={customCoachName}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomCoachName(e.target.value)}
+                    />
+                  )}
                 </div>
               )}
               <div className="space-y-2">
