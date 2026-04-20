@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAppContext } from '../context';
 import { User } from '../types';
@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
+import { SALES_NAME_MAPPING } from '../constants';
+
 
 interface UserPerformanceDialogProps {
   user: User;
@@ -51,24 +53,38 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
       const targetAmount = targetDoc ? targetDoc.targetAmount : 0;
       
       // Calculate achieved by getting payments in this month attributed to this user
+      // Create a lookup map for faster access - though for one user it's less critical, consistency is good
+      const clientMap = new Map(clients.map(c => [c.id, c]));
+
       const monthPayments = payments.filter(p => {
         const pDate = parseISO(p.date);
         if (!isWithinInterval(pDate, { start, end })) return false;
         
-        const client = clients.find(c => c.id === p.clientId);
+        const client = clientMap.get(p.clientId);
         
         // Branch Check
         if (user.branch && user.branch.toLowerCase() !== 'all') {
-          if (client?.branch !== user.branch) return false;
+          // If the payment is linked to a client, check their branch
+          if (client && client.branch !== user.branch) {
+             // Exception: if it's explicitly recorded by this user/ID, maybe don't filter? 
+             // keeping consistent with dashboard logic
+             return false;
+          }
         }
 
-        if (p.recordedBy === user.id) return true;
-        // Fallback for older data: if recordedBy is missing, check if the client is currently assigned to this rep
-        if (!p.recordedBy && client) {
-          if (client.assignedTo === user.id) return true;
-        }
-        return false;
+        // Robust Attribution Logic (Matching Dashboard.tsx)
+        const isDirectMatch = p.sales_rep_id === user.id || p.recordedBy === user.id;
+        const isAssignedClient = client?.assignedTo === user.id;
+        
+        // Check for aliases (Like "Maisoon" -> "Maison Mohamed")
+        const normalizedRepName = user.name.toLowerCase().trim();
+        const paymentSalesName = p.salesName?.toLowerCase().trim();
+        const mappedName = paymentSalesName ? (SALES_NAME_MAPPING[paymentSalesName]?.toLowerCase() || paymentSalesName) : '';
+        const isNameMatch = paymentSalesName && (paymentSalesName === normalizedRepName || mappedName === normalizedRepName);
+
+        return isDirectMatch || isAssignedClient || isNameMatch;
       });
+
 
       // Breakdown by session type
       const privatePayments = monthPayments.filter(p => p.packageType.toLowerCase().includes('private') || p.packageType.toLowerCase().includes('pt'));

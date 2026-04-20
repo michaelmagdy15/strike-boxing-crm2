@@ -132,6 +132,31 @@ export default function Dashboard() {
   const selectedMonth = subMonths(now, selectedMonthOffset);
   const currentMonthStr = format(selectedMonth, 'yyyy-MM');
   const reps = users.filter(u => u.role === 'rep');
+
+  const clientIdToAssignedRepMap = React.useMemo(() => {
+    const map = new Map<string, string>();
+    allClients.forEach(c => {
+      if (c.assignedTo) map.set(c.id, c.assignedTo);
+    });
+    return map;
+  }, [allClients]);
+
+  const isPaymentAttributedToRep = React.useCallback((payment: any, repId: string, repName: string) => {
+    // 1. Direct ID match
+    if (payment.sales_rep_id === repId || payment.recordedBy === repId) return true;
+    
+    // 2. Client Assignment match
+    if (clientIdToAssignedRepMap.get(payment.clientId) === repId) return true;
+    
+    // 3. Name mapping match (for imported data or manual entry fallback)
+    if (payment.sales_rep_id === 'system-import' || !payment.sales_rep_id) {
+      const salesName = (payment.salesName || '').trim();
+      const mappedName = SALES_NAME_MAPPING[salesName] || salesName;
+      if (mappedName.toLowerCase() === (repName || '').toLowerCase().trim()) return true;
+    }
+    
+    return false;
+  }, [clientIdToAssignedRepMap]);
   
   const filteredSalesData = React.useMemo(() => {
     let targetAmount = salesTarget.targetAmount;
@@ -147,20 +172,10 @@ export default function Dashboard() {
         targetAmount = 0; // Or some default
       }
       
-      const repVisibleClients = clients.filter(c => c.assignedTo === selectedRepId);
-      const repClientIds = new Set(repVisibleClients.map(c => c.id));
-      
       const selectedUser = users.find(u => u.id === selectedRepId);
+      const repName = selectedUser?.name || '';
       
-      relevantPayments = relevantPayments.filter(p => {
-        if (repClientIds.has(p.clientId) || p.recordedBy === selectedRepId || p.sales_rep_id === selectedRepId) return true;
-        if (selectedUser && (p.sales_rep_id === 'system-import' || !p.sales_rep_id)) {
-          const salesName = ((p as any).salesName || '').trim();
-          const mappedName = SALES_NAME_MAPPING[salesName] || salesName;
-          if (mappedName.toLowerCase() === (selectedUser.name || '').toLowerCase().trim()) return true;
-        }
-        return false;
-      });
+      relevantPayments = relevantPayments.filter(p => isPaymentAttributedToRep(p, selectedRepId, repName));
     }
 
     const currentAmount = relevantPayments.reduce((acc, p) => acc + p.amount, 0);
@@ -208,14 +223,6 @@ export default function Dashboard() {
   const chartData = React.useMemo(() => {
     const months = Array.from({ length: 6 }).map((_, i) => subMonths(now, 5 - i));
 
-    // Pre-map clients to reps for O(1) lookup inside payment iteration
-    const clientIdToRepMap = new Map<string, string | undefined>();
-    if (currentUser?.role === 'rep') {
-      for (const client of clients) {
-        clientIdToRepMap.set(client.id, client.assignedTo);
-      }
-    }
-
     return months.map(date => {
       const monthStr = format(date, 'yyyy-MM');
       const start = startOfMonth(date);
@@ -232,18 +239,7 @@ export default function Dashboard() {
         if (!isWithinInterval(pDate, { start, end })) return false;
 
         if (currentUser?.role === 'rep') {
-          if (p.sales_rep_id === currentUser.id || p.recordedBy === currentUser.id) return true;
-          
-          // Fallback for imported data
-          const salesName = ((p as any).salesName || '').trim();
-          const mappedName = SALES_NAME_MAPPING[salesName] || salesName;
-          if (mappedName.toLowerCase() === (currentUser.name || '').toLowerCase().trim()) return true;
-
-          if (!p.recordedBy && !p.sales_rep_id) {
-            const assignedTo = clientIdToRepMap.get(p.clientId);
-            if (assignedTo === currentUser.id) return true;
-          }
-          return false;
+          return isPaymentAttributedToRep(p, currentUser.id, currentUser.name || '');
         }
 
         return true;
@@ -283,14 +279,7 @@ export default function Dashboard() {
       const repTarget = userTargets.find(t => t.userId === rep.id && t.month === currentMonthStr);
       const repPayments = payments.filter(p => {
         if (format(parseISO(p.date), 'yyyy-MM') !== currentMonthStr) return false;
-        if (p.sales_rep_id === rep.id || p.recordedBy === rep.id) return true;
-        
-        if (p.sales_rep_id === 'system-import' || !p.sales_rep_id) {
-          const salesName = ((p as any).salesName || '').trim();
-          const mappedName = SALES_NAME_MAPPING[salesName] || salesName;
-          if (mappedName.toLowerCase() === (rep.name || '').toLowerCase().trim()) return true;
-        }
-        return false;
+        return isPaymentAttributedToRep(p, rep.id, rep.name || '');
       });
       return {
         name: (rep.name || rep.email || 'Unknown').split(' ')[0],
@@ -341,14 +330,7 @@ export default function Dashboard() {
 
       const repPayments = payments.filter(p => {
         if (format(parseISO(p.date), 'yyyy-MM') !== currentMonthStr) return false;
-        if (p.sales_rep_id === rep.id || p.recordedBy === rep.id) return true;
-        
-        if (p.sales_rep_id === 'system-import' || !p.sales_rep_id) {
-          const salesName = ((p as any).salesName || '').trim();
-          const mappedName = SALES_NAME_MAPPING[salesName] || salesName;
-          if (mappedName.toLowerCase() === (rep.name || '').toLowerCase().trim()) return true;
-        }
-        return false;
+        return isPaymentAttributedToRep(p, rep.id, rep.name || '');
       });
       const revenue = repPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
 

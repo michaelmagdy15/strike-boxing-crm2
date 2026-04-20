@@ -12,9 +12,12 @@ import {
 } from 'lucide-react';
 import { useAppContext } from '../context';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { SALES_NAME_MAPPING, SALES_MEMBERS } from '../constants';
+
 
 const CommissionReport: React.FC = () => {
-  const { payments, commissionRates, updateCommissionRates, currentUser } = useAppContext();
+  const { payments, commissionRates, updateCommissionRates, currentUser, users, clients } = useAppContext();
+
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [editingRates, setEditingRates] = useState(false);
   const safeCommissionRates = commissionRates || { ptRate: 0, groupRate: 0 };
@@ -38,9 +41,38 @@ const CommissionReport: React.FC = () => {
     const start = startOfMonth(monthDate);
     const end = endOfMonth(monthDate);
 
+    // Filter payments for the selected month
     const filteredPayments = payments.filter(p => {
       const pDate = typeof p.date === 'string' ? parseISO(p.date) : (p.date as any)?.toDate?.() || new Date(p.date);
       return isWithinInterval(pDate, { start, end });
+    });
+
+    // Strategy Part 1: Map all of our known Sales Rep IDs to their current full names
+    // And Part 2: Map Aliases/Names to IDs
+    const repIdToName: Record<string, string> = {};
+    const nameToRepId: Record<string, string> = {};
+    
+    users.forEach(u => {
+      const role = u.role?.toLowerCase();
+      // Only include reps or those in SALES_MEMBERS
+      if (role === 'rep' || role === 'sales_rep' || SALES_MEMBERS.includes(u.name)) {
+        repIdToName[u.id] = u.name;
+        nameToRepId[u.name.toLowerCase().trim()] = u.id;
+      }
+    });
+
+    // Add explicit mapping for common aliases to the IDs we found
+    Object.entries(SALES_NAME_MAPPING).forEach(([alias, fullName]) => {
+      const id = nameToRepId[fullName.toLowerCase().trim()];
+      if (id) {
+        nameToRepId[alias.toLowerCase().trim()] = id;
+      }
+    });
+
+    // Strategy Part 3: Client Assignments Fallback
+    const clientIdToAssignedRepMap = new Map();
+    clients.forEach(c => {
+      if (c.assignedTo) clientIdToAssignedRepMap.set(c.id, c.assignedTo);
     });
 
     const reps: Record<string, {
@@ -51,8 +83,21 @@ const CommissionReport: React.FC = () => {
     }> = {};
 
     filteredPayments.forEach(p => {
-      const repId = p.sales_rep_id || 'unassigned';
-      const repName = p.salesName || 'Unassigned';
+      // Determine the "Winner" (Rep who gets credit)
+      let winnerId = p.sales_rep_id || p.recordedBy;
+      
+      // If no explicit ID, try to match by name alias
+      if (!winnerId && p.salesName) {
+        winnerId = nameToRepId[p.salesName.toLowerCase().trim()];
+      }
+
+      // If still no ID, use the client assignment
+      if (!winnerId && p.clientId) {
+        winnerId = clientIdToAssignedRepMap.get(p.clientId);
+      }
+
+      const repId = winnerId || 'unassigned';
+      const repName = repIdToName[repId] || p.salesName || 'Unassigned';
 
       if (!reps[repId]) {
         reps[repId] = {
@@ -66,7 +111,7 @@ const CommissionReport: React.FC = () => {
       const amount = Number(p.amount) || 0;
       reps[repId].totalRevenue += amount;
 
-      if (p.package_category_type === 'Private Training') {
+      if (p.package_category_type === 'Private Training' || p.packageType?.toLowerCase().includes('pt')) {
         reps[repId].privateRevenue += amount;
       } else {
         reps[repId].groupRevenue += amount;
@@ -78,7 +123,8 @@ const CommissionReport: React.FC = () => {
       commission: (rep.privateRevenue * ((commissionRates?.ptRate || 0) / 100)) + 
                   (rep.groupRevenue * ((commissionRates?.groupRate || 0) / 100))
     })).sort((a, b) => b.totalRevenue - a.totalRevenue);
-  }, [payments, selectedMonth, commissionRates]);
+  }, [payments, selectedMonth, commissionRates, users, clients]);
+
 
   const exportToCSV = () => {
     const headers = ['Representative', 'Total Revenue', 'Private Revenue', 'Group Revenue', 'Commission'];
