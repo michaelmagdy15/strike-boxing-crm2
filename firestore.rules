@@ -168,7 +168,11 @@ service cloud.firestore {
       allow read, write: if isAuthenticated();
     }
     
-    match /interactions/{interactionId} {
+    match /attendance/{attendanceId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    match /{path=**}/interactions/{interactionId} {
       allow read, write: if isAuthenticated();
     }
   }
