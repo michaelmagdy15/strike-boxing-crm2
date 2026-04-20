@@ -43,82 +43,67 @@ const db = admin.firestore();
 // -------------------------------------------------------------
 // SECRETS & CONFIGURATION
 // -------------------------------------------------------------
-// You will need to set this token in the Meta Developer Portal
-// when setting up your Webhook. Make sure it matches exactly!
-const META_VERIFY_TOKEN = "strike_crm_secure_token_2026";
+// Simple secret to ensure only your Zapier account can add leads.
+// You can set this in Zapier Headers as: X-Strike-Secret
+const STRIKE_WEBHOOK_SECRET = "strike_zapier_secret_2026";
 /**
- * Meta Webhook Endpoint
- * Handles verification (GET) and incoming leads (POST)
+ * Generic Webhook Endpoint for Zapier / Make.com
+ * Accepts a POST request with name, phone, email, and source.
  */
 exports.metaWebhook = (0, https_1.onRequest)(async (req, res) => {
-    logger.info(`Received ${req.method} request`);
-    // 1. WEBHOOK VERIFICATION (GET)
-    if (req.method === "GET") {
-        const mode = req.query["hub.mode"];
-        const token = req.query["hub.verify_token"];
-        const challenge = req.query["hub.challenge"];
-        if (mode === "subscribe" && token === META_VERIFY_TOKEN) {
-            logger.info("Meta Webhook Verified Successfully!");
-            res.status(200).send(challenge);
-            return;
-        }
-        else {
-            logger.warn("Meta Webhook Verification Failed: Token mismatch");
-            res.sendStatus(403);
-            return;
-        }
+    logger.info(`[${req.method}] Webhook triggered`);
+    // Only allow POST
+    if (req.method !== "POST") {
+        res.status(405).send("Only POST is allowed");
+        return;
     }
-    // 2. INCOMING DATA (POST)
-    if (req.method === "POST") {
+    try {
         const body = req.body;
-        logger.info("Incoming Webhook Body:", JSON.stringify(body));
-        // Meta Lead Ads test usually sends object: 'page'
-        if (body.object === "page" || body.object === "instagram" || body.object === "whatsapp_business_account") {
-            for (const entry of body.entry) {
-                // Log individual entry for debugging
-                logger.info("Processing entry:", JSON.stringify(entry));
-                // --- HANDLE INSTAGRAM / FACEBOOK LEAD ADS ---
-                if (entry.changes && entry.changes[0].field === "leadgen") {
-                    const leadgenId = entry.changes[0].value.leadgen_id;
-                    logger.info(`Detected Leadgen Change. Lead ID: ${leadgenId}`);
-                    await createLeadInCRM("Test Meta Lead", "000-000-0000", "Instagram");
-                }
-                // --- HANDLE MESSAGES ---
-                if (entry.messaging || (entry.changes && entry.changes[0].field === "messages")) {
-                    logger.info("Detected Message Event");
-                    const source = body.object === "whatsapp_business_account" ? "WhatsApp" : "Instagram";
-                    await createLeadInCRM("Test Message Lead", "000-000-0000", source);
-                }
-            }
-            res.status(200).send("EVENT_RECEIVED");
+        const secret = req.headers["x-strike-secret"];
+        logger.info("Incoming Webhook Data:", JSON.stringify(body, null, 2));
+        // Optional: Check secret if you want to be safe
+        if (secret && secret !== STRIKE_WEBHOOK_SECRET) {
+            logger.warn("Invalid secret received");
+            res.status(401).send("Unauthorized");
+            return;
         }
-        else {
-            logger.warn(`Unrecognized object type: ${body.object}`);
-            res.sendStatus(404);
+        const { name, phone, email, source } = body;
+        if (!name) {
+            logger.warn("Missing required field: name");
+            res.status(400).send("Missing field: name");
+            return;
         }
+        // Inject into CRM
+        await createLeadInCRM(name, phone || "000-000-0000", source || "Zapier", email || "");
+        res.status(200).send({ status: "success", message: "Lead added to CRM" });
+    }
+    catch (err) {
+        logger.error("Error processing webhook payload:", err);
+        res.status(500).send({ status: "error", message: "Internal Server Error" });
     }
 });
 /**
  * Helper function to inject a Lead directly into Strike CRM's Firestore
  */
-async function createLeadInCRM(name, phone, source) {
+async function createLeadInCRM(name, phone, source, email) {
     try {
-        const newClientRef = db.collection("clients").doc(); // Auto-generate ID
-        // This matches the `Client` interface used in your frontend app
+        const newClientRef = db.collection("clients").doc();
         const leadData = {
             name: name,
             phone: phone,
+            email: email,
             status: "Lead",
             stage: "New",
             source: source,
             createdAt: new Date().toISOString(),
             lastContactDate: new Date().toISOString(),
+            notes: `Ingested via Zapier (${source})`
         };
         await newClientRef.set(leadData);
-        logger.info(`Successfully added Lead to CRM: ${name}`);
+        logger.info(`Successfully added Lead to CRM: ${name} (${source})`);
     }
     catch (error) {
-        logger.error("Error creating Lead in CRM", error);
+        logger.error("Error creating Lead in CRM:", error);
     }
 }
 //# sourceMappingURL=index.js.map
