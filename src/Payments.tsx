@@ -71,7 +71,8 @@ export default function Payments() {
     }
   };
 
-  const handlePackageChange = (val: string) => {
+  const handlePackageChange = (val: string | null) => {
+    if (!val) return;
     setPackageType(val);
     const pkg = packages.find(p => p.name === val);
     if (pkg) {
@@ -113,20 +114,39 @@ export default function Payments() {
 
       // Update client with new package info
       const pkg = packages.find(p => p.name === packageType);
+      const selectedClient = clients.find(c => c.id === clientId);
       if (pkg) {
         const pkgStartDate = new Date(startDate);
+        const newClientPackage = {
+          id: Math.random().toString(36).substr(2, 9),
+          packageName: pkg.name,
+          startDate: pkgStartDate.toISOString(),
+          endDate: addDays(pkgStartDate, pkg.expiryDays).toISOString(),
+          sessionsTotal: pkg.sessions,
+          sessionsRemaining: pkg.sessions,
+          status: 'Active' as const
+        };
         updateClient(clientId, {
           packageType: pkg.name,
           sessionsRemaining: pkg.sessions,
           membershipExpiry: addDays(pkgStartDate, pkg.expiryDays).toISOString(),
           startDate: pkgStartDate.toISOString(),
-          status: 'Active'
+          status: 'Active',
+          packages: [...(selectedClient?.packages || []), newClientPackage]
         });
       } else {
+        const pkgStartDate = new Date(startDate);
+        const newClientPackage = {
+          id: Math.random().toString(36).substr(2, 9),
+          packageName: finalPackageType,
+          startDate: pkgStartDate.toISOString(),
+          status: 'Active' as const
+        };
         updateClient(clientId, {
           packageType: finalPackageType,
-          startDate: new Date(startDate).toISOString(),
-          status: 'Active'
+          startDate: pkgStartDate.toISOString(),
+          status: 'Active',
+          packages: [...(selectedClient?.packages || []), newClientPackage]
         });
       }
 
@@ -319,7 +339,7 @@ export default function Payments() {
                 
                 <div className="space-y-3 lg:col-span-2">
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Client / Member</Label>
-                  <Select value={clientId} onValueChange={setClientId}>
+                  <Select value={clientId} onValueChange={v => v && setClientId(v)}>
                     <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
                       <SelectValue placeholder="Search or select client" />
                     </SelectTrigger>
@@ -359,7 +379,7 @@ export default function Payments() {
 
                 <div className="space-y-3">
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Method</Label>
-                  <Select value={method} onValueChange={(v) => setMethod(v as Payment['method'])}>
+                  <Select value={method} onValueChange={(v) => v && setMethod(v as Payment['method'])}>
                     <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
                       <SelectValue placeholder="Select method" />
                     </SelectTrigger>
@@ -418,7 +438,7 @@ export default function Payments() {
                 {((packageType && packageType !== 'Custom' && /\bpt\b/i.test(packageType)) || (packageType === 'Custom' && /\bpt\b/i.test(customPackage))) && (
                   <div className="space-y-3">
                     <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Coach</Label>
-                    <Select value={coachName} onValueChange={(v) => { setCoachName(v); if (v !== '__custom__') setCustomCoachName(''); }}>
+                    <Select value={coachName} onValueChange={(v) => { if(!v) return; setCoachName(v); if (v !== '__custom__') setCustomCoachName(''); }}>
                       <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
                         <SelectValue placeholder="Assigned coach" />
                       </SelectTrigger>
@@ -442,7 +462,7 @@ export default function Payments() {
 
                 <div className="space-y-3">
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Sales Person</Label>
-                  <Select value={salesName} onValueChange={setSalesName}>
+                  <Select value={salesName} onValueChange={v => v && setSalesName(v)}>
                     <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
                       <SelectValue placeholder="For commission" />
                     </SelectTrigger>
@@ -456,7 +476,7 @@ export default function Payments() {
 
                 <div className="space-y-3">
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Recorded By</Label>
-                  <Select value={recordedById} onValueChange={setRecordedById}>
+                  <Select value={recordedById} onValueChange={v => v && setRecordedById(v)}>
                     <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
                       <SelectValue placeholder="Staff member">
                          {adminUsers.find(u => u.id === recordedById)?.name || undefined}

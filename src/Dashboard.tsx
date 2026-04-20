@@ -52,7 +52,7 @@ function PaginatedList({ items, renderItem, itemsPerPage = 5 }: { items: any[], 
 }
 
 export default function Dashboard() {
-  const { clients: allClients, salesTarget, updateSalesTarget, currentUser, payments: allPayments, userTargets, users, canViewGlobalDashboard, canAccessSettings, branches } = useAppContext();
+  const { clients: allClients, salesTarget, updateSalesTarget, updateUserTarget, currentUser, payments: allPayments, userTargets, users, canViewGlobalDashboard, canAccessSettings, branches } = useAppContext();
   const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false);
   const [newTarget, setNewTarget] = useState(salesTarget.targetAmount.toString());
   const [selectedRepId, setSelectedRepId] = useState<string>('all');
@@ -115,12 +115,14 @@ export default function Dashboard() {
     return daysSinceComment >= 7;
   });
 
-  const targetPercentage = Math.round((salesTarget.currentAmount / salesTarget.targetAmount) * 100);
-
   const handleUpdateTarget = () => {
     const target = parseFloat(newTarget);
     if (!isNaN(target) && target > 0) {
-      updateSalesTarget(target);
+      if (canViewGlobalDashboard && selectedRepId !== 'all') {
+        updateUserTarget(selectedRepId, currentMonthStr, target);
+      } else {
+        updateSalesTarget(target);
+      }
       setIsTargetDialogOpen(false);
     }
   };
@@ -132,8 +134,6 @@ export default function Dashboard() {
   
   const filteredSalesData = React.useMemo(() => {
     let targetAmount = salesTarget.targetAmount;
-    let privateTarget = salesTarget.privateTarget;
-    let groupTarget = salesTarget.groupTarget;
     
     let relevantPayments = payments.filter(p => format(parseISO(p.date), 'yyyy-MM') === currentMonthStr);
     
@@ -142,12 +142,8 @@ export default function Dashboard() {
       const repTarget = userTargets.find(t => t.userId === selectedRepId && t.month === currentMonthStr);
       if (repTarget) {
         targetAmount = repTarget.targetAmount;
-        privateTarget = repTarget.privateTarget || 0;
-        groupTarget = repTarget.groupTarget || 0;
       } else {
         targetAmount = 0; // Or some default
-        privateTarget = 0;
-        groupTarget = 0;
       }
       
       const repVisibleClients = clients.filter(c => c.assignedTo === selectedRepId);
@@ -184,8 +180,6 @@ export default function Dashboard() {
       groupSessionsSold,
       privateRevenue,
       groupRevenue,
-      privateTarget,
-      groupTarget,
       cash,
       visa,
       instapay,
@@ -241,11 +235,14 @@ export default function Dashboard() {
       });
 
       const achievedAmount = monthPayments.reduce((sum, p) => sum + p.amount, 0);
+      const privateRevenue = monthPayments.filter(p => /private|pt/i.test(p.packageType)).reduce((s, p) => s + p.amount, 0);
+      const groupRevenue = monthPayments.filter(p => /group|gt/i.test(p.packageType)).reduce((s, p) => s + p.amount, 0);
 
       return {
         month: format(date, 'MMM yy'),
         Target: targetAmount,
-        Revenue: achievedAmount,
+        Private: privateRevenue,
+        Group: groupRevenue,
       };
     });
   }, [userTargets, payments, clients, currentUser]);
@@ -521,7 +518,7 @@ export default function Dashboard() {
               <div className="mt-4 h-2 w-full bg-secondary rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-primary" 
-                  style={{ width: `${Math.min(targetPercentage, 100)}%` }}
+                  style={{ width: `${Math.min(filteredSalesData.percentage, 100)}%` }}
                 />
               </div>
 
@@ -540,21 +537,8 @@ export default function Dashboard() {
                         <Badge variant="outline" className="font-semibold px-1.5 py-0 h-5 bg-blue-500/10 text-blue-500 border-blue-500/20">
                           {filteredSalesData.privateSessionsSold} packages
                         </Badge>
-                        {filteredSalesData.privateTarget > 0 && (
-                          <span className="text-[10px] text-muted-foreground block mt-0.5">
-                            Target: {filteredSalesData.privateTarget}
-                          </span>
-                        )}
                       </div>
                     </div>
-                    {filteredSalesData.privateTarget > 0 && (
-                      <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-blue-500" 
-                          style={{ width: `${Math.min((filteredSalesData.privateSessionsSold / filteredSalesData.privateTarget) * 100, 100)}%` }}
-                        />
-                      </div>
-                    )}
                   </div>
                   
                   <div className="space-y-2">
@@ -569,21 +553,8 @@ export default function Dashboard() {
                         <Badge variant="outline" className="font-semibold px-1.5 py-0 h-5 bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
                           {filteredSalesData.groupSessionsSold} packages
                         </Badge>
-                        {filteredSalesData.groupTarget > 0 && (
-                          <span className="text-[10px] text-muted-foreground block mt-0.5">
-                            Target: {filteredSalesData.groupTarget}
-                          </span>
-                        )}
                       </div>
                     </div>
-                    {filteredSalesData.groupTarget > 0 && (
-                      <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-emerald-500" 
-                          style={{ width: `${Math.min((filteredSalesData.groupSessionsSold / filteredSalesData.groupTarget) * 100, 100)}%` }}
-                        />
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -1019,7 +990,8 @@ export default function Dashboard() {
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
                   <Tooltip formatter={(v: any) => `${v.toLocaleString()} LE`} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Private" stackId="rev" fill="#6366f1" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="Group" stackId="rev" fill="#10b981" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Target" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>

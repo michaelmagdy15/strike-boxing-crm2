@@ -152,7 +152,11 @@ export default function Clients() {
   const now = new Date();
 
   // Filter clients
-  const members = clients.filter(c => c.status !== 'Lead');
+  const members = clients.filter(c => {
+    if (c.status === 'Lead') return false;
+    if (currentUser?.role === 'rep' && c.assignedTo !== currentUser.id) return false;
+    return true;
+  });
   
   const activeMembers = members.filter(c => c.status === 'Active');
   const nearlyExpired = members.filter(c => c.status === 'Nearly Expired');
@@ -466,6 +470,12 @@ export default function Clients() {
                             >
                               Comments
                             </TabsTrigger>
+                            <TabsTrigger 
+                              value="packages" 
+                              className="rounded-2xl px-12 py-5 data-[state=active]:bg-background data-[state=active]:shadow-2xl data-[state=active]:text-primary data-[state=active]:border-primary/20 transition-all font-black uppercase tracking-widest text-sm border-2 border-transparent h-auto"
+                            >
+                              Packages
+                            </TabsTrigger>
                           </TabsList>
                         </div>
 
@@ -509,89 +519,7 @@ export default function Clients() {
                                     onChange={(e) => updateClient(client.id, { points: parseInt(e.target.value) || 0 })}
                                   />
                                 </div>
-                                <div className="space-y-2">
-                                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Package Type</Label>
-                                  <Select 
-                                    value={client.packageType || ''} 
-                                    onValueChange={(val) => {
-                                      const pkg = packages.find(p => p.name === val);
-                                      if (pkg) {
-                                        const startDate = client.startDate ? parseISO(client.startDate) : new Date();
-                                        updateClient(client.id, { 
-                                          packageType: pkg.name,
-                                          sessionsRemaining: pkg.sessions,
-                                          membershipExpiry: addDays(startDate, pkg.expiryDays).toISOString()
-                                        });
-                                      } else {
-                                        updateClient(client.id, { packageType: val || undefined });
-                                      }
-                                    }}
-                                  >
-                                    <SelectTrigger className="h-11 rounded-xl bg-background/50 border-input px-4">
-                                      <SelectValue placeholder="Select package" />
-                                    </SelectTrigger>
-                                    <SelectContent className="rounded-xl border-none shadow-xl">
-                                      {packages.map(pkg => (
-                                        <SelectItem key={pkg.id || pkg.name} value={pkg.name} className="rounded-lg">
-                                          {pkg.name} ({pkg.expiryDays} days)
-                                        </SelectItem>
-                                      ))}
-                                      <SelectItem value="Custom" className="rounded-lg">Custom / Other</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                <div className="space-y-2">
-                                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Packages Remaining</Label>
-                                  <Input 
-                                    className="h-11 rounded-xl bg-background/50 focus-visible:ring-primary transition-all px-4"
-                                    defaultValue={client.sessionsRemaining} 
-                                    placeholder="Enter number or 'no attend'"
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      updateClient(client.id, { 
-                                        sessionsRemaining: isNaN(Number(val)) ? val : Number(val) 
-                                      });
-                                    }}
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Start Date</Label>
-                                  <Input 
-                                    type="date" 
-                                    className="h-11 rounded-xl bg-background/50 focus-visible:ring-primary transition-all px-4"
-                                    defaultValue={client.startDate ? format(parseISO(client.startDate), 'yyyy-MM-dd') : ''}
-                                    onChange={(e) => updateClient(client.id, { startDate: new Date(e.target.value).toISOString() })}
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">End Date (Expiry)</Label>
-                                  <div className="flex gap-2">
-                                    <Input 
-                                      type="date" 
-                                      className="h-11 rounded-xl bg-background/50 focus-visible:ring-primary transition-all flex-1 px-4"
-                                      defaultValue={client.membershipExpiry ? format(parseISO(client.membershipExpiry), 'yyyy-MM-dd') : ''}
-                                      onChange={(e) => updateClient(client.id, { membershipExpiry: new Date(e.target.value).toISOString() })}
-                                    />
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      className="h-11 w-11 rounded-xl border-input hover:bg-muted transition-all shrink-0"
-                                      title="Recalculate from Start Date & Package"
-                                      onClick={() => {
-                                        const pkg = packages.find(p => p.name === client.packageType);
-                                        if (pkg && client.startDate) {
-                                          updateClient(client.id, {
-                                            membershipExpiry: addDays(parseISO(client.startDate), pkg.expiryDays).toISOString()
-                                          });
-                                        } else {
-                                          alert('Could not find matching package or missing start date.');
-                                        }
-                                      }}
-                                    >
-                                      <RefreshCw className="h-4 w-4 text-muted-foreground" />
-                                    </Button>
-                                  </div>
-                                </div>
+
                                 <div className="space-y-2">
                                   <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Date of Birth</Label>
                                   <Input 
@@ -893,6 +821,147 @@ export default function Clients() {
                                 <p className="text-xl font-mono font-bold text-foreground tracking-tight">
                                   #{client.memberId || client.id.slice(0, 8).toUpperCase()}
                                 </p>
+                              </div>
+                            </div>
+                          </TabsContent>
+
+                          <TabsContent value="packages" className="mt-0 outline-none">
+                            <div className="space-y-6 p-2">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground ml-1">Client Packages</Label>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  className="h-8 text-xs bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 hover:text-emerald-700 border-emerald-200"
+                                  onClick={() => {
+                                    const newPkg = {
+                                      id: Math.random().toString(36).substring(7),
+                                      packageName: '',
+                                      status: 'Active' as const
+                                    };
+                                    const updatedPackages = [...(client.packages || []), newPkg];
+                                    updateClient(client.id, { packages: updatedPackages });
+                                  }}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" /> Add Package
+                                </Button>
+                              </div>
+                              
+                              <div className="space-y-3">
+                                {(client.packages || []).map((pkg, idx) => (
+                                  <div key={pkg.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 p-3 bg-muted/30 rounded-xl border relative">
+                                    <div className="md:col-span-3 space-y-1">
+                                      <Label className="text-[10px] uppercase text-muted-foreground">Package</Label>
+                                      <Select 
+                                        value={pkg.packageName} 
+                                        onValueChange={(val) => {
+                                           if (!val) return;
+                                           const sysPkg = packages.find(p => p.name === val);
+                                           const updated = [...(client.packages || [])];
+                                           const currentPkg = updated[idx];
+                                           if (!currentPkg) return;
+                                           
+                                           updated[idx] = {
+                                             ...currentPkg, 
+                                             packageName: val,
+                                             sessionsTotal: sysPkg ? sysPkg.sessions : undefined,
+                                             sessionsRemaining: sysPkg ? sysPkg.sessions : undefined,
+                                             endDate: sysPkg && currentPkg.startDate ? addDays(parseISO(currentPkg.startDate), sysPkg.expiryDays).toISOString() : currentPkg.endDate
+                                           };
+                                           updateClient(client.id, { packages: updated });
+                                        }}
+                                      >
+                                        <SelectTrigger className="h-8 text-xs bg-background"><SelectValue placeholder="Select" /></SelectTrigger>
+                                        <SelectContent>
+                                          {packages.map(p => <SelectItem key={p.id} value={p.name} className="text-xs">{p.name}</SelectItem>)}
+                                          <SelectItem value="Custom" className="text-xs">Custom</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div className="md:col-span-2 space-y-1">
+                                      <Label className="text-[10px] uppercase text-muted-foreground">Start</Label>
+                                      <Input 
+                                        type="date" className="h-8 text-xs bg-background" 
+                                        value={pkg.startDate ? format(parseISO(pkg.startDate), 'yyyy-MM-dd') : ''}
+                                        onChange={e => {
+                                          const updated = [...(client.packages || [])];
+                                          const currentPkg = updated[idx];
+                                          if (!currentPkg) return;
+                                          const sysPkg = packages.find(p => p.name === currentPkg.packageName);
+                                          const newStart = new Date(e.target.value).toISOString();
+                                          updated[idx] = { 
+                                            ...currentPkg, 
+                                            startDate: newStart,
+                                            endDate: sysPkg ? addDays(parseISO(newStart), sysPkg.expiryDays).toISOString() : currentPkg.endDate
+                                          };
+                                          updateClient(client.id, { packages: updated });
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="md:col-span-2 space-y-1">
+                                      <Label className="text-[10px] uppercase text-muted-foreground">Expiry</Label>
+                                      <Input 
+                                        type="date" className="h-8 text-xs bg-background" 
+                                        value={pkg.endDate ? format(parseISO(pkg.endDate), 'yyyy-MM-dd') : ''}
+                                        onChange={e => {
+                                          const updated = [...(client.packages || [])];
+                                          const currentPkg = updated[idx];
+                                          if (!currentPkg) return;
+                                          updated[idx] = { ...currentPkg, endDate: new Date(e.target.value).toISOString() };
+                                          updateClient(client.id, { packages: updated });
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="md:col-span-2 space-y-1">
+                                      <Label className="text-[10px] uppercase text-muted-foreground">Remaining</Label>
+                                      <Input 
+                                        type="number" className="h-8 text-xs bg-background" 
+                                        value={pkg.sessionsRemaining || ''}
+                                        onChange={e => {
+                                          const updated = [...(client.packages || [])];
+                                          const currentPkg = updated[idx];
+                                          if (!currentPkg) return;
+                                          updated[idx] = { ...currentPkg, sessionsRemaining: parseInt(e.target.value) || 0 };
+                                          updateClient(client.id, { packages: updated });
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="md:col-span-3 space-y-1">
+                                      <Label className="text-[10px] uppercase text-muted-foreground">Status</Label>
+                                      <div className="flex gap-1 items-center">
+                                        <Select 
+                                          value={pkg.status} 
+                                          onValueChange={(val: any) => {
+                                            if (!val) return;
+                                            const updated = [...(client.packages || [])];
+                                            const currentPkg = updated[idx];
+                                            if (!currentPkg) return;
+                                            updated[idx] = { ...currentPkg, status: val };
+                                            updateClient(client.id, { packages: updated });
+                                          }}
+                                        >
+                                          <SelectTrigger className="h-8 text-xs flex-1 bg-background"><SelectValue /></SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="Active" className="text-xs">Active</SelectItem>
+                                            <SelectItem value="Expired" className="text-xs">Expired</SelectItem>
+                                            <SelectItem value="Cancelled" className="text-xs">Cancelled</SelectItem>
+                                            <SelectItem value="Pending" className="text-xs">Pending</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                        <Button 
+                                          variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0"
+                                          onClick={() => {
+                                            const updated = (client.packages || []).filter((_, i) => i !== idx);
+                                            updateClient(client.id, { packages: updated });
+                                          }}
+                                        ><Trash2 className="h-4 w-4" /></Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                                {(client.packages || []).length === 0 && (
+                                  <p className="text-xs text-muted-foreground text-center py-6 bg-muted/20 rounded-xl border border-dashed">No packages found for this client. Click "Add Package" to assign one.</p>
+                                )}
                               </div>
                             </div>
                           </TabsContent>

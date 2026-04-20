@@ -178,7 +178,7 @@ export default function RenewalPipeline() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
-                        <Badge variant={daysLeft < 0 ? 'destructive' : daysLeft <= 7 ? 'warning' : 'outline'} className="w-fit">
+                        <Badge variant={daysLeft < 0 ? 'destructive' : 'outline'} className={daysLeft >= 0 && daysLeft <= 7 ? 'w-fit text-orange-600 border-orange-200 bg-orange-50' : 'w-fit'}>
                           {daysLeft < 0 
                             ? `Expired ${Math.abs(daysLeft)}d ago` 
                             : daysLeft === 0 
@@ -289,7 +289,7 @@ export default function RenewalPipeline() {
 
             <div className="grid gap-2">
               <Label htmlFor="package">Package</Label>
-              <Select value={packageType} onValueChange={handlePackageChange}>
+              <Select value={packageType} onValueChange={(val) => val && handlePackageChange(val)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select package" />
                 </SelectTrigger>
@@ -315,7 +315,7 @@ export default function RenewalPipeline() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="method">Method</Label>
-                <Select value={method} onValueChange={(val: any) => setMethod(val)}>
+                <Select value={method} onValueChange={(val) => val && setMethod(val as any)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -344,7 +344,7 @@ export default function RenewalPipeline() {
             {/\bpt\b/i.test(packageType) && (
               <div className="grid gap-2">
                 <Label htmlFor="coach">Coach</Label>
-                <Select value={coachName} onValueChange={setCoachName}>
+                <Select value={coachName} onValueChange={(val) => val && setCoachName(val)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select coach" />
                   </SelectTrigger>

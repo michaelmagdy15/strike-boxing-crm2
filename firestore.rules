@@ -28,12 +28,6 @@ service cloud.firestore {
       );
     }
 
-    function isRep() {
-      return isAuthenticated() && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'rep';
-    }
-
     function hasRequiredFields(fields) {
       return request.resource.data.keys().hasAll(fields);
     }
@@ -71,10 +65,24 @@ service cloud.firestore {
              data.status in ["Scheduled", "Attended", "No Show", "Cancelled"];
     }
 
+    function isValidInteraction(data) {
+      return data.date is string &&
+             data.type in ["Call", "WhatsApp", "Email", "Visit"] &&
+             data.outcome in ["Interested", "Not Answered", "Scheduled Trial", "Rejected", "Other"] &&
+             data.author is string;
+    }
+
+    function isValidAttendance(data) {
+      return data.clientId is string &&
+             data.branch is string &&
+             data.date is string &&
+             data.recordedBy is string;
+    }
+
     function isValidAuditLog(data) {
       return data.userId is string &&
              data.action in ["CREATE", "UPDATE", "DELETE"] &&
-             data.entityType in ["CLIENT", "PAYMENT", "SESSION", "LEAD", "TARGET"] &&
+             data.entityType in ["CLIENT", "PAYMENT", "PACKAGE_RECORD", "LEAD", "TARGET", "ATTENDANCE", "COACH", "SYSTEM", "BRANCH", "SESSION"] &&
              data.entityId is string;
     }
 
@@ -96,13 +104,15 @@ service cloud.firestore {
     match /{path=**}/comments/{commentId} {
       allow read: if isAuthenticated();
     }
-    
+
+    // collectionGroup read for interactions dashboard queries; writes handled by client subcollection rule
     match /{path=**}/interactions/{interactionId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
     }
-    
+
     match /{path=**}/attendance/{attendanceId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isValidAttendance(request.resource.data);
     }
 
     match /users/{userId} {
@@ -140,7 +150,7 @@ service cloud.firestore {
       }
       
       match /interactions/{interactionId} {
-        allow read, write: if isAuthenticated();
+        allow read, write: if isAuthenticated() && isValidInteraction(request.resource.data);
       }
     }
 
@@ -173,11 +183,8 @@ service cloud.firestore {
     }
     
     match /targets/{targetId} {
-      allow read, write: if isAuthenticated();
-    }
-
-    match /interactions/{interactionId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
   }
 }

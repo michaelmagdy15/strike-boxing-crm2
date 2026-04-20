@@ -70,6 +70,7 @@ export default function Reports() {
       if (memberAttendances.length === 0) return true;
       
       const lastAttendance = memberAttendances.sort((a, b) => b.date.localeCompare(a.date))[0];
+      if (!lastAttendance) return true;
       return differenceInDays(now, parseISO(lastAttendance.date)) > 14;
     }).map(m => {
       const lastAtt = attendances.filter(a => a.clientId === m.id).sort((a, b) => b.date.localeCompare(a.date))[0];

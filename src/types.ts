@@ -81,7 +81,7 @@ export interface AuditLog {
   id: string;
   userId: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE';
-  entityType: 'CLIENT' | 'PAYMENT' | 'PACKAGE_RECORD' | 'LEAD' | 'TARGET' | 'ATTENDANCE' | 'COACH' | 'SYSTEM' | 'BRANCH';
+  entityType: 'CLIENT' | 'PAYMENT' | 'PACKAGE_RECORD' | 'LEAD' | 'TARGET' | 'ATTENDANCE' | 'COACH' | 'SYSTEM' | 'BRANCH' | 'SESSION';
   entityId: string;
   details: string;
   timestamp: string;
@@ -137,11 +137,23 @@ export interface Client {
   typeOfClient?: string;
   salesName?: string;
   
+  packages?: ClientPackage[];
+  
   comments?: CRMComment[];
   interactions?: InteractionLog[];
   lastContactDate?: string; // ISO string
   nextReminderDate?: string; // ISO string
   paid?: boolean;
+}
+
+export interface ClientPackage {
+  id: string;
+  packageName: string;
+  startDate?: string;
+  endDate?: string;
+  sessionsTotal?: number;
+  sessionsRemaining?: number;
+  status: 'Active' | 'Expired' | 'Cancelled' | 'Pending';
 }
 
 export interface Attendance {
@@ -174,8 +186,6 @@ export interface SalesTarget {
   currentAmount: number;
   privatePackagesSold: number;
   groupPackagesSold: number;
-  privateTarget: number;
-  groupTarget: number;
 }
 
 export interface CommissionRates {
@@ -190,10 +200,6 @@ export interface UserSalesTarget {
   month: string; // 'YYYY-MM'
   month_year: string; // 'YYYY-MM'
   targetAmount: number;
-  target_total_private: number;
-  target_total_group: number;
-  privateTarget: number;
-  groupTarget: number;
   setBy: string; // manager userId
   createdAt: string; // ISO string
 }
@@ -205,3 +211,18 @@ export interface BrandingSettings {
   dailyCheckinPin?: string;
 }
 
+export type UserId = string;
+export type ClientId = string;
+export type PackageId = string;
+export type TaskId = string;
+export type PaymentId = string;
+export type SessionId = string;
+export type ImportBatchId = string;
+
+export type PrivateSession = PTPackageRecord;
+export type Comment = CRMComment;
+export type UserTarget = UserSalesTarget;
+export type ClientUpdates = Partial<Client>;
+
+export const isSuperAdmin = (role?: UserRole): boolean => role === 'super_admin' || role === 'crm_admin';
+export const isAdmin = (role?: UserRole): boolean => role === 'manager' || role === 'super_admin' || role === 'crm_admin';

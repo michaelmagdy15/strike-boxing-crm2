@@ -58,7 +58,8 @@ const ConversionFunnel: React.FC<ConversionFunnelProps> = ({ selectedRepId, sele
 
     return STAGES.map((s, i) => {
       const count = progressiveCounts[s.stage];
-      const prevCount = i > 0 ? progressiveCounts[STAGES[i - 1].stage] : null;
+      const prevStage = i > 0 ? STAGES[i - 1]?.stage : undefined;
+      const prevCount = prevStage ? progressiveCounts[prevStage] : null;
       const dropOff = prevCount && prevCount > 0 ? ((prevCount - count) / prevCount) * 100 : 0;
       const conversionRate = progressiveCounts['New'] > 0 ? (count / progressiveCounts['New']) * 100 : 0;
 
@@ -72,7 +73,7 @@ const ConversionFunnel: React.FC<ConversionFunnelProps> = ({ selectedRepId, sele
     });
   }, [clients, selectedRepId, selectedMonthStr]);
 
-  const totalNew = funnelData[0].count;
+  const totalNew = funnelData[0]?.count || 0;
 
   return (
     <div className="bg-card text-card-foreground p-6 rounded-xl border border-border shadow-sm h-full">
@@ -83,7 +84,7 @@ const ConversionFunnel: React.FC<ConversionFunnelProps> = ({ selectedRepId, sele
         </div>
         <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium border border-primary/20">
           <Target className="w-4 h-4" />
-          {funnelData[3].conversionRate.toFixed(1)}% Conversion
+          {funnelData[3]?.conversionRate.toFixed(1) || 0}% Conversion
         </div>
       </div>
 
@@ -139,14 +140,14 @@ const ConversionFunnel: React.FC<ConversionFunnelProps> = ({ selectedRepId, sele
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mb-1">Raw Lost Count</div>
           <div className="text-xl font-bold text-destructive flex items-center gap-2">
             <XCircle className="w-5 h-5" />
-            {funnelData[4].actualCount}
+            {funnelData[4]?.actualCount || 0}
           </div>
         </div>
         <div className="p-3 bg-muted/30 rounded-xl border border-border/50">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mb-1">Success Rate</div>
           <div className="text-xl font-bold text-emerald-500 flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5" />
-            {funnelData[3].conversionRate.toFixed(1)}%
+            {funnelData[3]?.conversionRate.toFixed(1) || 0}%
           </div>
         </div>
       </div>

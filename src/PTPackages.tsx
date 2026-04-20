@@ -66,7 +66,7 @@ export default function PTPackages() {
     if (newPackageClientId && selectedDate) {
       const [hours, minutes] = newPackageTime.split(':');
       const packageDate = new Date(selectedDate);
-      packageDate.setHours(parseInt(hours), parseInt(minutes));
+      packageDate.setHours(parseInt(hours || '0'), parseInt(minutes || '0'));
 
       addPTPackageRecord({
         clientId: newPackageClientId,
@@ -91,7 +91,7 @@ export default function PTPackages() {
         let currentSessions = client.sessionsRemaining;
         if (currentSessions === 'no attend') {
           const match = client.packageType?.match(/(\d+)\s*S/i) || client.packageType?.match(/(\d+)\s*Session/i);
-          currentSessions = match ? parseInt(match[1], 10) : 0;
+          currentSessions = match && match[1] ? parseInt(match[1], 10) : 0;
         }
         if (typeof currentSessions === 'number') {
           updateClient(client.id, { sessionsRemaining: currentSessions - 1 });
@@ -210,7 +210,7 @@ export default function PTPackages() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Select value={filterBranch} onValueChange={(v) => setFilterBranch(v as any)}>
+              <Select value={filterBranch} onValueChange={(v) => v && setFilterBranch(v as any)}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Branches" />
                 </SelectTrigger>
@@ -306,7 +306,7 @@ export default function PTPackages() {
 
             <div className="space-y-2">
               <Label>Client</Label>
-              <Select value={newPackageClientId} onValueChange={setNewPackageClientId}>
+              <Select value={newPackageClientId} onValueChange={v => v && setNewPackageClientId(v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select client" />
                 </SelectTrigger>
@@ -322,7 +322,7 @@ export default function PTPackages() {
 
             <div className="space-y-2">
               <Label>Trainer (Optional)</Label>
-              <Select value={newPackageTrainerId} onValueChange={setNewPackageTrainerId}>
+              <Select value={newPackageTrainerId} onValueChange={v => v && setNewPackageTrainerId(v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select trainer" />
                 </SelectTrigger>
@@ -336,7 +336,7 @@ export default function PTPackages() {
 
             <div className="space-y-2">
               <Label>Branch</Label>
-              <Select value={newPackageBranch} onValueChange={(v) => setNewPackageBranch(v as any)}>
+              <Select value={newPackageBranch} onValueChange={(v) => v && setNewPackageBranch(v as any)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select branch" />
                 </SelectTrigger>
@@ -363,7 +363,7 @@ export default function PTPackages() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Select Member</Label>
-              <Select value={historyClientId} onValueChange={setHistoryClientId}>
+              <Select value={historyClientId} onValueChange={v => v && setHistoryClientId(v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select member" />
                 </SelectTrigger>

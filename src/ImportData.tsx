@@ -563,7 +563,7 @@ export default function ImportData({ type }: ImportDataProps) {
                   <Label>{field.label}</Label>
                   <Select 
                     value={mapping[field.key] || 'none'} 
-                    onValueChange={(val) => setMapping(prev => ({ ...prev, [field.key]: val === 'none' ? '' : val }))}
+                    onValueChange={(val) => setMapping(prev => ({ ...prev, [field.key]: val === 'none' || !val ? '' : val }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select column" />

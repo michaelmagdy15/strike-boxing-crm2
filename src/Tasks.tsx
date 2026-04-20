@@ -138,7 +138,7 @@ export default function Tasks() {
                 </div>
                 <div className="space-y-2">
                   <Label>Priority</Label>
-                  <Select value={newTask.priority} onValueChange={(v: TaskPriority) => setNewTask({...newTask, priority: v})}>
+                  <Select value={newTask.priority} onValueChange={(v) => v && setNewTask({...newTask, priority: v as TaskPriority})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Low">Low</SelectItem>
@@ -151,7 +151,7 @@ export default function Tasks() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Assign To</Label>
-                  <Select value={newTask.assignedTo} onValueChange={v => setNewTask({...newTask, assignedTo: v})}>
+                  <Select value={newTask.assignedTo} onValueChange={v => v && setNewTask({...newTask, assignedTo: v})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {users.map(u => (
@@ -162,7 +162,7 @@ export default function Tasks() {
                 </div>
                 <div className="space-y-2">
                   <Label>Related Client (Optional)</Label>
-                  <Select value={newTask.clientId || 'none'} onValueChange={v => setNewTask({...newTask, clientId: v})}>
+                  <Select value={newTask.clientId || 'none'} onValueChange={v => v && setNewTask({...newTask, clientId: v})}>
                     <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
@@ -291,7 +291,7 @@ export default function Tasks() {
                 </div>
                 <div className="space-y-2">
                   <Label>Status</Label>
-                  <Select value={editingTask.status} onValueChange={(v: TaskStatus) => setEditingTask({...editingTask, status: v})}>
+                  <Select value={editingTask.status} onValueChange={(v) => v && setEditingTask({...editingTask, status: v as TaskStatus})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Pending">Pending</SelectItem>
@@ -304,7 +304,7 @@ export default function Tasks() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Priority</Label>
-                  <Select value={editingTask.priority} onValueChange={(v: TaskPriority) => setEditingTask({...editingTask, priority: v})}>
+                  <Select value={editingTask.priority} onValueChange={(v) => v && setEditingTask({...editingTask, priority: v as TaskPriority})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Low">Low</SelectItem>
@@ -315,7 +315,7 @@ export default function Tasks() {
                 </div>
                 <div className="space-y-2">
                   <Label>Assign To</Label>
-                  <Select value={editingTask.assignedTo} onValueChange={v => setEditingTask({...editingTask, assignedTo: v})}>
+                  <Select value={editingTask.assignedTo} onValueChange={v => v && setEditingTask({...editingTask, assignedTo: v})}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {users.map(u => (
@@ -327,7 +327,7 @@ export default function Tasks() {
               </div>
               <div className="space-y-2">
                 <Label>Related Client (Optional)</Label>
-                <Select value={editingTask.clientId || 'none'} onValueChange={v => setEditingTask({...editingTask, clientId: v})}>
+                <Select value={editingTask.clientId || 'none'} onValueChange={v => v && setEditingTask({...editingTask, clientId: v})}>
                   <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>

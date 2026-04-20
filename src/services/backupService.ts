@@ -27,6 +27,7 @@ export const exportDatabaseToJson = async () => {
     // Handle subcollections for clients
     if (collName === 'clients') {
       const allComments: Record<string, any[]> = {};
+      const allInteractions: Record<string, any[]> = {};
       for (const clientDoc of snapshot.docs) {
         const commentsSnapshot = await getDocs(collection(db, 'clients', clientDoc.id, 'comments'));
         if (!commentsSnapshot.empty) {
@@ -35,8 +36,16 @@ export const exportDatabaseToJson = async () => {
             id: doc.id
           }));
         }
+        const interactionsSnapshot = await getDocs(collection(db, 'clients', clientDoc.id, 'interactions'));
+        if (!interactionsSnapshot.empty) {
+          allInteractions[clientDoc.id] = interactionsSnapshot.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id
+          }));
+        }
       }
       backupData['client_comments'] = [allComments];
+      backupData['client_interactions'] = [allInteractions];
     }
   }
 
@@ -85,6 +94,24 @@ export const restoreDatabaseFromJson = async (jsonData: string) => {
       for (const comment of allComments[clientId]) {
         const { id, ...data } = comment;
         const docRef = doc(db, 'clients', clientId, 'comments', id);
+        batch.set(docRef, data);
+        operationCount++;
+
+        if (operationCount >= 450) {
+          batch = await commitBatch(batch);
+          operationCount = 0;
+        }
+      }
+    }
+  }
+
+  // Restore interactions
+  if (backupData['client_interactions'] && backupData['client_interactions'][0]) {
+    const allInteractions = backupData['client_interactions'][0];
+    for (const clientId in allInteractions) {
+      for (const interaction of allInteractions[clientId]) {
+        const { id, ...data } = interaction;
+        const docRef = doc(db, 'clients', clientId, 'interactions', id);
         batch.set(docRef, data);
         operationCount++;
 

@@ -1,5 +1,5 @@
 import { QRCodeSVG } from 'qrcode.react';
-import React, { useState, useDeferredValue } from 'react';
+import React, { useState, useDeferredValue, useRef, useEffect } from 'react';
 import { useAppContext } from './context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -44,6 +44,14 @@ export default function Leads() {
   const [nextFollowUpDate, setNextFollowUpDate] = useState('');
   const [isNewLeadOpen, setIsNewLeadOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
+  const didSetDefaultTab = useRef(false);
+
+  useEffect(() => {
+    if (!didSetDefaultTab.current && currentUser && currentUser.role !== 'rep') {
+      setActiveTab('unassigned');
+      didSetDefaultTab.current = true;
+    }
+  }, [currentUser]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBranch, setFilterBranch] = useState<Branch | 'All'>('All');
   const [filterStage, setFilterStage] = useState<LeadStage | 'All'>('All');
@@ -127,8 +135,11 @@ export default function Leads() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
-
-  const allLeads = clients.filter(c => c.status === 'Lead');
+  const allLeads = clients.filter(c => {
+    if (c.status !== 'Lead') return false;
+    if (currentUser?.role === 'rep' && c.assignedTo !== currentUser.id) return false;
+    return true;
+  });
 
   const calculateLeadScore = (lead: Client) => {
     let score = 0;
@@ -525,7 +536,7 @@ export default function Leads() {
                 <TableCell className="hidden lg:table-cell">
                   <Select 
                     defaultValue={lead.assignedTo || 'unassigned'}
-                    onValueChange={(v) => updateClient(lead.id, { assignedTo: v === 'unassigned' ? '' : v })}
+                    onValueChange={(v) => updateClient(lead.id, { assignedTo: v === 'unassigned' ? '' : (v || undefined) })}
                   >
                     <SelectTrigger className="w-[130px] h-8 text-xs">
                       <SelectValue placeholder="Assign rep">
@@ -718,7 +729,7 @@ export default function Leads() {
                                 <Input 
                                   type="date" 
                                   className="w-full bg-background/50 border-white/5 rounded-xl h-12"
-                                  defaultValue={lead.trialDate || lead.expectedVisitDate ? format(parseISO((lead.trialDate || lead.expectedVisitDate)), 'yyyy-MM-dd') : ''}
+                                  defaultValue={lead.trialDate || lead.expectedVisitDate ? format(parseISO((lead.trialDate || lead.expectedVisitDate) as string), 'yyyy-MM-dd') : ''}
                                   onChange={(e) => updateClient(lead.id, { trialDate: new Date(e.target.value).toISOString(), expectedVisitDate: new Date(e.target.value).toISOString() })}
                                 />
                               </div>
@@ -882,7 +893,7 @@ export default function Leads() {
                           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
                             <div className="lg:col-span-7 space-y-6">
                               <div className="h-[400px] overflow-y-auto space-y-4 pr-4 custom-scrollbar bg-muted/10 p-6 rounded-[24px] border border-white/5">
-                                {lead.comments.length > 0 ? (
+                                {lead.comments && lead.comments.length > 0 ? (
                                   [...lead.comments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(comment => (
                                     <div key={comment.id} className="bg-background/40 p-4 rounded-2xl text-sm border border-white/5 shadow-sm">
                                       <p className="leading-relaxed text-foreground/90">{comment.text}</p>
@@ -1037,7 +1048,7 @@ export default function Leads() {
                 </div>
                 <div className="space-y-2">
                   <Label>Assigned To</Label>
-                  <Select value={newLeadAssignedTo} onValueChange={setNewLeadAssignedTo}>
+                  <Select value={newLeadAssignedTo} onValueChange={(v) => setNewLeadAssignedTo(v || '')}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select assignment" />
                     </SelectTrigger>
@@ -1134,7 +1145,7 @@ export default function Leads() {
           </div>
           <div className="space-y-2">
             <Label className="text-xs">Assigned To</Label>
-            <Select value={filterAssignedTo} onValueChange={setFilterAssignedTo}>
+            <Select value={filterAssignedTo} onValueChange={(v) => setFilterAssignedTo(v || 'All')}>
               <SelectTrigger className="h-9">
                 <SelectValue placeholder="All Reps">
                   {filterAssignedTo === 'All' || !filterAssignedTo
@@ -1178,7 +1189,7 @@ export default function Leads() {
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-2 bg-primary-foreground/10 p-1 rounded-md">
               <ArrowRight className="h-4 w-4" />
-              <Select onValueChange={(v) => handleBulkStageUpdate(v as LeadStage)}>
+              <Select onValueChange={(v: string | null) => v && handleBulkStageUpdate(v as LeadStage)}>
                 <SelectTrigger className="h-8 w-[140px] bg-transparent border-none text-primary-foreground">
                   <SelectValue placeholder="Update Stage" />
                 </SelectTrigger>
@@ -1194,7 +1205,7 @@ export default function Leads() {
             {canAssignLeads ? (
               <div className="flex items-center gap-2 bg-primary-foreground/10 p-1 rounded-md">
                 <UserCheck className="h-4 w-4" />
-                <Select onValueChange={handleBulkAssign}>
+                <Select onValueChange={(v: string | null) => v && handleBulkAssign(v)}>
                   <SelectTrigger className="h-8 w-[140px] bg-transparent border-none text-primary-foreground">
                     <SelectValue placeholder="Assign To" />
                   </SelectTrigger>
@@ -1258,8 +1269,8 @@ export default function Leads() {
       <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
         <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
           <TabsList className="flex w-max sm:w-full bg-muted/50 rounded-lg p-1 justify-start sm:justify-center mb-4">
-            <TabsTrigger value="all" className="px-4 text-xs sm:text-sm">All</TabsTrigger>
             <TabsTrigger value="unassigned" className="px-4 text-xs sm:text-sm text-amber-600 font-bold dark:text-amber-500">Unassigned</TabsTrigger>
+            <TabsTrigger value="all" className="px-4 text-xs sm:text-sm">All</TabsTrigger>
             <TabsTrigger value="instagram" className="px-4 text-xs sm:text-sm">Instagram</TabsTrigger>
             <TabsTrigger value="whatsapp" className="px-4 text-xs sm:text-sm">WhatsApp</TabsTrigger>
             <TabsTrigger value="walkin" className="px-4 text-xs sm:text-sm">Walk-in</TabsTrigger>

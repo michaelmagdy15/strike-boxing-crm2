@@ -97,7 +97,7 @@ export function RevenueChart({ data }: RevenueChartProps) {
                 fillOpacity={1} 
                 fill="url(#colorRevenue)" 
                 animationDuration={3000}
-                animationEasing="cubic-bezier(0.16, 1, 0.3, 1)"
+                animationEasing="ease-out"
                 activeDot={{ r: 12, strokeWidth: 4, stroke: 'white' }}
               />
             </AreaChart>

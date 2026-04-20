@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PrivateSession, Branch } from './types';
+import { PTPackageRecord, Branch } from './types';
 import { 
   MapPin, 
   Users as TrainerIcon, 
@@ -26,14 +26,7 @@ import {
 } from 'lucide-react';
 
 export default function PrivateSessions() {
-  const { clients, privateSessions, addPrivateSession, updatePrivateSession, updateClient, users } = useAppContext() as {
-    clients: any[];
-    privateSessions: any[];
-    addPrivateSession: any;
-    updatePrivateSession: any;
-    updateClient: any;
-    users: any[];
-  };
+  const { clients, ptPackageRecords: privateSessions, addPTPackageRecord: addPrivateSession, updatePTPackageRecord: updatePrivateSession, updateClient, users } = useAppContext();
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [isNewSessionOpen, setIsNewSessionOpen] = useState(false);
   const [newSessionClientId, setNewSessionClientId] = useState('');
@@ -89,7 +82,7 @@ export default function PrivateSessions() {
     }
   };
 
-  const handleUpdateStatus = (session: PrivateSession, status: PrivateSession['status']) => {
+  const handleUpdateStatus = (session: PTPackageRecord, status: PTPackageRecord['status']) => {
     updatePrivateSession(session.id, { status });
     
     if (status === 'Attended' || status === 'No Show') {
@@ -98,7 +91,7 @@ export default function PrivateSessions() {
         let currentSessions = client.sessionsRemaining;
         if (currentSessions === 'no attend') {
           const match = client.packageType?.match(/(\d+)\s*S/i) || client.packageType?.match(/(\d+)\s*Session/i);
-          currentSessions = match ? parseInt(match[1], 10) : 0;
+          currentSessions = match ? parseInt(match[1]!, 10) : 0;
         }
         if (typeof currentSessions === 'number') {
           updateClient(client.id, { sessionsRemaining: currentSessions - 1 });
@@ -119,7 +112,7 @@ export default function PrivateSessions() {
     .filter(s => s.clientId === historyClientId)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  const getStatusBadge = (status: PrivateSession['status']) => {
+  const getStatusBadge = (status: PTPackageRecord['status']) => {
     switch (status) {
       case 'Attended': return <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200">Attended</Badge>;
       case 'No Show': return <Badge className="bg-destructive/10 text-destructive border-destructive/20">No Show</Badge>;

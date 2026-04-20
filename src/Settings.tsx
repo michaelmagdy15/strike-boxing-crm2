@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAppContext } from './context';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Save, Building2, Image as ImageIcon, Users, Package, AlertTriangle, ShieldAlert, Trash2, Dumbbell } from 'lucide-react';
+import { Save, Building2, Users, Package, AlertTriangle, ShieldAlert, Trash2, Dumbbell, Lock, Download, Upload } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import UsersManagement from './Users';
 import Packages from './Packages';
@@ -14,6 +14,7 @@ import CommissionReport from './components/CommissionReport';
 import { BadgePercent, QrCode, Printer, MapPin, Plus } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Branch } from './types';
+import { exportDatabaseToJson, restoreDatabaseFromJson } from './services/backupService';
 
 export default function Settings() {
   const { branding, updateBranding, currentUser, wipeSystem, canAccessSettings, backfillMemberIds, branches, updateBranches } = useAppContext();
@@ -22,12 +23,18 @@ export default function Settings() {
   const [kioskPin, setKioskPin] = useState(branding.kioskPin || '');
   const [dailyPin, setDailyPin] = useState(branding.dailyCheckinPin || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingPin, setIsSavingPin] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
-  
+
   const [isWipeDialogOpen, setIsWipeDialogOpen] = useState(false);
   const [wipeStep, setWipeStep] = useState(1);
   const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [isWiping, setIsWiping] = useState(false);
+
+  const [isExporting, setIsExporting] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [restoreStatus, setRestoreStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canWipe = canAccessSettings || currentUser?.email === 'michaelmitry13@gmail.com';
 
@@ -41,9 +48,44 @@ export default function Settings() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await updateBranding({ companyName, logoUrl, kioskPin, dailyCheckinPin: dailyPin });
+      await updateBranding({ companyName, logoUrl });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSavePin = async () => {
+    setIsSavingPin(true);
+    try {
+      await updateBranding({ kioskPin, dailyCheckinPin: dailyPin });
+    } finally {
+      setIsSavingPin(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      await exportDatabaseToJson();
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleRestoreFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setRestoreStatus(null);
+    setIsRestoring(true);
+    try {
+      const text = await file.text();
+      await restoreDatabaseFromJson(text);
+      setRestoreStatus({ type: 'success', message: `Restore complete from "${file.name}".` });
+    } catch (err) {
+      setRestoreStatus({ type: 'error', message: `Restore failed: ${(err as Error).message}` });
+    } finally {
+      setIsRestoring(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -74,7 +116,7 @@ export default function Settings() {
     if (!printWindow) return;
 
     const qrUrl = `${appUrl}/checkin?branch=${encodeURIComponent(branch)}`;
-    
+
     printWindow.document.write(`
       <html>
         <head>
@@ -84,7 +126,6 @@ export default function Settings() {
             .container { border: 2px solid #000; padding: 40px; border-radius: 20px; }
             h1 { font-size: 48px; margin-bottom: 10px; }
             h2 { font-size: 24px; color: #666; margin-bottom: 40px; }
-            .qr-placeholder { margin: 20px auto; }
             .footer { margin-top: 40px; font-weight: bold; }
           </style>
         </head>
@@ -115,8 +156,7 @@ export default function Settings() {
         <ShieldAlert className="h-16 w-16 text-destructive opacity-20" />
         <h2 className="text-2xl font-bold">Access Restricted</h2>
         <p className="text-muted-foreground max-w-md">
-          This section is exclusively managed by Atef (Sales Manager). 
-          Please contact him for any system configuration or history access.
+          You do not have permission to access Settings. Please contact your administrator.
         </p>
       </div>
     );
@@ -129,7 +169,7 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="branding" className="space-y-6">
-        <TabsList className="bg-muted/50 p-1">
+        <TabsList className="bg-muted/50 p-1 flex-wrap h-auto gap-1">
           <TabsTrigger value="branding" className="flex items-center gap-2">
             <Building2 className="h-4 w-4" />
             Branding
@@ -154,6 +194,10 @@ export default function Settings() {
             <BadgePercent className="h-4 w-4" />
             Commission
           </TabsTrigger>
+          <TabsTrigger value="backup" className="flex items-center gap-2">
+            <Download className="h-4 w-4" />
+            Backup
+          </TabsTrigger>
           {canWipe && (
             <TabsTrigger value="danger" className="flex items-center gap-2 text-destructive data-[state=active]:bg-destructive data-[state=active]:text-destructive-foreground">
               <AlertTriangle className="h-4 w-4" />
@@ -162,95 +206,104 @@ export default function Settings() {
           )}
         </TabsList>
 
+        {/* ── Branding ── */}
         <TabsContent value="branding" className="space-y-6 animate-in fade-in-50 duration-500">
           <div className="grid gap-6 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-primary" />
-                  Branding
-                </CardTitle>
-                <CardDescription>
-                  Customize your CRM's appearance with your company name and logo.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="companyName">Company Name</Label>
-                  <Input
-                    id="companyName"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    placeholder="Enter company name"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="logoUrl">Logo URL</Label>
-                  <div className="flex gap-2">
+            <div className="flex flex-col gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-primary" />
+                    Branding
+                  </CardTitle>
+                  <CardDescription>
+                    Customize your CRM's appearance with your company name and logo.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="companyName">Company Name</Label>
+                    <Input
+                      id="companyName"
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      placeholder="Enter company name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="logoUrl">Logo URL</Label>
                     <Input
                       id="logoUrl"
                       value={logoUrl}
                       onChange={(e) => setLogoUrl(e.target.value)}
                       placeholder="https://example.com/logo.png"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Transparent PNG works best.
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Provide a URL to your company logo image. Transparent PNG works best.
-                  </p>
-                </div>
+                  {logoUrl && (
+                    <div className="p-4 border rounded-lg bg-muted/50 flex flex-col items-center space-y-2">
+                      <span className="text-xs font-medium text-muted-foreground uppercase">Preview</span>
+                      <img
+                        src={logoUrl}
+                        alt="Logo Preview"
+                        className="max-h-12 object-contain"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    </div>
+                  )}
+                  <Button className="w-full" onClick={handleSave} disabled={isSaving}>
+                    <Save className="mr-2 h-4 w-4" />
+                    {isSaving ? 'Saving...' : 'Save Branding'}
+                  </Button>
+                </CardContent>
+              </Card>
 
-                <div className="space-y-2">
-                  <Label htmlFor="kioskPin">Kiosk Access PIN</Label>
-                  <Input
-                    id="kioskPin"
-                    type="password"
-                    value={kioskPin}
-                    onChange={(e) => setKioskPin(e.target.value)}
-                    placeholder="Enter 4-6 digit PIN"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    This PIN allows local front-desk devices to access the attendance scanner without a full CRM account.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="dailyPin">Daily Check-in PIN</Label>
-                  <Input
-                    id="dailyPin"
-                    value={dailyPin}
-                    onChange={(e) => setDailyPin(e.target.value)}
-                    placeholder="e.g. 1234"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Required for members using self-check-in. Change this daily for security.
-                  </p>
-                </div>
-
-                {logoUrl && (
-                  <div className="mt-4 p-4 border rounded-lg bg-muted/50 flex flex-col items-center justify-center space-y-2">
-                    <span className="text-xs font-medium text-muted-foreground uppercase">Preview</span>
-                    <img 
-                      src={logoUrl} 
-                      alt="Logo Preview" 
-                      className="max-h-12 object-contain"
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Lock className="h-5 w-5 text-primary" />
+                    Check-in PINs
+                  </CardTitle>
+                  <CardDescription>
+                    Set the daily member check-in PIN and kiosk access PIN.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="kioskPin">Kiosk Access PIN</Label>
+                    <Input
+                      id="kioskPin"
+                      type="password"
+                      value={kioskPin}
+                      onChange={(e) => setKioskPin(e.target.value)}
+                      placeholder="Enter 4-6 digit PIN"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Unlocks the attendance scanner on front-desk devices.
+                    </p>
                   </div>
-                )}
-
-                <Button 
-                  className="w-full" 
-                  onClick={handleSave} 
-                  disabled={isSaving}
-                >
-                  <Save className="mr-2 h-4 w-4" />
-                  {isSaving ? 'Saving...' : 'Save Branding'}
-                </Button>
-              </CardContent>
-            </Card>
+                  <div className="space-y-2">
+                    <Label htmlFor="dailyPin">Daily Check-in PIN</Label>
+                    <Input
+                      id="dailyPin"
+                      value={dailyPin}
+                      onChange={(e) => setDailyPin(e.target.value)}
+                      placeholder="e.g. 1234"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Members enter this PIN for self check-in. Change it daily for security.
+                    </p>
+                  </div>
+                  <Button className="w-full" onClick={handleSavePin} disabled={isSavingPin}>
+                    <Save className="mr-2 h-4 w-4" />
+                    {isSavingPin ? 'Saving...' : 'Save PINs'}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
 
             <Card>
               <CardHeader>
@@ -263,7 +316,7 @@ export default function Settings() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid gap-4 sm:grid-cols-1 overflow-auto">
+                <div className="grid gap-4 overflow-auto">
                   {branches.map(branch => (
                     <div key={branch} className="flex flex-col items-center p-4 border rounded-lg bg-muted/30 space-y-3">
                       <div className="flex justify-between w-full items-center">
@@ -274,8 +327,8 @@ export default function Settings() {
                         </Button>
                       </div>
                       <div className="bg-white p-2 rounded-md shadow-sm">
-                        <QRCodeSVG 
-                          value={`${appUrl}/checkin?branch=${encodeURIComponent(branch)}`} 
+                        <QRCodeSVG
+                          value={`${appUrl}/checkin?branch=${encodeURIComponent(branch)}`}
                           size={120}
                         />
                       </div>
@@ -290,6 +343,7 @@ export default function Settings() {
           </div>
         </TabsContent>
 
+        {/* ── Branches ── */}
         <TabsContent value="branches" className="animate-in fade-in-50 duration-500">
           <Card>
             <CardHeader>
@@ -303,8 +357,8 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex gap-2 max-w-sm">
-                <Input 
-                  placeholder="New Branch Name" 
+                <Input
+                  placeholder="New Branch Name"
                   value={newBranchName}
                   onChange={(e) => setNewBranchName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddBranch()}
@@ -313,7 +367,6 @@ export default function Settings() {
                   <Plus className="h-4 w-4 mr-2" /> Add
                 </Button>
               </div>
-
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {branches.map(branch => (
                   <div key={branch} className="flex items-center justify-between p-4 border rounded-lg bg-card">
@@ -349,6 +402,71 @@ export default function Settings() {
           <CommissionReport />
         </TabsContent>
 
+        {/* ── Backup ── */}
+        <TabsContent value="backup" className="animate-in fade-in-50 duration-500">
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Download className="h-5 w-5 text-primary" />
+                  Export Backup
+                </CardTitle>
+                <CardDescription>
+                  Download a full JSON backup of all CRM data — clients, payments, sessions, tasks, packages, and more.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  The backup includes all root collections and client subcollections (comments &amp; interactions). Store the file somewhere safe.
+                </p>
+                <Button className="w-full" onClick={handleExport} disabled={isExporting}>
+                  <Download className="mr-2 h-4 w-4" />
+                  {isExporting ? 'Exporting...' : 'Download Backup'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Upload className="h-5 w-5 text-primary" />
+                  Restore from Backup
+                </CardTitle>
+                <CardDescription>
+                  Upload a previously exported JSON backup to restore data. Existing records with the same ID will be overwritten.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  This does <strong>not</strong> delete existing data first — it merges. To do a clean restore, wipe the system first, then restore.
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={handleRestoreFile}
+                />
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isRestoring}
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  {isRestoring ? 'Restoring...' : 'Choose Backup File'}
+                </Button>
+                {restoreStatus && (
+                  <p className={`text-sm font-medium ${restoreStatus.type === 'success' ? 'text-green-600' : 'text-destructive'}`}>
+                    {restoreStatus.message}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* ── Danger Zone ── */}
         {canWipe && (
           <TabsContent value="danger" className="animate-in fade-in-50 duration-500">
             <Card className="border-destructive/50 bg-destructive/5">
@@ -368,16 +486,13 @@ export default function Settings() {
                     Wipe All CRM Data
                   </h4>
                   <p className="text-sm text-muted-foreground">
-                    This will permanently delete all Clients, Leads, Payments, Attendance records, and Tasks. 
-                    This action is irreversible. Admins and Branding settings will be preserved.
+                    Permanently deletes all Clients, Leads, Payments, Attendance records, and Tasks.
+                    Admins and Branding settings are preserved.
                   </p>
-                  <Button 
-                    variant="destructive" 
+                  <Button
+                    variant="destructive"
                     className="font-bold"
-                    onClick={() => {
-                      setWipeStep(1);
-                      setIsWipeDialogOpen(true);
-                    }}
+                    onClick={() => { setWipeStep(1); setIsWipeDialogOpen(true); }}
                   >
                     Wipe System Content
                   </Button>
@@ -389,14 +504,10 @@ export default function Settings() {
                     Standardize ID System
                   </h4>
                   <p className="text-sm text-muted-foreground">
-                    Assign a permanent, sequential Member ID to all existing records (Leads & Members) that don't have one yet. 
-                    This ensures total consistency across the CRM for check-ins and QR codes.
+                    Assign a permanent, sequential Member ID to all existing records that don't have one yet.
+                    Required for self check-in by member ID.
                   </p>
-                  <Button 
-                    variant="default" 
-                    className="font-bold"
-                    onClick={backfillMemberIds}
-                  >
+                  <Button variant="default" className="font-bold" onClick={backfillMemberIds}>
                     Backfill Missing IDs
                   </Button>
                 </div>
@@ -414,16 +525,16 @@ export default function Settings() {
               {wipeStep === 1 ? 'Confirm Reset' : 'Final Verification'}
             </DialogTitle>
             <DialogDescription>
-              {wipeStep === 1 
-                ? 'Are you absolutely sure you want to delete all CRM data? This cannot be undone.' 
+              {wipeStep === 1
+                ? 'Are you absolutely sure you want to delete all CRM data? This cannot be undone.'
                 : 'To prevent accidental deletion, please type "RESET SYSTEM" in the box below to confirm.'}
             </DialogDescription>
           </DialogHeader>
-          
+
           {wipeStep === 2 && (
             <div className="py-4">
-              <Input 
-                value={wipeConfirmText} 
+              <Input
+                value={wipeConfirmText}
                 onChange={(e) => setWipeConfirmText(e.target.value.toUpperCase())}
                 placeholder="RESET SYSTEM"
                 className="font-mono text-center tracking-widest"
@@ -440,15 +551,15 @@ export default function Settings() {
                 Continue to Final Step
               </Button>
             ) : (
-              <Button 
-                variant="destructive" 
+              <Button
+                variant="destructive"
                 disabled={wipeConfirmText !== 'RESET SYSTEM' || isWiping}
                 onClick={async () => {
                   setIsWiping(true);
                   try {
                     await wipeSystem();
                     setIsWipeDialogOpen(false);
-                    window.location.reload(); // Refresh to clear local state
+                    window.location.reload();
                   } catch (e) {
                     alert("Wipe failed: " + (e as Error).message);
                     setIsWiping(false);

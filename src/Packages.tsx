@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Package } from './types';
+import { Package, Branch } from './types';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from './components/ConfirmDialog';
 
@@ -23,7 +23,8 @@ export default function Packages() {
   const [sessions, setSessions] = useState<number | ''>('');
   const [price, setPrice] = useState<number | ''>('');
   const [expiryDays, setExpiryDays] = useState<number | ''>('');
-  const [branch, setBranch] = useState<'COMPLEX' | 'MIVIDA' | 'Strike IMPACT' | 'ALL'>('ALL');
+  const [branch, setBranch] = useState<Branch | 'ALL'>('ALL');
+  const [packageType, setPackageType] = useState<Package['type']>('Group');
 
   if (currentUser?.role !== 'manager' && currentUser?.role !== 'admin' && currentUser?.role !== 'super_admin' && currentUser?.role !== 'crm_admin') {
     return (
@@ -40,7 +41,8 @@ export default function Packages() {
         sessions: Number(sessions),
         price: Number(price),
         expiryDays: Number(expiryDays),
-        branch
+        branch,
+        type: packageType
       });
       setIsAddOpen(false);
       resetForm();
@@ -54,7 +56,8 @@ export default function Packages() {
         sessions: Number(sessions),
         price: Number(price),
         expiryDays: Number(expiryDays),
-        branch
+        branch,
+        type: packageType
       });
       setIsEditOpen(false);
       setEditingPackage(null);
@@ -81,6 +84,7 @@ export default function Packages() {
     setPrice(pkg.price);
     setExpiryDays(pkg.expiryDays);
     setBranch(pkg.branch);
+    setPackageType(pkg.type || 'Group');
     setIsEditOpen(true);
   };
 
@@ -90,6 +94,7 @@ export default function Packages() {
     setPrice('');
     setExpiryDays('');
     setBranch('ALL');
+    setPackageType('Group');
   };
 
   return (
@@ -138,6 +143,19 @@ export default function Packages() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select value={packageType} onValueChange={(v: any) => v && setPackageType(v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Private">Private</SelectItem>
+                    <SelectItem value="Group">Group</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <DialogFooter>
@@ -230,6 +248,19 @@ export default function Packages() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <Select value={packageType} onValueChange={(v: any) => v && setPackageType(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Private">Private</SelectItem>
+                  <SelectItem value="Group">Group</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

@@ -15,8 +15,6 @@ export const mockPTPackages: import('./types').PTPackageRecord[] = [];
 export const mockSalesTarget: SalesTarget = {
   targetAmount: 50000,
   currentAmount: 32500,
-  privateTarget: 25000,
-  groupTarget: 25000,
   privatePackagesSold: 45,
   groupPackagesSold: 120,
 };

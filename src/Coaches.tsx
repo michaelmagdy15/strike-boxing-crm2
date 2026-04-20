@@ -83,10 +83,8 @@ export default function Coaches() {
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold tracking-tight">Coach Management</h2>
         <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetForm(); }}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" /> Add Coach
-            </Button>
+          <DialogTrigger render={<Button />}>
+            <Plus className="mr-2 h-4 w-4" /> Add Coach
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
@@ -99,7 +97,7 @@ export default function Coaches() {
               </div>
               <div className="space-y-2">
                 <Label>Active Status</Label>
-                <Select value={active ? "true" : "false"} onValueChange={v => setActive(v === "true")}>
+                <Select value={active ? "true" : "false"} onValueChange={v => v && setActive(v === "true")}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -173,7 +171,7 @@ export default function Coaches() {
             </div>
             <div className="space-y-2">
               <Label>Active Status</Label>
-              <Select value={active ? "true" : "false"} onValueChange={v => setActive(v === "true")}>
+              <Select value={active ? "true" : "false"} onValueChange={v => v && setActive(v === "true")}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

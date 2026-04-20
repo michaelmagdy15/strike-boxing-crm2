@@ -25,8 +25,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [salesTarget, setSalesTarget] = useState<SalesTarget>({
     targetAmount: 50000,
     currentAmount: 0,
-    privateSessionsSold: 0,
-    groupSessionsSold: 0,
+    privatePackagesSold: 0,
+    groupPackagesSold: 0,
   });
 
   useEffect(() => {

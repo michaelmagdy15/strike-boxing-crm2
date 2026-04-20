@@ -16,7 +16,9 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(npm install *)",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(npx tsc *)",
+      "Bash(firebase deploy *)"
     ]
   }
 }

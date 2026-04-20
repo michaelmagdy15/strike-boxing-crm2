@@ -28,7 +28,7 @@ import {
   writeBatch,
   orderBy
 } from 'firebase/firestore';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged, signInAnonymously, User as FirebaseUser } from 'firebase/auth';
 import { auth, db, signInWithGoogle, logOut } from './firebase';
 import { 
   Client, 
@@ -130,9 +130,9 @@ interface AppContextType {
   inviteUser: (email: string, role: UserRole) => Promise<void>;
   addComment: (clientId: string, text: string, author?: string) => Promise<void>;
   addInteraction: (clientId: string, interaction: Omit<InteractionLog, 'id' | 'author'>) => Promise<void>;
-  addPayment: (payment: Omit<Payment, 'id'>) => Promise<void>;
+  addPayment: (payment: Omit<Payment, 'id' | 'client_name' | 'amount_paid' | 'sales_rep_id' | 'created_at' | 'package_category_type' | 'deleted_at'>) => Promise<void>;
   updateSalesTarget: (target: number) => Promise<void>;
-  updateUserTarget: (userId: string, month: string, total: number, privateTarget: number, groupTarget: number) => Promise<void>;
+  updateUserTarget: (userId: string, month: string, total: number) => Promise<void>;
   addPTPackageRecord: (session: Omit<PTPackageRecord, 'id'>) => Promise<void>;
   updatePTPackageRecord: (id: string, updates: Partial<PTPackageRecord>) => Promise<void>;
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'createdBy'>) => Promise<void>;
@@ -168,7 +168,6 @@ interface AppContextType {
   commissionRates: CommissionRates;
   updateCommissionRates: (rates: CommissionRates) => Promise<void>;
   isManagerOrSama: boolean;
-  isAtefStrict: boolean;
   branches: Branch[];
   updateBranches: (branches: Branch[]) => Promise<void>;
 }
@@ -232,23 +231,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const isManagerOrSama = useMemo(() => {
     if (!currentUser) return false;
     const role = effectiveRole;
-    if (role === 'admin' && currentUser.name.toLowerCase().includes('sama')) return true;
     return role === 'manager' || role === 'admin' || role === 'super_admin' || role === 'crm_admin';
-  }, [currentUser, effectiveRole]);
-
-  const isAtefStrict = useMemo(() => {
-    if (!currentUser) return false;
-    const role = effectiveRole;
-    const nameMatch = currentUser.name.toLowerCase().includes('atef');
-    const roleMatch = role === 'manager';
-    return nameMatch && roleMatch;
   }, [currentUser, effectiveRole]);
 
   const canDeletePayments = useMemo(() => {
     if (!currentUser) return false;
     const role = effectiveRole;
     if (role === 'super_admin' || role === 'crm_admin' || role === 'manager' || role === 'admin') return true;
-    if (role === 'admin' && currentUser.name.toLowerCase().includes('sama')) return true;
     return !!currentUser.can_delete_payments;
   }, [currentUser, effectiveRole]);
 
@@ -256,7 +245,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!currentUser) return false;
     const role = effectiveRole;
     if (role === 'super_admin' || role === 'crm_admin' || role === 'manager' || role === 'admin') return true;
-    if (currentUser.name.toLowerCase().includes('atef')) return true;
     return !!currentUser.can_access_settings_and_history;
   }, [currentUser, effectiveRole]);
 
@@ -284,6 +272,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        if (firebaseUser.isAnonymous) {
+          setIsAuthReady(true);
+          return;
+        }
         // Check if user exists in Firestore
         const userDocRef = doc(db, 'users', firebaseUser.uid);
         try {
@@ -313,11 +305,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const querySnapshot = await getDocs(q);
               if (!querySnapshot.empty) {
                 const invitedUserDoc = querySnapshot.docs[0];
-                role = invitedUserDoc.data().role as UserRole;
-                try {
-                  await deleteDoc(doc(db, 'users', invitedUserDoc.id));
-                } catch (e) {
-                  console.warn("Could not delete placeholder invitation doc:", e);
+                if (invitedUserDoc) {
+                  role = invitedUserDoc.data().role as UserRole;
+                  try {
+                    await deleteDoc(doc(db, 'users', invitedUserDoc.id));
+                  } catch (e) {
+                    console.warn("Could not delete placeholder invitation doc:", e);
+                  }
                 }
               }
             }
@@ -340,6 +334,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsAuthReady(true);
     });
     return () => unsubscribe();
+  }, []);
+
+  // Load branding without auth so kiosk page always has the daily PIN
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'branding'), (snapshot) => {
+      if (snapshot.exists()) setBranding(snapshot.data() as BrandingSettings);
+    }, () => {});
+    return () => unsub();
   }, []);
 
   // Real-time listeners
@@ -422,12 +424,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setAttendances(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Attendance)));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'attendance'));
 
-    const unsubBranding = onSnapshot(doc(db, 'settings', 'branding'), (snapshot) => {
-      if (snapshot.exists()) {
-        setBranding(snapshot.data() as BrandingSettings);
-      }
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'settings/branding'));
-
     const unsubCommission = onSnapshot(doc(db, 'settings', 'commission'), (snapshot) => {
       if (snapshot.exists()) {
         setCommissionRates(snapshot.data() as CommissionRates);
@@ -466,7 +462,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (unsubTargets) unsubTargets();
       unsubBatches();
       unsubAttendances();
-      unsubBranding();
       unsubCommission();
     };
   }, [currentUser]);
@@ -591,6 +586,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     for (let i = 0; i < newClients.length; i++) {
       try {
         const client = newClients[i];
+        if (!client) continue;
         const { id, comments, ...clientData } = client;
         
         if (!clientData.memberId) {
@@ -740,7 +736,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addPayment = async (payment: Omit<Payment, 'id'>) => {
+  const addPayment = async (payment: Omit<Payment, 'id' | 'client_name' | 'amount_paid' | 'sales_rep_id' | 'created_at' | 'package_category_type' | 'deleted_at'>) => {
     if (!currentUser) return;
     try {
       const client = clients.find(c => c.id === payment.clientId);
@@ -801,7 +797,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const updateUserTarget = async (userId: string, month: string, total: number, privateTarget: number, groupTarget: number) => {
+  const updateUserTarget = async (userId: string, month: string, total: number) => {
     if (!currentUser) return;
     try {
       const existing = userTargets.find(t => (t.userId === userId || t.sales_rep_id === userId) && (t.month === month || t.month_year === month));
@@ -811,20 +807,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         month,
         month_year: month,
         targetAmount: total,
-        target_total_private: privateTarget,
-        target_total_group: groupTarget,
-        privateTarget,
-        groupTarget,
         setBy: currentUser.id,
         createdAt: new Date().toISOString()
       };
 
       if (existing) {
         await updateDoc(doc(db, 'targets', existing.id), cleanData(targetData));
-        await addAuditLog('UPDATE', 'TARGET', existing.id, `Updated user target for ${month}: Total ${total}, Private ${privateTarget}, Group ${groupTarget}`);
+        await addAuditLog('UPDATE', 'TARGET', existing.id, `Updated user target for ${month}: Total ${total}`);
       } else {
         const docRef = await addDoc(collection(db, 'targets'), cleanData(targetData));
-        await addAuditLog('CREATE', 'TARGET', docRef.id, `Created user target for ${month}: Total ${total}, Private ${privateTarget}, Group ${groupTarget}`);
+        await addAuditLog('CREATE', 'TARGET', docRef.id, `Created user target for ${month}: Total ${total}`);
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'targets');
@@ -1093,15 +1085,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const currentMonthStr = new Date().toISOString().substring(0, 7); 
 
     let targetAmount = globalSalesTarget;
-    let privateTarget = 0;
-    let groupTarget = 0;
 
     if (currentUser?.role === 'rep') {
       const personalTarget = userTargets.find(t => t.userId === currentUser.id && t.month === currentMonthStr);
       if (personalTarget) {
         targetAmount = personalTarget.targetAmount;
-        privateTarget = personalTarget.privateTarget || 0;
-        groupTarget = personalTarget.groupTarget || 0;
       } else if (currentUser.salesTarget) {
         targetAmount = currentUser.salesTarget;
       }
@@ -1109,8 +1097,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const allMonthTargets = userTargets.filter(t => t.month === currentMonthStr);
       if (allMonthTargets.length > 0) {
         targetAmount = allMonthTargets.reduce((sum, t) => sum + t.targetAmount, 0);
-        privateTarget = allMonthTargets.reduce((sum, t) => sum + (t.privateTarget || 0), 0);
-        groupTarget = allMonthTargets.reduce((sum, t) => sum + (t.groupTarget || 0), 0);
       }
     }
 
@@ -1118,9 +1104,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetAmount,
       currentAmount: total,
       privatePackagesSold: privateSold,
-      groupPackagesSold: groupSold,
-      privateTarget,
-      groupTarget
+      groupPackagesSold: groupSold
     };
   }, [visiblePayments, globalSalesTarget, currentUser, userTargets]);
 
@@ -1202,13 +1186,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     },
     selfCheckIn: async (identifier: string, pin: string, branch: Branch) => {
       try {
-        // Verify PIN first
-        if (branding.dailyCheckinPin && pin !== branding.dailyCheckinPin) {
+        // Ensure we are authenticated (anonymous if no real session) so Firestore rules pass
+        if (!auth.currentUser) {
+          try {
+            await signInAnonymously(auth);
+          } catch {
+            return { success: false, message: "Check-in unavailable. Please see the front desk." };
+          }
+        }
+
+        // Verify PIN
+        if (branding.dailyCheckinPin && pin.trim() !== branding.dailyCheckinPin.trim()) {
           return { success: false, message: "Invalid Daily PIN. Please ask the front desk." };
         }
 
-        const q = query(collection(db, 'clients'), where('memberId', '==', identifier));
-        const q2 = query(collection(db, 'clients'), where('phone', '==', identifier));
+        const normalizedIdentifier = identifier.trim();
+        const q = query(collection(db, 'clients'), where('memberId', '==', normalizedIdentifier));
+        const q2 = query(collection(db, 'clients'), where('phone', '==', normalizedIdentifier));
         
         const [snap1, snap2] = await Promise.all([getDocs(q), getDocs(q2)]);
         const clientDoc = snap1.docs[0] || snap2.docs[0];
@@ -1221,6 +1215,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         if (client.status === 'Expired' || client.status === 'Hold') {
           return { success: false, message: `Your membership is currently ${client.status}. Please visit the front desk.` };
+        }
+
+        if (typeof client.sessionsRemaining === 'number' && client.sessionsRemaining <= 0) {
+          return { success: false, message: "You have no sessions remaining. Please renew your membership at the front desk." };
         }
 
         const attendanceData: Omit<Attendance, 'id'> = {
@@ -1262,7 +1260,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     previewRole,
     setPreviewRole,
     isManagerOrSama,
-    isAtefStrict,
     canDeletePayments,
     canAccessSettings,
     canViewGlobalDashboard,
@@ -1324,6 +1321,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         } catch (e) {
           console.error("Failed to wipe comments collection group:", e);
+        }
+
+        try {
+          const interactionsSnapshot = await getDocs(collectionGroup(db, 'interactions'));
+          if (!interactionsSnapshot.empty) {
+            let i = 0;
+            let batch = writeBatch(db);
+            for (const d of interactionsSnapshot.docs) {
+              batch.delete(d.ref);
+              i++;
+              if (i === 450) {
+                await batch.commit();
+                batch = writeBatch(db);
+                i = 0;
+              }
+            }
+            if (i > 0) await batch.commit();
+          }
+        } catch (e) {
+          console.error("Failed to wipe interactions collection group:", e);
         }
 
         try {
@@ -1541,6 +1558,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           const primary = sorted[0];
           const duplicates = sorted.slice(1);
+          if (!primary) continue;
 
           for (const dup of duplicates) {
             const dupId = dup.id;
@@ -1608,7 +1626,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     canAssignLeads,
     globalSalesTarget,
     isManagerOrSama,
-    isAtefStrict,
     addAuditLog,
     commissionRates,
     updateCommissionRates,

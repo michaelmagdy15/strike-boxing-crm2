@@ -72,7 +72,7 @@ export function ColumnMapper({
 
             <Select 
               value={mapping[field.key] || 'none'} 
-              onValueChange={(val) => onMappingChange(field.key, val === 'none' ? '' : val)}
+              onValueChange={(val) => val && onMappingChange(field.key, val === 'none' ? '' : val)}
             >
               <SelectTrigger className="h-12 bg-white dark:bg-zinc-900 border-none rounded-xl font-black text-[10px] uppercase tracking-widest px-6 italic transition-all group-hover:shadow-md">
                 <SelectValue placeholder="Identify Source Column..." />
