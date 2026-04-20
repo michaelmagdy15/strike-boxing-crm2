@@ -174,11 +174,10 @@ service cloud.firestore {
     
     match /targets/{targetId} {
       allow read, write: if isAuthenticated();
+    }
 
-  // Top-level interactions collection
-  match /interactions/{interactionId} {
-    allow read, write: if isAuthenticated();
-  }
+    match /interactions/{interactionId} {
+      allow read, write: if isAuthenticated();
     }
   }
 }
