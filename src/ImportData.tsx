@@ -242,17 +242,18 @@ export default function ImportData({ type }: ImportDataProps) {
     for (let i = 0; i < importData.length; i++) {
       const row = importData[i];
       try {
-        let name = (row[importMapping['name']] || '').toString().trim();
-        let phone = (row[importMapping['phone']] || '').toString().replace(/[^\d+]/g, '');
-        let branchRaw = (row[importMapping['branch']] || '').toString().trim().toUpperCase();
-        let source = (row[importMapping['source']] || 'Other').toString().trim();
-        let packageType = (row[importMapping['packageType']] || '').toString().trim();
-        let sessionsRemainingRaw = row[importMapping['sessionsRemaining']];
-        let startDateRaw = row[importMapping['startDate']];
-        let membershipExpiryRaw = row[importMapping['membershipExpiry']];
-        let paidRaw = row[importMapping['paid']];
-        let typeOfClient = (row[importMapping['typeOfClient']] || '').toString().trim();
-        let salesName = (row[importMapping['salesName']] || '').toString().trim();
+        let name = (row[importMapping['name'] || ''] || '').toString().trim();
+        let phone = (row[importMapping['phone'] || ''] || '').toString().replace(/[^\d+]/g, '');
+        let branchRaw = (row[importMapping['branch'] || ''] || '').toString().trim().toUpperCase();
+        let source = (row[importMapping['source'] || ''] || 'Other').toString().trim();
+        let packageType = (row[importMapping['packageType'] || ''] || '').toString().trim();
+        let sessionsRemainingRaw = row[importMapping['sessionsRemaining'] || ''];
+        let startDateRaw = row[importMapping['startDate'] || ''];
+        let membershipExpiryRaw = row[importMapping['membershipExpiry'] || ''];
+        let paidRaw = row[importMapping['paid'] || ''];
+        let typeOfClient = (row[importMapping['typeOfClient'] || ''] || '').toString().trim();
+        let salesName = (row[importMapping['salesName'] || ''] || '').toString().trim();
+
 
         if (!name || !phone) {
           failedCount++;
@@ -332,7 +333,10 @@ export default function ImportData({ type }: ImportDataProps) {
           membershipExpiry = parsedExpiryDate.toISOString();
         }
 
-        let status: any = type;
+        let rawStatus = (typeOfClient || 'Lead').toString().trim();
+        rawStatus = rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase();
+        let status: any = ["Lead", "Active", "Nearly Expired", "Expired", "Hold", "Pending", "Interested", "Interest"].includes(rawStatus) ? rawStatus : 'Lead';
+        
         if (isHold) {
           status = 'Hold';
         } else if (membershipExpiry) {
