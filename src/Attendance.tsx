@@ -10,13 +10,19 @@ import { Camera, CheckCircle, User, History, AlertCircle, MapPin, Scan } from 'l
 import { format, parseISO } from 'date-fns';
 import { Branch } from './types';
 
-export default function Attendance() {
+export default function Attendance({ isKiosk = false }: { isKiosk?: boolean }) {
   const { clients, recordAttendance, attendances, currentUser, users } = useAppContext();
   const [scannedId, setScannedId] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const [selectedBranch, setSelectedBranch] = useState<Branch>('COMPLEX');
+  const [selectedBranch, setSelectedBranch] = useState<Branch>(() => {
+    if (isKiosk) {
+      const saved = localStorage.getItem('kioskBranch');
+      if (saved) return saved as Branch;
+    }
+    return 'COMPLEX';
+  });
   const [lastScannedMember, setLastScannedMember] = useState<any>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -103,7 +109,7 @@ export default function Attendance() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Attendance Scanner</h2>
-          <p className="text-muted-foreground">Scan member QR codes to record attendance and manage sessions.</p>
+          <p className="text-muted-foreground">Scan member QR codes to record attendance and manage packages.</p>
         </div>
         
         <div className="flex items-center gap-2 bg-muted/50 p-1.5 rounded-lg border">
@@ -111,7 +117,13 @@ export default function Attendance() {
           <select 
             className="bg-transparent border-none text-sm font-medium focus:ring-0 cursor-pointer pr-8"
             value={selectedBranch}
-            onChange={(e) => setSelectedBranch(e.target.value as Branch)}
+            onChange={(e) => {
+              const branch = e.target.value as Branch;
+              setSelectedBranch(branch);
+              if (isKiosk) {
+                localStorage.setItem('kioskBranch', branch);
+              }
+            }}
           >
             <option value="COMPLEX">COMPLEX Branch</option>
             <option value="MIVIDA">MIVIDA Branch</option>
@@ -237,9 +249,9 @@ export default function Attendance() {
                     <p className="text-sm font-medium truncate">{lastScannedMember.packageType || 'None'}</p>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Sessions Left</Label>
+                    <Label className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Packages Left</Label>
                     <p className={`text-lg font-bold ${Number(lastScannedMember.sessionsRemaining) <= 0 ? 'text-destructive' : 'text-green-600'}`}>
-                      {lastScannedMember.sessionsRemaining}
+                      {lastScannedMember.sessionsRemaining} packages
                     </p>
                   </div>
                 </div>
@@ -277,42 +289,44 @@ export default function Attendance() {
           )}
 
           {/* Recent History Preview */}
-          <Card>
-            <CardHeader className="py-4 border-b">
-              <CardTitle className="text-sm font-bold flex items-center">
-                <History className="mr-2 h-4 w-4" />
-                Today's Attendance
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="max-h-[250px] overflow-y-auto">
-                {attendances
-                  .filter(a => parseISO(a.date).toDateString() === new Date().toDateString())
-                  .map(a => {
-                    const client = clients.find(c => c.id === a.clientId);
-                    const recorder = users.find(u => u.id === a.recordedBy);
-                    return (
-                      <div key={a.id} className="p-3 border-b last:border-0 flex items-center justify-between hover:bg-muted/30 transition-colors">
-                        <div className="space-y-0.5">
-                          <p className="text-sm font-bold">{client?.name || 'Unknown'}</p>
-                          <p className="text-[10px] text-muted-foreground flex items-center">
-                            <MapPin className="h-3 w-3 mr-1" /> {a.branch} · {format(parseISO(a.date), 'h:mm a')}
-                          </p>
+          {!isKiosk && (
+            <Card>
+              <CardHeader className="py-4 border-b">
+                <CardTitle className="text-sm font-bold flex items-center">
+                  <History className="mr-2 h-4 w-4" />
+                  Today's Attendance
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="max-h-[250px] overflow-y-auto">
+                  {attendances
+                    .filter(a => parseISO(a.date).toDateString() === new Date().toDateString())
+                    .map(a => {
+                      const client = clients.find(c => c.id === a.clientId);
+                      const recorder = users.find(u => u.id === a.recordedBy);
+                      return (
+                        <div key={a.id} className="p-3 border-b last:border-0 flex items-center justify-between hover:bg-muted/30 transition-colors">
+                          <div className="space-y-0.5">
+                            <p className="text-sm font-bold">{client?.name || 'Unknown'}</p>
+                            <p className="text-[10px] text-muted-foreground flex items-center">
+                              <MapPin className="h-3 w-3 mr-1" /> {a.branch} · {format(parseISO(a.date), 'h:mm a')}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-[10px] h-5 px-1.5 opacity-70">
+                            by {recorder?.name?.split(' ')[0] || 'Admin'}
+                          </Badge>
                         </div>
-                        <Badge variant="outline" className="text-[10px] h-5 px-1.5 opacity-70">
-                          by {recorder?.name?.split(' ')[0] || 'Admin'}
-                        </Badge>
-                      </div>
-                    );
-                  })}
-                {attendances.filter(a => parseISO(a.date).toDateString() === new Date().toDateString()).length === 0 && (
-                  <div className="p-8 text-center text-muted-foreground text-xs italic">
-                    No attendance records for today yet.
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                      );
+                    })}
+                  {attendances.filter(a => parseISO(a.date).toDateString() === new Date().toDateString()).length === 0 && (
+                    <div className="p-8 text-center text-muted-foreground text-xs italic">
+                      No attendance records for today yet.
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

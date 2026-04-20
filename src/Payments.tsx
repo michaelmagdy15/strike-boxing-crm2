@@ -10,7 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, parseISO, addDays } from 'date-fns';
 import { Payment } from './types';
-import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { SALES_MEMBERS } from './constants';
+import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search, Trash2, ChevronLeft, ChevronRight, User } from 'lucide-react';
 import { AlertDialog } from './components/AlertDialog';
 
 export default function Payments() {
@@ -30,6 +31,8 @@ export default function Payments() {
   const [customCoachName, setCustomCoachName] = useState('');
   const [notes, setNotes] = useState('');
   const [recordedById, setRecordedById] = useState('');
+  const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [salesName, setSalesName] = useState('');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMethod, setFilterMethod] = useState('All');
@@ -50,6 +53,17 @@ export default function Payments() {
       setRecordedById(sama?.id || currentUser?.id || '');
     }
   }, [users]);
+
+  useEffect(() => {
+    if (clientId) {
+      const client = clients.find(c => c.id === clientId);
+      if (client && client.assignedTo && SALES_MEMBERS.includes(client.assignedTo)) {
+        setSalesName(client.assignedTo);
+      } else {
+        setSalesName('');
+      }
+    }
+  }, [clientId, clients]);
 
   const handleDeletePayment = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this payment record? This action cannot be undone.')) {
@@ -87,28 +101,31 @@ export default function Payments() {
       addPayment({
         clientId,
         amount: parseFloat(amount),
-        date: new Date().toISOString(),
+        date: new Date(startDate).toISOString(), // Use start date for transaction date as well
         method,
         instapayRef: method === 'Instapay' ? instapayRef : undefined,
         packageType: finalPackageType,
         coachName: isPT ? resolvedCoachName : undefined,
         notes,
-        recordedBy: recordedById || currentUser?.id
+        recordedBy: recordedById || currentUser?.id,
+        salesName: salesName || undefined
       });
 
       // Update client with new package info
       const pkg = packages.find(p => p.name === packageType);
       if (pkg) {
-        const now = new Date();
+        const pkgStartDate = new Date(startDate);
         updateClient(clientId, {
           packageType: pkg.name,
           sessionsRemaining: pkg.sessions,
-          membershipExpiry: addDays(now, pkg.expiryDays).toISOString(),
+          membershipExpiry: addDays(pkgStartDate, pkg.expiryDays).toISOString(),
+          startDate: pkgStartDate.toISOString(),
           status: 'Active'
         });
       } else {
         updateClient(clientId, {
           packageType: finalPackageType,
+          startDate: new Date(startDate).toISOString(),
           status: 'Active'
         });
       }
@@ -124,8 +141,10 @@ export default function Payments() {
       setCoachName('');
       setCustomCoachName('');
       setNotes('');
+      setStartDate(format(new Date(), 'yyyy-MM-dd'));
       const sama = users.find(u => u.name?.toLowerCase().includes('sama'));
       setRecordedById(sama?.id || currentUser?.id || '');
+      setSalesName('');
     }
   };
 
@@ -288,132 +307,195 @@ export default function Payments() {
           <DialogTrigger render={<Button />}>
             <Plus className="mr-2 h-4 w-4" /> Record Payment
           </DialogTrigger>
-          <DialogContent className="w-[95vw] max-w-md max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Record New Payment</DialogTitle>
+          <DialogContent className="!w-full !max-w-[1400px] max-h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl rounded-3xl bg-background/95 backdrop-blur-xl">
+            <DialogHeader className="p-10 pb-6 bg-muted/30 border-b">
+              <DialogTitle className="text-3xl font-extrabold tracking-tight flex items-center gap-3">
+                <CreditCard className="h-8 w-8 text-primary" />
+                Record New Payment
+              </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Client</Label>
-                <Select value={clientId} onValueChange={setClientId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select client" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map(client => (
-                      <SelectItem key={client.id} value={client.id}>{client.name || client.email || 'Unknown User'}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Amount (LE)</Label>
-                <Input 
-                  type="number" 
-                  placeholder="0.00" 
-                  value={amount} 
-                  onChange={(e) => setAmount(e.target.value)} 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Payment Method</Label>
-                <Select value={method} onValueChange={(v) => setMethod(v as Payment['method'])}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select method" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Cash">Cash</SelectItem>
-                    <SelectItem value="Credit Card">Credit Card</SelectItem>
-                    <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-                    <SelectItem value="Instapay">Instapay</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {method === 'Instapay' && (
-                <div className="space-y-2">
-                  <Label>Instapay Reference Number (12 digits)</Label>
-                  <Input 
-                    placeholder="123456789012" 
-                    value={instapayRef} 
-                    maxLength={12}
-                    onChange={(e) => setInstapayRef(e.target.value.replace(/\D/g, ''))} 
-                  />
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label>Package Type</Label>
-                <Select value={packageType} onValueChange={handlePackageChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select package" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {packages.map(pkg => (
-                      <SelectItem key={pkg.id} value={pkg.name}>
-                        {pkg.name} ({pkg.price} LE)
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="Custom">Custom Package</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {packageType === 'Custom' && (
-                <div className="space-y-2">
-                  <Label>Custom Package Name</Label>
-                  <Input 
-                    placeholder="e.g., 5 S GT Adults" 
-                    value={customPackage} 
-                    onChange={(e) => setCustomPackage(e.target.value)} 
-                  />
-                </div>
-              )}
-              {((packageType && packageType !== 'Custom' && /\bpt\b/i.test(packageType)) || (packageType === 'Custom' && /\bpt\b/i.test(customPackage))) && (
-                <div className="space-y-2">
-                  <Label>Coach</Label>
-                  <Select value={coachName} onValueChange={(v) => { setCoachName(v); if (v !== '__custom__') setCustomCoachName(''); }}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a coach" />
+            <div className="flex-1 overflow-y-auto p-10 pt-8 custom-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-8">
+                
+                <div className="space-y-3 lg:col-span-2">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Client / Member</Label>
+                  <Select value={clientId} onValueChange={setClientId}>
+                    <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                      <SelectValue placeholder="Search or select client" />
                     </SelectTrigger>
-                    <SelectContent>
-                      {coaches.filter(c => c.active).map(coach => (
-                        <SelectItem key={coach.id} value={coach.name}>{coach.name}</SelectItem>
+                    <SelectContent className="rounded-2xl border-none shadow-2xl max-h-[300px]">
+                      {clients.map(client => (
+                        <SelectItem key={client.id} value={client.id} className="rounded-xl py-3 px-4">
+                          {client.name} {client.phone ? `(${client.phone})` : ''}
+                        </SelectItem>
                       ))}
-                      <SelectItem value="__custom__">Other (type name…)</SelectItem>
                     </SelectContent>
                   </Select>
-                  {coachName === '__custom__' && (
-                    <Input
-                      placeholder="Enter coach name"
-                      value={customCoachName}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomCoachName(e.target.value)}
-                    />
-                  )}
                 </div>
-              )}
-              <div className="space-y-2">
-                <Label>Notes (Optional)</Label>
-                <Input
-                  placeholder="Any additional notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Date</Label>
+                  <Input
+                    type="date"
+                    className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Amount (LE)</Label>
+                  <div className="relative">
+                    <Input 
+                      type="number" 
+                      placeholder="0.00" 
+                      className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all pl-12 pr-5 text-lg font-bold text-green-600"
+                      value={amount} 
+                      onChange={(e) => setAmount(e.target.value)} 
+                    />
+                    <DollarSign className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Method</Label>
+                  <Select value={method} onValueChange={(v) => setMethod(v as Payment['method'])}>
+                    <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                      <SelectValue placeholder="Select method" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl border-none shadow-2xl">
+                      <SelectItem value="Cash" className="rounded-xl py-3 px-4">Cash</SelectItem>
+                      <SelectItem value="Credit Card" className="rounded-xl py-3 px-4">Credit Card</SelectItem>
+                      <SelectItem value="Bank Transfer" className="rounded-xl py-3 px-4">Bank Transfer</SelectItem>
+                      <SelectItem value="Instapay" className="rounded-xl py-3 px-4">Instapay</SelectItem>
+                      <SelectItem value="Other" className="rounded-xl py-3 px-4">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {method === 'Instapay' && (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Instapay Ref (12 digits)</Label>
+                    <Input 
+                      placeholder="123456789012" 
+                      className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg font-mono"
+                      value={instapayRef} 
+                      maxLength={12}
+                      onChange={(e) => setInstapayRef(e.target.value.replace(/\D/g, ''))} 
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Package Type</Label>
+                  <Select value={packageType} onValueChange={handlePackageChange}>
+                    <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                      <SelectValue placeholder="Select package" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl border-none shadow-2xl">
+                      {packages.map(pkg => (
+                        <SelectItem key={pkg.id} value={pkg.name} className="rounded-xl py-3 px-4">
+                          {pkg.name} ({pkg.price} LE)
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="Custom" className="rounded-xl py-3 px-4 italic">Custom Package...</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {packageType === 'Custom' && (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Custom Package Name</Label>
+                    <Input 
+                      placeholder="e.g., 5 S GT Adults" 
+                      className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
+                      value={customPackage} 
+                      onChange={(e) => setCustomPackage(e.target.value)} 
+                    />
+                  </div>
+                )}
+
+                {((packageType && packageType !== 'Custom' && /\bpt\b/i.test(packageType)) || (packageType === 'Custom' && /\bpt\b/i.test(customPackage))) && (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Coach</Label>
+                    <Select value={coachName} onValueChange={(v) => { setCoachName(v); if (v !== '__custom__') setCustomCoachName(''); }}>
+                      <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                        <SelectValue placeholder="Assigned coach" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-2xl border-none shadow-2xl">
+                        {coaches.filter(c => c.active).map(coach => (
+                          <SelectItem key={coach.id} value={coach.name} className="rounded-xl py-3 px-4">{coach.name}</SelectItem>
+                        ))}
+                        <SelectItem value="__custom__" className="rounded-xl py-3 px-4">Manual Entry...</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {coachName === '__custom__' && (
+                      <Input
+                        placeholder="Enter coach name"
+                        className="h-12 rounded-xl bg-background/50 mt-2 px-4 shadow-inner"
+                        value={customCoachName}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomCoachName(e.target.value)}
+                      />
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Sales Person</Label>
+                  <Select value={salesName} onValueChange={setSalesName}>
+                    <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                      <SelectValue placeholder="For commission" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl border-none shadow-2xl">
+                      {SALES_MEMBERS.map(name => (
+                        <SelectItem key={name} value={name} className="rounded-xl py-3 px-4">{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Recorded By</Label>
+                  <Select value={recordedById} onValueChange={setRecordedById}>
+                    <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                      <SelectValue placeholder="Staff member">
+                         {adminUsers.find(u => u.id === recordedById)?.name || undefined}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl border-none shadow-2xl">
+                      {adminUsers.map(u => (
+                        <SelectItem key={u.id} value={u.id} className="rounded-xl py-3 px-4">{u.name || u.email}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-3 lg:col-span-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Internal Notes (Optional)</Label>
+                  <Input
+                    placeholder="Add descriptive notes for this transaction..."
+                    className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Recorded By</Label>
-                <Select value={recordedById} onValueChange={setRecordedById}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select staff">
-                      {adminUsers.find(u => u.id === recordedById)?.name || undefined}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {adminUsers.map(u => (
-                      <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+
+              <div className="mt-12 flex gap-4">
+                <Button 
+                  variant="outline" 
+                  className="h-16 px-10 rounded-2xl text-lg font-bold border-white/10 hover:bg-muted/50 transition-all"
+                  onClick={() => setIsNewPaymentOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleAddPayment} 
+                  className="flex-1 h-16 rounded-2xl text-xl font-extrabold shadow-2xl shadow-primary/30 hover:shadow-primary/50 transition-all hover:scale-[1.01] active:scale-[0.99]"
+                >
+                  Complete Transaction
+                </Button>
               </div>
-              <Button onClick={handleAddPayment} className="w-full">Save Payment</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -475,7 +557,8 @@ export default function Payments() {
                   <TableHead>Amount</TableHead>
                   <TableHead className="hidden sm:table-cell">Method</TableHead>
                   <TableHead className="hidden md:table-cell">Package</TableHead>
-                  {canViewGlobalDashboard && <TableHead className="hidden lg:table-cell">Recorded By</TableHead>}
+                  <TableHead className="hidden lg:table-cell">Recorded By</TableHead>
+                  <TableHead className="hidden xl:table-cell">Sales Member</TableHead>
                   <TableHead className="hidden xl:table-cell">Notes</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -516,11 +599,17 @@ export default function Payments() {
                             )}
                           </div>
                         </TableCell>
-                        {canViewGlobalDashboard && (
-                          <TableCell className="text-muted-foreground text-xs sm:text-sm hidden lg:table-cell">
-                            {recordedByUser?.name || 'Unknown'}
-                          </TableCell>
-                        )}
+                        <TableCell className="text-muted-foreground text-xs sm:text-sm hidden lg:table-cell">
+                          {recordedByUser?.name || 'Unknown'}
+                        </TableCell>
+                        <TableCell className="hidden xl:table-cell">
+                          {payment.salesName ? (
+                            <Badge variant="outline" className="flex items-center gap-1 w-fit bg-amber-50 dark:bg-amber-900/10 text-amber-600 border-amber-200">
+                              <User className="h-3 w-3" />
+                              {payment.salesName}
+                            </Badge>
+                          ) : '-'}
+                        </TableCell>
                         <TableCell className="text-muted-foreground text-xs hidden xl:table-cell">{payment.notes || '-'}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">

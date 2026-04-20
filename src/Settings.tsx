@@ -10,11 +10,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import UsersManagement from './Users';
 import Packages from './Packages';
 import Coaches from './Coaches';
+import CommissionReport from './components/CommissionReport';
+import { BadgePercent, QrCode, Printer } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import { Branch } from './types';
 
 export default function Settings() {
-  const { branding, updateBranding, currentUser, wipeSystem, canAccessSettings } = useAppContext();
+  const { branding, updateBranding, currentUser, wipeSystem, canAccessSettings, backfillMemberIds } = useAppContext();
   const [companyName, setCompanyName] = useState(branding.companyName);
   const [logoUrl, setLogoUrl] = useState(branding.logoUrl);
+  const [kioskPin, setKioskPin] = useState(branding.kioskPin || '');
+  const [dailyPin, setDailyPin] = useState(branding.dailyCheckinPin || '');
   const [isSaving, setIsSaving] = useState(false);
   
   const [isWipeDialogOpen, setIsWipeDialogOpen] = useState(false);
@@ -27,15 +33,60 @@ export default function Settings() {
   React.useEffect(() => {
     setCompanyName(branding.companyName);
     setLogoUrl(branding.logoUrl);
+    setKioskPin(branding.kioskPin || '');
+    setDailyPin(branding.dailyCheckinPin || '');
   }, [branding]);
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await updateBranding({ companyName, logoUrl });
+      await updateBranding({ companyName, logoUrl, kioskPin, dailyCheckinPin: dailyPin });
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const branches: Branch[] = ['COMPLEX', 'MIVIDA', 'Strike IMPACT'];
+  const appUrl = window.location.origin;
+
+  const handlePrintQR = (branch: string) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const qrUrl = `${appUrl}/checkin?branch=${encodeURIComponent(branch)}`;
+    
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Check-in QR - ${branch}</title>
+          <style>
+            body { font-family: sans-serif; display: flex; flex-direction: column; items-center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
+            .container { border: 2px solid #000; padding: 40px; border-radius: 20px; }
+            h1 { font-size: 48px; margin-bottom: 10px; }
+            h2 { font-size: 24px; color: #666; margin-bottom: 40px; }
+            .qr-placeholder { margin: 20px auto; }
+            .footer { margin-top: 40px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <img src="${branding.logoUrl}" style="max-height: 80px; margin-bottom: 20px;" />
+            <h1>Scan to Check-in</h1>
+            <h2>${branch} Branch</h2>
+            <div id="qr-code"></div>
+            <p class="footer">Please ask the front desk for today's PIN</p>
+          </div>
+          <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+          <script>
+            QRCode.toCanvas(document.getElementById('qr-code'), '${qrUrl}', { width: 400 }, function (error) {
+              if (error) console.error(error);
+              window.print();
+            });
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   };
 
   if (!canAccessSettings) {
@@ -74,6 +125,10 @@ export default function Settings() {
           <TabsTrigger value="coaches" className="flex items-center gap-2">
             <Dumbbell className="h-4 w-4" />
             Coaches
+          </TabsTrigger>
+          <TabsTrigger value="commission" className="flex items-center gap-2">
+            <BadgePercent className="h-4 w-4" />
+            Commission
           </TabsTrigger>
           {canWipe && (
             <TabsTrigger value="danger" className="flex items-center gap-2 text-destructive data-[state=active]:bg-destructive data-[state=active]:text-destructive-foreground">
@@ -120,6 +175,33 @@ export default function Settings() {
                   </p>
                 </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor="kioskPin">Kiosk Access PIN</Label>
+                  <Input
+                    id="kioskPin"
+                    type="password"
+                    value={kioskPin}
+                    onChange={(e) => setKioskPin(e.target.value)}
+                    placeholder="Enter 4-6 digit PIN"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    This PIN allows local front-desk devices to access the attendance scanner without a full CRM account.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="dailyPin">Daily Check-in PIN</Label>
+                  <Input
+                    id="dailyPin"
+                    value={dailyPin}
+                    onChange={(e) => setDailyPin(e.target.value)}
+                    placeholder="e.g. 1234"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Required for members using self-check-in. Change this daily for security.
+                  </p>
+                </div>
+
                 {logoUrl && (
                   <div className="mt-4 p-4 border rounded-lg bg-muted/50 flex flex-col items-center justify-center space-y-2">
                     <span className="text-xs font-medium text-muted-foreground uppercase">Preview</span>
@@ -149,20 +231,36 @@ export default function Settings() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <ImageIcon className="h-5 w-5 text-primary" />
-                  Logo Tips
+                  <QrCode className="h-5 w-5 text-primary" />
+                  Self-Check-in QR Codes
                 </CardTitle>
                 <CardDescription>
-                  How to get the best results for your logo.
+                  Display or print these QR codes for members to scan with their phones.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4 text-sm text-muted-foreground">
-                <ul className="list-disc pl-4 space-y-2">
-                  <li>Use a high-resolution PNG or SVG with a transparent background.</li>
-                  <li>Horizontal logos work better than square or vertical ones in the header.</li>
-                  <li>Host your image on a reliable CDN or a public URL (like Imgur or your website).</li>
-                  <li>The logo will be displayed at a maximum height of 32px in the header.</li>
-                </ul>
+              <CardContent className="space-y-6">
+                <div className="grid gap-4 sm:grid-cols-1 overflow-auto">
+                  {branches.map(branch => (
+                    <div key={branch} className="flex flex-col items-center p-4 border rounded-lg bg-muted/30 space-y-3">
+                      <div className="flex justify-between w-full items-center">
+                        <span className="font-bold text-sm tracking-tight">{branch}</span>
+                        <Button variant="outline" size="sm" onClick={() => handlePrintQR(branch)}>
+                          <Printer className="h-4 w-4 mr-2" />
+                          Print
+                        </Button>
+                      </div>
+                      <div className="bg-white p-2 rounded-md shadow-sm">
+                        <QRCodeSVG 
+                          value={`${appUrl}/checkin?branch=${encodeURIComponent(branch)}`} 
+                          size={120}
+                        />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground break-all text-center">
+                        {appUrl}/checkin?branch={branch}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -178,6 +276,10 @@ export default function Settings() {
 
         <TabsContent value="coaches" className="animate-in fade-in-50 duration-500">
           <Coaches />
+        </TabsContent>
+
+        <TabsContent value="commission" className="animate-in fade-in-50 duration-500">
+          <CommissionReport />
         </TabsContent>
 
         {canWipe && (
@@ -211,6 +313,24 @@ export default function Settings() {
                     }}
                   >
                     Wipe System Content
+                  </Button>
+                </div>
+
+                <div className="p-4 border border-primary/20 rounded-lg bg-background/50 space-y-3">
+                  <h4 className="font-bold text-primary flex items-center gap-2">
+                    <ShieldAlert className="h-4 w-4" />
+                    Standardize ID System
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    Assign a permanent, sequential Member ID to all existing records (Leads & Members) that don't have one yet. 
+                    This ensures total consistency across the CRM for check-ins and QR codes.
+                  </p>
+                  <Button 
+                    variant="default" 
+                    className="font-bold"
+                    onClick={backfillMemberIds}
+                  >
+                    Backfill Missing IDs
                   </Button>
                 </div>
               </CardContent>

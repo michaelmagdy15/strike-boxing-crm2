@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ConversionFunnel from './components/ConversionFunnel';
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAppContext } from './context';
 import { differenceInDays, isSameDay, parseISO, isAfter, isBefore, addDays, subDays, subMonths, startOfMonth, endOfMonth, isWithinInterval, format } from 'date-fns';
-import { Target, Users, CalendarDays, AlertTriangle, Gift, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Target, Users, CalendarDays, AlertTriangle, Gift, Settings, ChevronLeft, ChevronRight, Trophy, Download, ArrowUpDown } from 'lucide-react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 function PaginatedList({ items, renderItem, itemsPerPage = 5 }: { items: any[], renderItem: (item: any) => React.ReactNode, itemsPerPage?: number }) {
@@ -56,6 +57,7 @@ export default function Dashboard() {
   const [newTarget, setNewTarget] = useState(salesTarget.targetAmount.toString());
   const [selectedRepId, setSelectedRepId] = useState<string>('all');
   const [selectedMonthOffset, setSelectedMonthOffset] = useState(0);
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
 
   const now = new Date();
   
@@ -111,7 +113,7 @@ export default function Dashboard() {
   // Filtered statistics for rep performance view
   const selectedMonth = subMonths(now, selectedMonthOffset);
   const currentMonthStr = format(selectedMonth, 'yyyy-MM');
-  const reps = users.filter(u => u.role === 'rep');
+  const reps = users.filter(u => u.role === 'rep' || u.role === 'sales_rep');
   
   const filteredSalesData = React.useMemo(() => {
     let targetAmount = salesTarget.targetAmount;
@@ -142,8 +144,22 @@ export default function Dashboard() {
     }
 
     const currentAmount = relevantPayments.reduce((acc, p) => acc + p.amount, 0);
-    const privateSessionsSold = relevantPayments.filter(p => p.packageType.toLowerCase().includes('private')).length;
-    const groupSessionsSold = relevantPayments.filter(p => p.packageType.toLowerCase().includes('group') || p.packageType.toLowerCase().includes('gt')).length;
+    const privatePayments = relevantPayments.filter(p => 
+      p.session_type === 'Private Training' || 
+      /\bpt\b/i.test(p.packageType) || 
+      p.packageType.toLowerCase().includes('private')
+    );
+    const groupPayments = relevantPayments.filter(p => 
+      p.session_type === 'Group Training' || 
+      p.packageType.toLowerCase().includes('group') || 
+      p.packageType.toLowerCase().includes('gt')
+    );
+
+    const privateSessionsSold = privatePayments.length;
+    const groupSessionsSold = groupPayments.length;
+    const privateRevenue = privatePayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+    const groupRevenue = groupPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+    
     const cash = relevantPayments.filter(p => p.method === 'Cash').reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
     const visa = relevantPayments.filter(p => p.method === 'Credit Card').reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
     const instapay = relevantPayments.filter(p => p.method === 'Instapay').reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
@@ -153,6 +169,8 @@ export default function Dashboard() {
       currentAmount,
       privateSessionsSold,
       groupSessionsSold,
+      privateRevenue,
+      groupRevenue,
       privateTarget,
       groupTarget,
       cash,
@@ -166,9 +184,9 @@ export default function Dashboard() {
   const totalVisa = canViewGlobalDashboard && selectedRepId !== 'all' ? filteredSalesData.visa : (payments ? payments.filter(p => p.method === 'Credit Card').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0);
   const totalInstapay = canViewGlobalDashboard && selectedRepId !== 'all' ? filteredSalesData.instapay : (payments ? payments.filter(p => p.method === 'Instapay').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0);
 
-  const totalSessionsSold = filteredSalesData.privateSessionsSold + filteredSalesData.groupSessionsSold;
-  const privatePercentage = totalSessionsSold > 0 ? Math.round((filteredSalesData.privateSessionsSold / totalSessionsSold) * 100) : 0;
-  const groupPercentage = totalSessionsSold > 0 ? Math.round((filteredSalesData.groupSessionsSold / totalSessionsSold) * 100) : 0;
+  const totalPackagesSold = filteredSalesData.privateSessionsSold + filteredSalesData.groupSessionsSold;
+  const privatePercentage = totalPackagesSold > 0 ? Math.round((filteredSalesData.privateSessionsSold / totalPackagesSold) * 100) : 0;
+  const groupPercentage = totalPackagesSold > 0 ? Math.round((filteredSalesData.groupSessionsSold / totalPackagesSold) * 100) : 0;
 
   // Chart Data (personal - for rep view)
   const chartData = React.useMemo(() => {
@@ -280,6 +298,89 @@ export default function Dashboard() {
       };
     });
   }, [payments]);
+
+  // Leaderboard Data Calculation
+  const leaderboardData = React.useMemo(() => {
+    if (!canViewGlobalDashboard) return [];
+
+    const data = reps.map(rep => {
+      const repTarget = userTargets.find(t => t.userId === rep.id && t.month === currentMonthStr);
+      const targetAmount = repTarget?.targetAmount || 0;
+
+      const repPayments = payments.filter(p =>
+        format(parseISO(p.date), 'yyyy-MM') === currentMonthStr &&
+        (p.sales_rep_id === rep.id || p.recordedBy === rep.id)
+      );
+      const revenue = repPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+
+      const convertedThisMonth = clients.filter(c => 
+        c.assignedTo === rep.id && 
+        c.status !== 'Lead' && 
+        c.startDate && (c.startDate.startsWith(currentMonthStr))
+      ).length;
+
+      const totalLeads = clients.filter(c => c.assignedTo === rep.id).length;
+      const targetAchievement = targetAmount > 0 ? (revenue / targetAmount) * 100 : 0;
+      const conversionRate = totalLeads > 0 ? (convertedThisMonth / totalLeads) * 100 : 0;
+
+      return {
+        id: rep.id,
+        name: rep.name || rep.email || 'Unknown',
+        revenue,
+        targetAmount,
+        targetAchievement: Math.round(targetAchievement),
+        converted: convertedThisMonth,
+        totalLeads,
+        conversionRate: Math.round(conversionRate * 10) / 10
+      };
+    });
+
+    // Apply sorting
+    return [...data].sort((a, b) => {
+      const aValue = (a as any)[sortConfig.key];
+      const bValue = (b as any)[sortConfig.key];
+      
+      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [reps, payments, userTargets, currentMonthStr, clients, canViewGlobalDashboard, sortConfig]);
+
+  const exportRepLeaderboardCSV = () => {
+    const headers = ['Rank', 'Rep Name', 'Revenue', 'Target Amount', 'Target Achievement %', 'Converted Leads', 'Total Leads', 'Conversion Rate %'];
+    const rows = leaderboardData.map((rep, index) => [
+      index + 1,
+      `"${rep.name.replace(/"/g, '""')}"`,
+      rep.revenue,
+      rep.targetAmount,
+      rep.targetAchievement,
+      rep.converted,
+      rep.totalLeads,
+      rep.conversionRate
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Rep_Leaderboard_${currentMonthStr}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleSort = (key: string) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  };
 
   return (
     <div className="space-y-6">
@@ -401,15 +502,26 @@ export default function Dashboard() {
               </div>
 
               <div className="mt-4 pt-3 border-t">
-                <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-2">Sessions Breakdown</span>
-                <div className="space-y-3 text-sm">
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Private:</span>
-                      <span className="font-medium">
-                        {filteredSalesData.privateSessionsSold} achieved
-                        {filteredSalesData.privateTarget > 0 && <span className="text-xs text-muted-foreground ml-1">of {filteredSalesData.privateTarget}</span>}
-                      </span>
+                <span className="text-[10px] uppercase font-bold text-muted-foreground block mb-2">Packages Breakdown</span>
+                <div className="space-y-4 text-sm">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-muted-foreground block text-[11px] mb-0.5">PT Packages</span>
+                        <span className="text-lg font-bold">
+                          {filteredSalesData.privateRevenue.toLocaleString()} <span className="text-xs font-normal">LE</span>
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <Badge variant="outline" className="font-semibold px-1.5 py-0 h-5 bg-blue-500/10 text-blue-500 border-blue-500/20">
+                          {filteredSalesData.privateSessionsSold} packages
+                        </Badge>
+                        {filteredSalesData.privateTarget > 0 && (
+                          <span className="text-[10px] text-muted-foreground block mt-0.5">
+                            Target: {filteredSalesData.privateTarget}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     {filteredSalesData.privateTarget > 0 && (
                       <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
@@ -421,13 +533,24 @@ export default function Dashboard() {
                     )}
                   </div>
                   
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Group:</span>
-                      <span className="font-medium">
-                        {filteredSalesData.groupSessionsSold} achieved
-                        {filteredSalesData.groupTarget > 0 && <span className="text-xs text-muted-foreground ml-1">of {filteredSalesData.groupTarget}</span>}
-                      </span>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-muted-foreground block text-[11px] mb-0.5">Group Packages</span>
+                        <span className="text-lg font-bold">
+                          {filteredSalesData.groupRevenue.toLocaleString()} <span className="text-xs font-normal">LE</span>
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <Badge variant="outline" className="font-semibold px-1.5 py-0 h-5 bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
+                          {filteredSalesData.groupSessionsSold} packages
+                        </Badge>
+                        {filteredSalesData.groupTarget > 0 && (
+                          <span className="text-[10px] text-muted-foreground block mt-0.5">
+                            Target: {filteredSalesData.groupTarget}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     {filteredSalesData.groupTarget > 0 && (
                       <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
@@ -465,7 +588,7 @@ export default function Dashboard() {
           <CardContent>
             <div className="text-2xl font-bold text-amber-600">{nearlyExpired}</div>
             <p className="text-xs text-muted-foreground">
-              Memberships ending in &lt; 30 days
+              Packages ending in &lt; 30 days
             </p>
           </CardContent>
         </Card>
@@ -501,14 +624,14 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Action Required: Sessions</CardTitle>
+            <CardTitle>Action Required: Packages</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {negativeSessions.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-sm font-semibold text-red-600 flex items-center">
-                    <AlertTriangle className="h-4 w-4 mr-1" /> Negative Sessions (Needs Renewal)
+                    <AlertTriangle className="h-4 w-4 mr-1" /> Negative Packages (Needs Renewal)
                   </h4>
                   <PaginatedList 
                     items={negativeSessions} 
@@ -518,7 +641,7 @@ export default function Dashboard() {
                           <p className="font-medium text-sm">{client.name}</p>
                           <p className="text-xs text-muted-foreground">{client.packageType}</p>
                         </div>
-                        <Badge variant="destructive">{client.sessionsRemaining} sessions</Badge>
+                        <Badge variant="destructive">{client.sessionsRemaining} packages</Badge>
                       </div>
                     )} 
                   />
@@ -548,7 +671,7 @@ export default function Dashboard() {
               {expiredList.length > 0 && (
                 <div className="space-y-2 mt-4">
                   <h4 className="text-sm font-semibold text-red-600 flex items-center">
-                    <AlertTriangle className="h-4 w-4 mr-1" /> Expired Memberships
+                    <AlertTriangle className="h-4 w-4 mr-1" /> Expired Packages
                   </h4>
                   <PaginatedList 
                     items={expiredList} 
@@ -566,7 +689,7 @@ export default function Dashboard() {
               )}
 
               {negativeSessions.length === 0 && noAttendance.length === 0 && expiredList.length === 0 && (
-                <p className="text-sm text-muted-foreground">All session tracking is up to date.</p>
+                <p className="text-sm text-muted-foreground">All package tracking is up to date.</p>
               )}
             </div>
           </CardContent>
@@ -647,6 +770,13 @@ export default function Dashboard() {
       {canViewGlobalDashboard ? (
         <div className="space-y-4">
           <h2 className="text-lg font-semibold tracking-tight">Team Analytics</h2>
+
+          <div className="grid grid-cols-1">
+            <ConversionFunnel 
+              selectedRepId={selectedRepId} 
+              selectedMonthStr={currentMonthStr} 
+            />
+          </div>
 
           {/* Row 1: Revenue Trend + Rep Comparison */}
           <div className="grid gap-4 md:grid-cols-2">
@@ -738,6 +868,117 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Rep Leaderboard Section */}
+          <Card className="mt-4 overflow-hidden border-none shadow-lg bg-gradient-to-br from-white to-gray-50/50">
+            <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-gray-100 bg-white/50 backdrop-blur-sm">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-50 rounded-lg">
+                  <Trophy className="h-5 w-5 text-indigo-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl font-bold text-gray-900 leading-none">Rep Performance Leaderboard</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">{format(selectedMonth, 'MMMM yyyy')} statistics</p>
+                </div>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={exportRepLeaderboardCSV}
+                className="hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-all duration-200"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export CSV
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50/80 border-b border-gray-100">
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Rank</th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        <button onClick={() => handleSort('name')} className="flex items-center hover:text-indigo-600 transition-colors">
+                          REP NAME <ArrowUpDown className="h-3 w-3 ml-1" />
+                        </button>
+                      </th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                        <button onClick={() => handleSort('revenue')} className="flex items-center hover:text-indigo-600 transition-colors">
+                          REVENUE <ArrowUpDown className="h-3 w-3 ml-1" />
+                        </button>
+                      </th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                        <button onClick={() => handleSort('targetAchievement')} className="flex items-center hover:text-indigo-600 transition-colors">
+                          TARGET % <ArrowUpDown className="h-3 w-3 ml-1" />
+                        </button>
+                      </th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                        <button onClick={() => handleSort('converted')} className="flex items-center hover:text-indigo-600 transition-colors">
+                          CONVERTED <ArrowUpDown className="h-3 w-3 ml-1" />
+                        </button>
+                      </th>
+                      <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                        <button onClick={() => handleSort('conversionRate')} className="flex items-center hover:text-indigo-600 transition-colors">
+                          RATE % <ArrowUpDown className="h-3 w-3 ml-1" />
+                        </button>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leaderboardData.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-12 text-center text-sm text-muted-foreground italic">No representative data found for this period.</td>
+                      </tr>
+                    ) : (
+                      leaderboardData.map((rep, index) => (
+                        <tr key={rep.id} className="border-b border-gray-50 hover:bg-indigo-50/30 transition-colors group">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-sm font-bold text-gray-700 group-hover:bg-indigo-100 group-hover:text-indigo-700 transition-colors">
+                              {index + 1}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div>
+                              <div className="text-sm font-semibold text-gray-900">{rep.name}</div>
+                              <div className="text-[10px] text-muted-foreground uppercase font-medium">{rep.id.slice(-6)}</div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm font-bold text-gray-900">{rep.revenue.toLocaleString()} <span className="text-[10px] text-muted-foreground font-normal">LE</span></div>
+                            <div className="text-[10px] text-muted-foreground">Goal: {rep.targetAmount.toLocaleString()}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="flex-1 min-w-[80px] h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full transition-all duration-500 ${rep.targetAchievement >= 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                                  style={{ width: `${Math.min(rep.targetAchievement, 100)}%` }}
+                                />
+                              </div>
+                              <span className={`text-xs font-bold ${rep.targetAchievement >= 100 ? 'text-emerald-600' : 'text-gray-700'}`}>
+                                {rep.targetAchievement}%
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700">
+                              {rep.converted} <span className="ml-1 text-[10px] opacity-70 font-medium">leads</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex flex-col">
+                              <span className="text-sm font-bold text-gray-900">{rep.conversionRate}%</span>
+                              <span className="text-[10px] text-muted-foreground">{rep.converted} of {rep.totalLeads} total</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       ) : (
         <div className="space-y-4">

@@ -8,3 +8,12 @@ export const PACKAGES = [
   { name: '20 Session GT', sessions: 20, price: 4150, expiryDays: 70 },
   { name: '30 Session GT', sessions: 30, price: 5600, expiryDays: 90 },
 ];
+
+export const SALES_MEMBERS = [
+  'Atef',
+  'EL GOO',
+  'Hassan Tarek',
+  'Maisoon',
+  'Mustafa',
+  'Omar Ehab'
+];

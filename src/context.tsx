@@ -1,25 +1,56 @@
-import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
-import { Client, SalesTarget, Payment, User, PrivateSession, AuditLog, Comment, Task, UserRole, Package, ImportBatch, BrandingSettings, Attendance, Branch, Coach, UserSalesTarget } from './types';
-import { auth, db, signInWithGoogle, logOut } from './firebase';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import { 
+  addDays, 
+  format, 
+  isAfter, 
+  isBefore, 
+  parseISO, 
+  startOfMonth, 
+  endOfMonth, 
+  subMonths,
+  parse,
+  isValid
+} from 'date-fns';
 import { 
   collection, 
   doc, 
-  setDoc, 
-  updateDoc, 
   onSnapshot, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
   query, 
   where, 
-  addDoc, 
-  serverTimestamp,
-  getDoc,
-  getDocs,
-  collectionGroup,
-  orderBy,
-  deleteDoc,
+  getDocs, 
+  getDoc, 
+  setDoc, 
   runTransaction,
-  writeBatch
+  collectionGroup,
+  writeBatch,
+  orderBy
 } from 'firebase/firestore';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { auth, db, signInWithGoogle, logOut } from './firebase';
+import { 
+  Client, 
+  User, 
+  UserRole, 
+  Payment, 
+  SalesTarget, 
+  PTPackageRecord, 
+  AuditLog, 
+  Task, 
+  Package, 
+  Coach, 
+  ImportBatch,
+  UserSalesTarget,
+  BrandingSettings,
+  Attendance,
+  Branch,
+  CRMComment,
+  InteractionLog,
+  CommissionRates
+} from './types';
+import { PACKAGES } from './constants';
 
 enum OperationType {
   CREATE = 'create',
@@ -80,7 +111,7 @@ interface AppContextType {
   clients: Client[];
   salesTarget: SalesTarget;
   payments: Payment[];
-  privateSessions: PrivateSession[];
+  ptPackageRecords: PTPackageRecord[];
   auditLogs: AuditLog[];
   tasks: Task[];
   packages: Package[];
@@ -97,12 +128,13 @@ interface AppContextType {
   updateUser: (id: string, updates: Partial<User>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   inviteUser: (email: string, role: UserRole) => Promise<void>;
-  addComment: (clientId: string, text: string, author: string) => Promise<void>;
+  addComment: (clientId: string, text: string, author?: string) => Promise<void>;
+  addInteraction: (clientId: string, interaction: Omit<InteractionLog, 'id' | 'author'>) => Promise<void>;
   addPayment: (payment: Omit<Payment, 'id'>) => Promise<void>;
   updateSalesTarget: (target: number) => Promise<void>;
   updateUserTarget: (userId: string, month: string, total: number, privateTarget: number, groupTarget: number) => Promise<void>;
-  addPrivateSession: (session: Omit<PrivateSession, 'id'>) => Promise<void>;
-  updatePrivateSession: (id: string, updates: Partial<PrivateSession>) => Promise<void>;
+  addPTPackageRecord: (session: Omit<PTPackageRecord, 'id'>) => Promise<void>;
+  updatePTPackageRecord: (id: string, updates: Partial<PTPackageRecord>) => Promise<void>;
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'createdBy'>) => Promise<void>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
@@ -129,9 +161,17 @@ interface AppContextType {
   canViewGlobalDashboard: boolean;
   canDeleteRecords: boolean;
   canAssignLeads: boolean;
+  recalculateAllPackages: () => Promise<void>;
+  selfCheckIn: (identifier: string, pin: string, branch: Branch) => Promise<{ success: boolean; message: string }>;
+  mergeDuplicates: () => Promise<void>;
+  backfillMemberIds: () => Promise<void>;
+  commissionRates: CommissionRates;
+  updateCommissionRates: (rates: CommissionRates) => Promise<void>;
+  isManagerOrSama: boolean;
+  isAtefStrict: boolean;
 }
 
-const AppContext = createContext<AppContextType | undefined>(undefined);
+const AppContext = React.createContext<AppContextType | undefined>(undefined);
 
 function cleanData(data: any) {
   const clean: any = {};
@@ -146,17 +186,19 @@ function cleanData(data: any) {
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [baseClients, setBaseClients] = useState<Omit<Client, 'comments'>[]>([]);
-  const [allComments, setAllComments] = useState<Record<string, Comment[]>>({});
+  const [baseClients, setBaseClients] = useState<Omit<Client, 'comments' | 'interactions'>[]>([]);
+  const [allComments, setAllComments] = useState<Record<string, CRMComment[]>>({});
+  const [allInteractions, setAllInteractions] = useState<Record<string, InteractionLog[]>>({});
 
   const clients = useMemo(() => {
     return baseClients.map(c => ({
       ...c,
-      comments: allComments[c.id] || []
+      comments: allComments[c.id] || [],
+      interactions: allInteractions[c.id] || []
     })) as Client[];
-  }, [baseClients, allComments]);
+  }, [baseClients, allComments, allInteractions]);
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [privateSessions, setPrivateSessions] = useState<PrivateSession[]>([]);
+  const [ptPackageRecords, setPTPackageRecords] = useState<PTPackageRecord[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
@@ -169,6 +211,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     companyName: 'Strike',
     logoUrl: '/strikelogo.png'
   });
+  const [commissionRates, setCommissionRates] = useState<CommissionRates>({
+    ptRate: 8,
+    groupRate: 5
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [previewRole, setPreviewRole] = useState<UserRole | null>(null);
@@ -179,6 +225,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return currentUser?.role;
   }, [currentUser, previewRole]);
+
   const isManagerOrSama = useMemo(() => {
     if (!currentUser) return false;
     const role = effectiveRole;
@@ -264,11 +311,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               if (!querySnapshot.empty) {
                 const invitedUserDoc = querySnapshot.docs[0];
                 role = invitedUserDoc.data().role as UserRole;
-                // Try to delete the placeholder doc (might fail due to permissions)
                 try {
                   await deleteDoc(doc(db, 'users', invitedUserDoc.id));
                 } catch (e) {
-                  console.warn("Could not delete placeholder invitation doc (this is normal if rules restrict it):", e);
+                  console.warn("Could not delete placeholder invitation doc:", e);
                 }
               }
             }
@@ -307,16 +353,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'clients'));
 
     const unsubComments = onSnapshot(collectionGroup(db, 'comments'), (snapshot) => {
-      const commentsByClient: Record<string, Comment[]> = {};
+      const commentsByClient: Record<string, CRMComment[]> = {};
       snapshot.docs.forEach(doc => {
         const clientId = doc.ref.parent.parent?.id;
         if (clientId) {
           if (!commentsByClient[clientId]) commentsByClient[clientId] = [];
-          commentsByClient[clientId].push({ ...doc.data(), id: doc.id } as Comment);
+          commentsByClient[clientId].push({ ...doc.data(), id: doc.id } as CRMComment);
         }
       });
       setAllComments(commentsByClient);
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'comments'));
+
+    const unsubInteractions = onSnapshot(collectionGroup(db, 'interactions'), (snapshot) => {
+      const interactionsByClient: Record<string, InteractionLog[]> = {};
+      snapshot.docs.forEach(doc => {
+        const clientId = doc.ref.parent.parent?.id;
+        if (clientId) {
+          if (!interactionsByClient[clientId]) interactionsByClient[clientId] = [];
+          interactionsByClient[clientId].push({ ...doc.data(), id: doc.id } as InteractionLog);
+        }
+      });
+      setAllInteractions(interactionsByClient);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'interactions'));
 
     const unsubPayments = onSnapshot(collection(db, 'payments'), (snapshot) => {
       const paymentsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Payment));
@@ -324,7 +382,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'payments'));
 
     const unsubSessions = onSnapshot(collection(db, 'sessions'), (snapshot) => {
-      setPrivateSessions(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as PrivateSession)));
+      setPTPackageRecords(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as PTPackageRecord)));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'sessions'));
 
     let unsubAudit: (() => void) | undefined;
@@ -367,10 +425,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }, (error) => handleFirestoreError(error, OperationType.GET, 'settings/branding'));
 
+    const unsubCommission = onSnapshot(doc(db, 'settings', 'commission'), (snapshot) => {
+      if (snapshot.exists()) {
+        setCommissionRates(snapshot.data() as CommissionRates);
+      }
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'settings/commission'));
+
     return () => {
       unsubUsers();
       unsubClients();
       unsubComments();
+      unsubInteractions();
       unsubPayments();
       unsubSessions();
       if (unsubAudit) unsubAudit();
@@ -381,6 +446,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubBatches();
       unsubAttendances();
       unsubBranding();
+      unsubCommission();
     };
   }, [currentUser]);
 
@@ -414,7 +480,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await logOut();
   };
 
-  const addAuditLog = async (action: AuditLog['action'], entityType: AuditLog['entityType'], entityId: string, details: string, branch?: Branch) => {
+  const addAuditLog = useCallback(async (action: AuditLog['action'], entityType: AuditLog['entityType'], entityId: string, details: string, branch?: Branch) => {
     if (!currentUser) return;
     try {
       await addDoc(collection(db, 'auditLogs'), {
@@ -429,14 +495,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'auditLogs');
     }
-  };
+  }, [currentUser]);
 
   const generateMemberId = async (): Promise<string> => {
     const counterRef = doc(db, 'counters', 'clients');
     try {
       const newId = await runTransaction(db, async (transaction) => {
         const counterDoc = await transaction.get(counterRef);
-        let nextId = 112; // Starting ID
+        let nextId = 112; 
         if (counterDoc.exists()) {
           nextId = (counterDoc.data().lastId || 111) + 1;
         }
@@ -446,7 +512,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return newId.toString();
     } catch (error) {
       console.error("Error generating member ID:", error);
-      // Fallback if transaction fails
       return Math.floor(Math.random() * 10000).toString();
     }
   };
@@ -456,12 +521,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const { id, comments, ...clientData } = client;
       if (clientData.paid === undefined) clientData.paid = false;
       
-      if (clientData.status === 'Active' && !clientData.memberId) {
+      if (!clientData.memberId) {
         clientData.memberId = await generateMemberId();
       }
 
       const docRef = doc(collection(db, 'clients'));
-      await setDoc(docRef, { ...cleanData(clientData), id: docRef.id });
+      const finalData = { 
+        ...cleanData(clientData), 
+        id: docRef.id,
+        createdAt: new Date().toISOString()
+      };
+      await setDoc(docRef, finalData);
       await addAuditLog('CREATE', client.status === 'Lead' ? 'LEAD' : 'CLIENT', docRef.id, `Added new ${client.status === 'Lead' ? 'lead' : 'client'}: ${client.name}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'clients');
@@ -473,11 +543,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let failedCount = 0;
     const errors: {row: number, reason: string}[] = [];
 
-    // Generate member IDs in bulk
-    const activeClientsCount = newClients.filter(c => c.status === 'Active' && !c.memberId).length;
+    const clientsNeedingId = newClients.filter(c => !c.memberId).length;
     let nextMemberId = 112;
     
-    if (activeClientsCount > 0) {
+    if (clientsNeedingId > 0) {
       const counterRef = doc(db, 'counters', 'clients');
       try {
         nextMemberId = await runTransaction(db, async (transaction) => {
@@ -486,7 +555,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (counterDoc.exists()) {
             currentId = (counterDoc.data().lastId || 111) + 1;
           }
-          transaction.set(counterRef, { lastId: currentId + activeClientsCount }, { merge: true });
+          transaction.set(counterRef, { lastId: currentId + clientsNeedingId }, { merge: true });
           return currentId;
         });
       } catch (error) {
@@ -503,12 +572,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const client = newClients[i];
         const { id, comments, ...clientData } = client;
         
-        if (clientData.status === 'Active' && !clientData.memberId) {
+        if (!clientData.memberId) {
           clientData.memberId = (nextMemberId++).toString();
         }
 
         const docRef = id ? doc(db, 'clients', id) : doc(collection(db, 'clients'));
-        batch.set(docRef, { ...cleanData(clientData), id: docRef.id });
+        batch.set(docRef, { 
+          ...cleanData(clientData), 
+          id: docRef.id,
+          createdAt: new Date().toISOString()
+        });
         operationCount++;
 
         if (operationCount === 500) {
@@ -535,18 +608,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateClient = async (id: string, updates: Partial<Client>) => {
     try {
-      const { comments, ...updateData } = updates;
-      
-      // If converting to Active and doesn't have a memberId yet
-      if (updateData.status === 'Active') {
-        const existingClient = clients.find(c => c.id === id);
-        if (existingClient && !existingClient.memberId && !updateData.memberId) {
+      const updateData = { ...updates };
+      if (!updateData.memberId) {
+        const existingClient = baseClients.find(c => c.id === id);
+        if (existingClient && !existingClient.memberId) {
           updateData.memberId = await generateMemberId();
         }
       }
 
       await updateDoc(doc(db, 'clients', id), cleanData(updateData));
-      const clientName = clients.find(c => c.id === id)?.name || id;
+      const clientName = baseClients.find(c => c.id === id)?.name || id;
       addAuditLog('UPDATE', 'CLIENT', id, `Updated client/lead: ${clientName}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `clients/${id}`);
@@ -565,7 +636,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteMultipleClients = async (ids: string[]) => {
     try {
-      // For simplicity, delete one by one. In production with huge lists, use batched writes.
       for (const id of ids) {
         await deleteDoc(doc(db, 'clients', id));
       }
@@ -597,8 +667,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const inviteUser = async (email: string, role: UserRole) => {
     try {
-      // Create a placeholder user doc. When they log in, it will match their email or they'll get a new UID.
-      // Actually, it's better to just create a doc with a random ID, and the login logic will match by email.
       const docRef = await addDoc(collection(db, 'users'), {
         email,
         role,
@@ -610,18 +678,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addComment = async (clientId: string, text: string, author: string) => {
+  const addComment = async (clientId: string, text: string, author?: string) => {
     try {
+      const commentAuthor = author || currentUser?.name || 'Admin';
       await addDoc(collection(db, 'clients', clientId, 'comments'), {
         text,
         date: new Date().toISOString(),
-        author
+        author: commentAuthor
       });
       await updateDoc(doc(db, 'clients', clientId), {
         lastContactDate: new Date().toISOString()
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `clients/${clientId}/comments`);
+    }
+  };
+
+  const addInteraction = async (clientId: string, interaction: Omit<InteractionLog, 'id' | 'author'>) => {
+    if (!currentUser) return;
+    try {
+      await addDoc(collection(db, 'clients', clientId, 'interactions'), {
+        ...interaction,
+        author: currentUser.name,
+        date: interaction.date || new Date().toISOString()
+      });
+      await updateDoc(doc(db, 'clients', clientId), {
+        lastContactDate: interaction.date || new Date().toISOString()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `clients/${clientId}/interactions`);
     }
   };
 
@@ -637,7 +722,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         amount_paid: payment.amount,
         sales_rep_id: payment.recordedBy || currentUser.id,
         created_at: new Date().toISOString(),
-        session_type: payment.packageType.toLowerCase().includes('pt') || payment.packageType.toLowerCase().includes('private') 
+        package_category_type: payment.packageType.toLowerCase().includes('pt') || payment.packageType.toLowerCase().includes('private') 
           ? 'Private Training' 
           : 'Group Training',
         deleted_at: null
@@ -674,7 +759,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateUserTarget = async (userId: string, month: string, total: number, privateTarget: number, groupTarget: number) => {
     if (!currentUser) return;
     try {
-      // Find existing target for this user and month in 'targets' collection
       const existing = userTargets.find(t => (t.userId === userId || t.sales_rep_id === userId) && (t.month === month || t.month_year === month));
       const targetData = {
         userId,
@@ -702,23 +786,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addPrivateSession = async (session: Omit<PrivateSession, 'id'>) => {
+  const addPTPackageRecord = async (session: Omit<PTPackageRecord, 'id'>) => {
     try {
       const docRef = await addDoc(collection(db, 'sessions'), cleanData(session));
       const clientName = clients.find(c => c.id === session.clientId)?.name || session.clientId;
-      await addAuditLog('CREATE', 'SESSION', docRef.id, `Scheduled session for ${clientName}`);
+      await addAuditLog('CREATE', 'PACKAGE_RECORD', docRef.id, `Scheduled package for ${clientName}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'sessions');
     }
   };
 
-  const updatePrivateSession = async (id: string, updates: Partial<PrivateSession>) => {
+  const updatePTPackageRecord = async (id: string, updates: Partial<PTPackageRecord>) => {
     try {
       await updateDoc(doc(db, 'sessions', id), cleanData(updates));
-      const session = privateSessions.find(s => s.id === id);
-      if (session) {
-        const clientName = clients.find(c => c.id === session.clientId)?.name || session.clientId;
-        await addAuditLog('UPDATE', 'SESSION', id, `Updated session status to ${updates.status} for ${clientName}`);
+      const record = ptPackageRecords.find(s => s.id === id);
+      if (record) {
+        const clientName = clients.find(c => c.id === record.clientId)?.name || record.clientId;
+        await addAuditLog('UPDATE', 'PACKAGE_RECORD', id, `Updated package status to ${updates.status} for ${clientName}`);
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `sessions/${id}`);
@@ -837,15 +921,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const updateCommissionRates = async (rates: CommissionRates) => {
+    try {
+      await setDoc(doc(db, 'settings', 'commission'), rates, { merge: true });
+      await addAuditLog('UPDATE', 'TARGET', 'commission', `Updated commission rates: PT ${rates.ptRate}%, Group ${rates.groupRate}%`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'settings/commission');
+    }
+  };
+
   const rollbackImport = async (batchId: string) => {
     try {
-      // Find all clients with this batchId
       const clientsToRollback = clients.filter(c => c.importBatchId === batchId);
       for (const client of clientsToRollback) {
         await deleteDoc(doc(db, 'clients', client.id));
       }
       
-      // Also delete any payments linked to these clients
       const paymentIds = payments
         .filter(p => clientsToRollback.some(c => c.id === p.clientId))
         .map(p => p.id);
@@ -865,7 +956,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (count > 0) await batch.commit();
       }
 
-      // Mark batch as rolled back
       await updateDoc(doc(db, 'importBatches', batchId), { status: 'Rolled Back' });
       await addAuditLog('DELETE', 'CLIENT', batchId, `Rolled back import batch, deleted ${clientsToRollback.length} records and ${paymentIds.length} payments`);
     } catch (error) {
@@ -890,7 +980,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           amount_paid: payment.amount,
           sales_rep_id: payment.recordedBy || payment.sales_rep_id || currentUser.id,
           created_at: payment.created_at || new Date().toISOString(),
-          session_type: payment.session_type || sessionType,
+          package_category_type: payment.package_category_type || sessionType,
           deleted_at: null
         };
 
@@ -915,7 +1005,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Filter clients based on user role and search query
   const visibleClients = useMemo(() => {
     if (!currentUser) return [];
     let filtered = clients;
@@ -931,9 +1020,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
     }
     return filtered;
-  }, [clients, currentUser, effectiveRole, searchQuery]);
+  }, [clients, currentUser, effectiveRole, searchQuery, canViewGlobalDashboard]);
 
-  // Filter payments based on visible clients
   const visiblePayments = useMemo(() => {
     if (!currentUser) return [];
     if (canViewGlobalDashboard) return payments;
@@ -946,7 +1034,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   }, [payments, visibleClients, currentUser, canViewGlobalDashboard]);
 
-  // Filter tasks based on user role
   const visibleTasks = useMemo(() => {
     if (!currentUser) return [];
     if (effectiveRole === 'manager' || effectiveRole === 'admin') return tasks;
@@ -958,8 +1045,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const privateSold = visiblePayments.filter(p => p.packageType.toLowerCase().includes('private')).length;
     const groupSold = visiblePayments.filter(p => p.packageType.toLowerCase().includes('group') || p.packageType.toLowerCase().includes('gt')).length;
     
-    // Month string for current targets
-    const currentMonthStr = new Date().toISOString().substring(0, 7); // 'YYYY-MM'
+    const currentMonthStr = new Date().toISOString().substring(0, 7); 
 
     let targetAmount = globalSalesTarget;
     let privateTarget = 0;
@@ -975,7 +1061,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         targetAmount = currentUser.salesTarget;
       }
     } else {
-      // For managers, we could sum all targets for this month or use global
       const allMonthTargets = userTargets.filter(t => t.month === currentMonthStr);
       if (allMonthTargets.length > 0) {
         targetAmount = allMonthTargets.reduce((sum, t) => sum + t.targetAmount, 0);
@@ -987,8 +1072,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return {
       targetAmount,
       currentAmount: total,
-      privateSessionsSold: privateSold,
-      groupSessionsSold: groupSold,
+      privatePackagesSold: privateSold,
+      groupPackagesSold: groupSold,
       privateTarget,
       groupTarget
     };
@@ -1002,7 +1087,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     clients: visibleClients, 
     salesTarget: salesStats, 
     payments: visiblePayments, 
-    privateSessions,
+    ptPackageRecords,
     auditLogs,
     tasks: visibleTasks,
     packages,
@@ -1020,12 +1105,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     deleteUser,
     inviteUser,
     addComment, 
+    addInteraction,
     addPayment, 
     deletePayment,
     updateSalesTarget,
     updateUserTarget,
-    addPrivateSession,
-    updatePrivateSession,
+    addPTPackageRecord,
+    updatePTPackageRecord,
     addTask,
     updateTask,
     deleteTask,
@@ -1054,7 +1140,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         await addDoc(collection(db, 'attendance'), attendanceData);
         
-        // Decrement sessions if numeric
         if (typeof client.sessionsRemaining === 'number') {
           await updateDoc(doc(db, 'clients', clientId), {
             sessionsRemaining: client.sessionsRemaining - 1
@@ -1064,6 +1149,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await addAuditLog('CREATE', 'ATTENDANCE', clientId, `Attendance: ${client.name} at ${branch}`, branch);
       } catch (error) {
         handleFirestoreError(error, OperationType.CREATE, 'attendance');
+      }
+    },
+    selfCheckIn: async (identifier: string, pin: string, branch: Branch) => {
+      try {
+        // Verify PIN first
+        if (branding.dailyCheckinPin && pin !== branding.dailyCheckinPin) {
+          return { success: false, message: "Invalid Daily PIN. Please ask the front desk." };
+        }
+
+        const q = query(collection(db, 'clients'), where('memberId', '==', identifier));
+        const q2 = query(collection(db, 'clients'), where('phone', '==', identifier));
+        
+        const [snap1, snap2] = await Promise.all([getDocs(q), getDocs(q2)]);
+        const clientDoc = snap1.docs[0] || snap2.docs[0];
+
+        if (!clientDoc) {
+          return { success: false, message: "Member not found. Please check your ID or Phone number." };
+        }
+
+        const client = { ...clientDoc.data(), id: clientDoc.id } as Client;
+
+        if (client.status === 'Expired' || client.status === 'Hold') {
+          return { success: false, message: `Your membership is currently ${client.status}. Please visit the front desk.` };
+        }
+
+        const attendanceData: Omit<Attendance, 'id'> = {
+          clientId: client.id,
+          branch,
+          date: new Date().toISOString(),
+          recordedBy: 'SELF_CHECKIN',
+          packageName: client.packageType
+        };
+
+        await addDoc(collection(db, 'attendance'), attendanceData);
+        
+        if (typeof client.sessionsRemaining === 'number') {
+          await updateDoc(doc(db, 'clients', client.id), {
+            sessionsRemaining: (client.sessionsRemaining || 0) - 1
+          });
+        }
+
+        await addDoc(collection(db, 'auditLogs'), {
+          userId: 'SELF_CHECKIN',
+          action: 'CREATE',
+          entityType: 'ATTENDANCE',
+          entityId: client.id,
+          details: `Self Check-in: ${client.name} at ${branch}`,
+          timestamp: new Date().toISOString(),
+          branch: branch
+        });
+
+        return { success: true, message: `Welcome, ${client.name}! Your attendance has been recorded.` };
+      } catch (error) {
+        console.error("Self check-in error:", error);
+        return { success: false, message: "An error occurred. Please try again." };
       }
     },
     branding,
@@ -1095,74 +1235,334 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           'auditLogs'
         ];
 
-        // Wipe main collections in parallel batches
         await Promise.all(collectionsToWipe.map(async (collName) => {
-          const snapshot = await getDocs(collection(db, collName));
-          if (snapshot.empty) return;
-          
-          let i = 0;
-          let batch = writeBatch(db);
-          for (const doc of snapshot.docs) {
-            batch.delete(doc.ref);
-            i++;
-            if (i === 450) { // Limit batch size
-              await batch.commit();
-              batch = writeBatch(db);
-              i = 0;
+          try {
+            const snapshot = await getDocs(collection(db, collName));
+            if (snapshot.empty) return;
+            
+            let i = 0;
+            let batch = writeBatch(db);
+            for (const doc of snapshot.docs) {
+              batch.delete(doc.ref);
+              i++;
+              if (i === 450) { 
+                await batch.commit();
+                batch = writeBatch(db);
+                i = 0;
+              }
             }
+            if (i > 0) await batch.commit();
+          } catch (e) {
+            console.error(`Failed to wipe collection ${collName}:`, e);
           }
-          if (i > 0) await batch.commit();
         }));
 
-        // Wipe subcollections like comments
-        const commentsSnapshot = await getDocs(collectionGroup(db, 'comments'));
-        if (!commentsSnapshot.empty) {
-          let i = 0;
-          let batch = writeBatch(db);
-          for (const doc of commentsSnapshot.docs) {
-            batch.delete(doc.ref);
-            i++;
-            if (i === 450) {
-              await batch.commit();
-              batch = writeBatch(db);
-              i = 0;
+        try {
+          const commentsSnapshot = await getDocs(collectionGroup(db, 'comments'));
+          if (!commentsSnapshot.empty) {
+            let i = 0;
+            let batch = writeBatch(db);
+            for (const doc of commentsSnapshot.docs) {
+              batch.delete(doc.ref);
+              i++;
+              if (i === 450) {
+                await batch.commit();
+                batch = writeBatch(db);
+                i = 0;
+              }
             }
+            if (i > 0) await batch.commit();
           }
-          if (i > 0) await batch.commit();
+        } catch (e) {
+          console.error("Failed to wipe comments collection group:", e);
         }
 
-        // Reset counters
-        await setDoc(doc(db, 'counters', 'clients'), { lastId: 111 }, { merge: true });
+        try {
+          await setDoc(doc(db, 'counters', 'clients'), { lastId: 111 }, { merge: true });
+        } catch (e) {
+          console.error("Failed to reset counters:", e);
+        }
 
         await addAuditLog('DELETE', 'CLIENT', 'system', `CRITICAL: Full system wipe performed by ${currentUser.name}`);
       } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, 'system');
+        handleFirestoreError(error, OperationType.DELETE, 'system-wipe');
         throw error;
+      }
+    },
+    recalculateAllPackages: async () => {
+      if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'super_admin' && currentUser.role !== 'crm_admin' && currentUser.role !== 'manager')) {
+        alert('Unauthorized');
+        return;
+      }
+
+      const confirm = window.confirm('Are you sure you want to recalculate all expiry dates? This will use the "Start Date" and "Package Type" to determine the new expiry date.');
+      if (!confirm) return;
+
+      let successCount = 0;
+      let skippedCount = 0;
+
+      const parseDateStr = (dateStr: string | undefined) => {
+        if (!dateStr) return null;
+        const isoDate = parseISO(dateStr);
+        if (isValid(isoDate) && isoDate.getFullYear() > 1990) return isoDate;
+        const ddmmyyyy = parse(dateStr, 'dd/MM/yyyy', new Date());
+        if (isValid(ddmmyyyy) && ddmmyyyy.getFullYear() > 1990) return ddmmyyyy;
+        const mmddyyyy = parse(dateStr, 'MM/dd/yyyy', new Date());
+        if (isValid(mmddyyyy) && mmddyyyy.getFullYear() > 1990) return mmddyyyy;
+        return null;
+      };
+
+      const findPackage = (name: string) => {
+        if (!name) return null;
+        const normalized = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return PACKAGES.find(p => {
+          const pName = p.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+          return normalized.includes(pName) || pName.includes(normalized);
+        });
+      };
+
+      try {
+        const batch = writeBatch(db);
+        let batchCount = 0;
+
+        for (const client of baseClients) {
+          if (!client.startDate || !client.packageType) {
+            skippedCount++;
+            continue;
+          }
+          const startDate = parseDateStr(client.startDate);
+          if (!startDate) {
+            skippedCount++;
+            continue;
+          }
+          const pkg = findPackage(client.packageType);
+          if (!pkg) {
+            skippedCount++;
+            continue;
+          }
+          const newExpiryDate = addDays(startDate, pkg.expiryDays);
+          const newExpiry = format(newExpiryDate, 'yyyy-MM-dd');
+          if (client.membershipExpiry !== newExpiry) {
+            batch.update(doc(db, 'clients', client.id), { 
+              membershipExpiry: newExpiry,
+              status: isAfter(new Date(), newExpiryDate) ? 'Expired' : client.status
+            });
+            batchCount++;
+            successCount++;
+            if (batchCount >= 400) {
+              await batch.commit();
+              batchCount = 0;
+            }
+          } else {
+            skippedCount++;
+          }
+        }
+        if (batchCount > 0) await batch.commit();
+        await addAuditLog('UPDATE', 'CLIENT', 'bulk', `Bulk recalculated membership expiry. Success: ${successCount}, Skipped: ${skippedCount}`);
+        alert(`Recalculation complete!\nUpdated: ${successCount}\nSkipped: ${skippedCount}`);
+      } catch (error) {
+        console.error('Error during bulk recalculation:', error);
+        handleFirestoreError(error, OperationType.UPDATE, 'clients/bulk-recalculate');
+      }
+    },
+    backfillMemberIds: async () => {
+      if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'super_admin' && currentUser.role !== 'crm_admin' && currentUser.role !== 'manager')) {
+        alert('Unauthorized');
+        return;
+      }
+
+      const clientsToBackfill = baseClients.filter(c => !c.memberId);
+      if (clientsToBackfill.length === 0) {
+        alert('All clients already have Member IDs.');
+        return;
+      }
+
+      const confirm = window.confirm(`Found ${clientsToBackfill.length} clients missing Member IDs. Assign sequential IDs now?`);
+      if (!confirm) return;
+
+      try {
+        const counterRef = doc(db, 'counters', 'clients');
+        let nextId = await runTransaction(db, async (transaction) => {
+          const counterDoc = await transaction.get(counterRef);
+          let currentId = 112;
+          if (counterDoc.exists()) {
+            currentId = (counterDoc.data().lastId || 111) + 1;
+          }
+          transaction.set(counterRef, { lastId: currentId + clientsToBackfill.length }, { merge: true });
+          return currentId;
+        });
+
+        const batch = writeBatch(db);
+        let batchCount = 0;
+        let successCount = 0;
+
+        for (const client of clientsToBackfill) {
+          batch.update(doc(db, 'clients', client.id), { memberId: (nextId++).toString() });
+          batchCount++;
+          successCount++;
+          if (batchCount >= 450) {
+            await batch.commit();
+            batchCount = 0;
+          }
+        }
+        if (batchCount > 0) await batch.commit();
+        
+        await addAuditLog('UPDATE', 'CLIENT', 'bulk', `Backfilled ${successCount} Member IDs.`);
+        alert(`Successfully backfilled ${successCount} Member IDs.`);
+      } catch (error) {
+        console.error('Error during backfill:', error);
+        handleFirestoreError(error, OperationType.UPDATE, 'clients/backfill-ids');
+      }
+    },
+    mergeDuplicates: async () => {
+      if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'super_admin' && currentUser.role !== 'crm_admin' && currentUser.role !== 'manager')) {
+        alert('Unauthorized');
+        return;
+      }
+
+      const confirm = window.confirm('Are you sure you want to merge duplicate profiles? This will identify duplicates by matching any phone numbers (including those separated by /) and merge their data into the most active profile. This action cannot be undone.');
+      if (!confirm) return;
+
+      try {
+        const clientPhones: Record<string, string[]> = {};
+        const phoneToClients: Record<string, string[]> = {};
+
+        baseClients.forEach(c => {
+          const rawPhones = (c.phone || '').split(/[/,;]/);
+          const normalized = rawPhones
+            .map(p => p.trim().replace(/[^0-9]/g, ''))
+            .filter(p => p.length >= 8);
+          
+          clientPhones[c.id] = normalized;
+          normalized.forEach(p => {
+            if (!phoneToClients[p]) phoneToClients[p] = [];
+            phoneToClients[p].push(c.id);
+          });
+        });
+
+        const visited = new Set<string>();
+        const mergeGroups: string[][] = [];
+
+        Object.keys(clientPhones).forEach(startId => {
+          if (visited.has(startId)) return;
+
+          const group: string[] = [];
+          const stack = [startId];
+          visited.add(startId);
+
+          while (stack.length > 0) {
+            const currentId = stack.pop()!;
+            group.push(currentId);
+
+            const phones = clientPhones[currentId] || [];
+            phones.forEach(p => {
+              const neighbors = phoneToClients[p] || [];
+              neighbors.forEach(neighborId => {
+                if (!visited.has(neighborId)) {
+                  visited.add(neighborId);
+                  stack.push(neighborId);
+                }
+              });
+            });
+          }
+
+          if (group.length > 1) {
+            mergeGroups.push(group);
+          }
+        });
+
+        if (mergeGroups.length === 0) {
+          alert('No duplicates found.');
+          return;
+        }
+
+        let totalMerged = 0;
+        for (const groupIds of mergeGroups) {
+          const groupClients = baseClients.filter(c => groupIds.includes(c.id));
+          
+          const sorted = [...groupClients].sort((a, b) => {
+            if (a.status === 'Active' && b.status !== 'Active') return -1;
+            if (b.status === 'Active' && a.status !== 'Active') return 1;
+            if (a.memberId && !b.memberId) return -1;
+            if (b.memberId && !a.memberId) return 1;
+            const dateA = a.startDate ? new Date(a.startDate).getTime() : 0;
+            const dateB = b.startDate ? new Date(b.startDate).getTime() : 0;
+            return dateB - dateA;
+          });
+
+          const primary = sorted[0];
+          const duplicates = sorted.slice(1);
+
+          for (const dup of duplicates) {
+            const dupId = dup.id;
+
+            const dupPayments = payments.filter(p => p.clientId === dupId);
+            for (const p of dupPayments) {
+              await updateDoc(doc(db, 'payments', p.id), { clientId: primary.id });
+            }
+
+            const dupAttendance = attendances.filter(a => a.clientId === dupId);
+            for (const a of dupAttendance) {
+              await updateDoc(doc(db, 'attendance', a.id), { clientId: primary.id });
+            }
+
+            const dupSessions = ptPackageRecords.filter(s => s.clientId === dupId);
+            for (const s of dupSessions) {
+              await updateDoc(doc(db, 'sessions', s.id), { clientId: primary.id });
+            }
+
+            const commentsSnapshot = await getDocs(collection(db, 'clients', dupId, 'comments'));
+            for (const commentDoc of commentsSnapshot.docs) {
+              await addDoc(collection(db, 'clients', primary.id, 'comments'), commentDoc.data());
+              await deleteDoc(commentDoc.ref);
+            }
+
+            await deleteDoc(doc(db, 'clients', dupId));
+            totalMerged++;
+          }
+        }
+
+        await addAuditLog('UPDATE', 'CLIENT', 'bulk', `Bulk merged ${totalMerged} duplicate profiles.`);
+        alert(`Successfully merged ${totalMerged} duplicate profiles.`);
+      } catch (error) {
+        console.error('Error during merge:', error);
+        handleFirestoreError(error, OperationType.UPDATE, 'clients/merge-duplicates');
       }
     }
   }), [
     currentUser, 
-    effectiveRole,
+    effectiveRole, 
     users, 
     visibleClients, 
     salesStats, 
     visiblePayments, 
-    privateSessions, 
-    auditLogs,
-    visibleTasks,
-    packages,
-    coaches,
-    importBatches,
-    userTargets,
-    branding,
-    searchQuery,
+    ptPackageRecords, 
+    auditLogs, 
+    visibleTasks, 
+    packages, 
+    coaches, 
+    importBatches, 
+    userTargets, 
+    branding, 
+    searchQuery, 
     isAuthReady, 
-    previewRole,
-    attendances,
-    canDeletePayments,
-    canAccessSettings,
-    canViewGlobalDashboard,
-    bulkAddPayments
+    previewRole, 
+    attendances, 
+    canDeletePayments, 
+    canAccessSettings, 
+    canViewGlobalDashboard, 
+    bulkAddPayments,
+    baseClients,
+    clients,
+    payments,
+    canDeleteRecords,
+    canAssignLeads,
+    globalSalesTarget,
+    isManagerOrSama,
+    isAtefStrict,
+    addAuditLog,
+    commissionRates,
+    updateCommissionRates
   ]);
 
   return (
@@ -1179,4 +1579,3 @@ export const useAppContext = () => {
   }
   return context;
 };
-

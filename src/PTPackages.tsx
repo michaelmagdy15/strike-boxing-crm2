@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PrivateSession, Branch } from './types';
+import { PTPackageRecord, Branch } from './types';
 import { 
   MapPin, 
   Users as TrainerIcon, 
@@ -25,21 +25,14 @@ import {
   History
 } from 'lucide-react';
 
-export default function PrivateSessions() {
-  const { clients, privateSessions, addPrivateSession, updatePrivateSession, updateClient, users } = useAppContext() as {
-    clients: any[];
-    privateSessions: any[];
-    addPrivateSession: any;
-    updatePrivateSession: any;
-    updateClient: any;
-    users: any[];
-  };
+export default function PTPackages() {
+  const { clients, ptPackageRecords, addPTPackageRecord, updatePTPackageRecord, updateClient, users } = useAppContext();
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  const [isNewSessionOpen, setIsNewSessionOpen] = useState(false);
-  const [newSessionClientId, setNewSessionClientId] = useState('');
-  const [newSessionTrainerId, setNewSessionTrainerId] = useState('');
-  const [newSessionBranch, setNewSessionBranch] = useState<Branch | ''>('');
-  const [newSessionTime, setNewSessionTime] = useState('10:00');
+  const [isNewPackageOpen, setIsNewPackageOpen] = useState(false);
+  const [newPackageClientId, setNewPackageClientId] = useState('');
+  const [newPackageTrainerId, setNewPackageTrainerId] = useState('');
+  const [newPackageBranch, setNewPackageBranch] = useState<Branch | ''>('');
+  const [newPackageTime, setNewPackageTime] = useState('10:00');
   
   const [filterBranch, setFilterBranch] = useState<Branch | 'All'>('All');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -51,49 +44,49 @@ export default function PrivateSessions() {
     const start = startOfMonth(now);
     const end = endOfMonth(now);
     
-    const monthSessions = privateSessions.filter(s => {
+    const monthPackages = ptPackageRecords.filter(s => {
       const d = parseISO(s.date);
       return isWithinInterval(d, { start, end });
     });
     
-    const attended = monthSessions.filter(s => s.status === 'Attended').length;
-    const noShow = monthSessions.filter(s => s.status === 'No Show').length;
-    const scheduled = monthSessions.filter(s => s.status === 'Scheduled').length;
+    const attended = monthPackages.filter(s => s.status === 'Attended').length;
+    const noShow = monthPackages.filter(s => s.status === 'No Show').length;
+    const scheduled = monthPackages.filter(s => s.status === 'Scheduled').length;
     
     return {
-      total: monthSessions.length,
+      total: monthPackages.length,
       attended,
       noShow,
       scheduled,
-      rate: monthSessions.length > 0 ? Math.round((attended / (attended + noShow || 1)) * 100) : 0
+      rate: monthPackages.length > 0 ? Math.round((attended / (attended + noShow || 1)) * 100) : 0
     };
-  }, [privateSessions]);
+  }, [ptPackageRecords]);
 
-  const handleAddSession = () => {
-    if (newSessionClientId && selectedDate) {
-      const [hours, minutes] = newSessionTime.split(':');
-      const sessionDate = new Date(selectedDate as Date);
-      sessionDate.setHours(parseInt(hours || '0'), parseInt(minutes || '0'));
+  const handleAddPackageUsage = () => {
+    if (newPackageClientId && selectedDate) {
+      const [hours, minutes] = newPackageTime.split(':');
+      const packageDate = new Date(selectedDate);
+      packageDate.setHours(parseInt(hours), parseInt(minutes));
 
-      addPrivateSession({
-        clientId: newSessionClientId,
-        trainerId: newSessionTrainerId || undefined,
-        branch: newSessionBranch || undefined,
-        date: sessionDate.toISOString(),
+      addPTPackageRecord({
+        clientId: newPackageClientId,
+        trainerId: newPackageTrainerId || undefined,
+        branch: newPackageBranch || undefined,
+        date: packageDate.toISOString(),
         status: 'Scheduled',
       });
-      setIsNewSessionOpen(false);
-      setNewSessionClientId('');
-      setNewSessionTrainerId('');
-      setNewSessionBranch('');
+      setIsNewPackageOpen(false);
+      setNewPackageClientId('');
+      setNewPackageTrainerId('');
+      setNewPackageBranch('');
     }
   };
 
-  const handleUpdateStatus = (session: PrivateSession, status: PrivateSession['status']) => {
-    updatePrivateSession(session.id, { status });
+  const handleUpdateStatus = (record: PTPackageRecord, status: PTPackageRecord['status']) => {
+    updatePTPackageRecord(record.id, { status });
     
     if (status === 'Attended' || status === 'No Show') {
-      const client = clients.find(c => c.id === session.clientId);
+      const client = clients.find(c => c.id === record.clientId);
       if (client) {
         let currentSessions = client.sessionsRemaining;
         if (currentSessions === 'no attend') {
@@ -107,19 +100,19 @@ export default function PrivateSessions() {
     }
   };
 
-  const sessionsForSelectedDate = privateSessions
-    .filter(session => {
-      const matchesDate = selectedDate && isSameDay(parseISO(session.date), selectedDate);
-      const matchesBranch = filterBranch === 'All' || session.branch === filterBranch;
+  const packagesForSelectedDate = ptPackageRecords
+    .filter(record => {
+      const matchesDate = selectedDate && isSameDay(parseISO(record.date), selectedDate);
+      const matchesBranch = filterBranch === 'All' || record.branch === filterBranch;
       return matchesDate && matchesBranch;
     })
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  const historySessions = privateSessions
+  const historyPackages = ptPackageRecords
     .filter(s => s.clientId === historyClientId)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  const getStatusBadge = (status: PrivateSession['status']) => {
+  const getStatusBadge = (status: PTPackageRecord['status']) => {
     switch (status) {
       case 'Attended': return <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200">Attended</Badge>;
       case 'No Show': return <Badge className="bg-destructive/10 text-destructive border-destructive/20">No Show</Badge>;
@@ -133,15 +126,15 @@ export default function PrivateSessions() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Private Sessions</h2>
-          <p className="text-muted-foreground">Manage 1-on-1 member training and trainer schedules.</p>
+          <h2 className="text-2xl font-bold tracking-tight">PT Packages</h2>
+          <p className="text-muted-foreground">Manage 1-on-1 member training and package records.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setIsHistoryOpen(true)}>
             <History className="mr-2 h-4 w-4" /> Client History
           </Button>
-          <Button size="sm" onClick={() => setIsNewSessionOpen(true)}>
-            <CalendarIcon className="mr-2 h-4 w-4" /> Schedule Session
+          <Button size="sm" onClick={() => setIsNewPackageOpen(true)}>
+            <CalendarIcon className="mr-2 h-4 w-4" /> Log PT Usage
           </Button>
         </div>
       </div>
@@ -152,7 +145,7 @@ export default function PrivateSessions() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Scheduled (MTD)</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Packages Logged (MTD)</p>
                 <p className="text-2xl font-bold">{monthStats.total}</p>
               </div>
               <CalendarIcon className="h-8 w-8 text-primary opacity-20" />
@@ -239,44 +232,44 @@ export default function PrivateSessions() {
                 <CardTitle>Daily Schedule</CardTitle>
                 <CardDescription>{selectedDate ? format(selectedDate, 'EEEE, MMMM do, yyyy') : 'No date selected'}</CardDescription>
               </div>
-              <Badge variant="outline" className="bg-background">{sessionsForSelectedDate.length} Sessions</Badge>
+              <Badge variant="outline" className="bg-background">{packagesForSelectedDate.length} Records</Badge>
             </div>
           </CardHeader>
           <CardContent className="p-0 flex-1">
-            {sessionsForSelectedDate.length === 0 ? (
+            {packagesForSelectedDate.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground opacity-50">
                 <Clock className="h-12 w-12 mb-2" />
-                <p>No sessions scheduled for this date and branch.</p>
+                <p>No package usage records for this date and branch.</p>
               </div>
             ) : (
               <div className="divide-y">
-                {sessionsForSelectedDate.map(session => {
-                  const client = clients.find(c => c.id === session.clientId);
-                  const trainer = users.find(u => u.id === session.trainerId);
+                {packagesForSelectedDate.map(record => {
+                  const client = clients.find(c => c.id === record.clientId);
+                  const trainer = users.find(u => u.id === record.trainerId);
                   return (
-                    <div key={session.id} className="p-6 hover:bg-muted/20 transition-colors group">
+                    <div key={record.id} className="p-6 hover:bg-muted/20 transition-colors group">
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                         <div className="flex items-start gap-4">
                           <div className="bg-primary/10 p-3 rounded-xl flex flex-col items-center justify-center min-w-[70px]">
-                            <span className="text-sm font-bold text-primary">{format(parseISO(session.date), 'h:mm')}</span>
-                            <span className="text-[10px] font-bold text-primary/70 uppercase">{format(parseISO(session.date), 'a')}</span>
+                            <span className="text-sm font-bold text-primary">{format(parseISO(record.date), 'h:mm')}</span>
+                            <span className="text-[10px] font-bold text-primary/70 uppercase">{format(parseISO(record.date), 'a')}</span>
                           </div>
                           <div className="space-y-1">
                             <h4 className="font-bold text-lg">{client?.name || 'Unknown Client'}</h4>
                             <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                               <span className="flex items-center gap-1"><TrainerIcon className="h-3 w-3" /> {trainer?.name || 'Unassigned'}</span>
-                              <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {session.branch || 'N/A'}</span>
-                              <span>{getStatusBadge(session.status)}</span>
+                              <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {record.branch || 'N/A'}</span>
+                              <span>{getStatusBadge(record.status)}</span>
                             </div>
                           </div>
                         </div>
                         
-                        {session.status === 'Scheduled' && (
+                        {record.status === 'Scheduled' && (
                           <div className="flex gap-2">
-                            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-bold" onClick={() => handleUpdateStatus(session, 'Attended')}>
+                            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 font-bold" onClick={() => handleUpdateStatus(record, 'Attended')}>
                               <CheckCircle className="mr-2 h-4 w-4" /> Attended
                             </Button>
-                            <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/5 font-bold" onClick={() => handleUpdateStatus(session, 'No Show')}>
+                            <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/5 font-bold" onClick={() => handleUpdateStatus(record, 'No Show')}>
                               <XCircle className="mr-2 h-4 w-4" /> No Show
                             </Button>
                           </div>
@@ -292,10 +285,10 @@ export default function PrivateSessions() {
       </div>
 
       {/* Schedule Dialog */}
-      <Dialog open={isNewSessionOpen} onOpenChange={setIsNewSessionOpen}>
+      <Dialog open={isNewPackageOpen} onOpenChange={setIsNewPackageOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Schedule New Session</DialogTitle>
+            <DialogTitle>Log Package Usage</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
@@ -307,13 +300,13 @@ export default function PrivateSessions() {
               </div>
               <div className="space-y-2">
                 <Label>Time</Label>
-                <Input type="time" value={newSessionTime} onChange={(e) => setNewSessionTime(e.target.value)} />
+                <Input type="time" value={newPackageTime} onChange={(e) => setNewPackageTime(e.target.value)} />
               </div>
             </div>
 
             <div className="space-y-2">
               <Label>Client</Label>
-              <Select value={newSessionClientId} onValueChange={(v) => v && setNewSessionClientId(v as any)}>
+              <Select value={newPackageClientId} onValueChange={setNewPackageClientId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select client" />
                 </SelectTrigger>
@@ -329,7 +322,7 @@ export default function PrivateSessions() {
 
             <div className="space-y-2">
               <Label>Trainer (Optional)</Label>
-              <Select value={newSessionTrainerId} onValueChange={(v) => v && setNewSessionTrainerId(v as any)}>
+              <Select value={newPackageTrainerId} onValueChange={setNewPackageTrainerId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select trainer" />
                 </SelectTrigger>
@@ -343,7 +336,7 @@ export default function PrivateSessions() {
 
             <div className="space-y-2">
               <Label>Branch</Label>
-              <Select value={newSessionBranch} onValueChange={(v) => setNewSessionBranch(v as any)}>
+              <Select value={newPackageBranch} onValueChange={(v) => setNewPackageBranch(v as any)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select branch" />
                 </SelectTrigger>
@@ -355,23 +348,22 @@ export default function PrivateSessions() {
               </Select>
             </div>
 
-            <Button className="w-full mt-2" onClick={handleAddSession} disabled={!newSessionClientId || !selectedDate || !newSessionBranch}>
-              Confirm Schedule
+            <Button className="w-full mt-2" onClick={handleAddPackageUsage} disabled={!newPackageClientId || !selectedDate || !newPackageBranch}>
+              Confirm Usage
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* History Dialog */}
       <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Member Session History</DialogTitle>
+            <DialogTitle>Member Package History</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Select Member</Label>
-              <Select value={historyClientId} onValueChange={(v) => v && setHistoryClientId(v as any)}>
+              <Select value={historyClientId} onValueChange={setHistoryClientId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select member" />
                 </SelectTrigger>
@@ -395,27 +387,27 @@ export default function PrivateSessions() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {historySessions.length > 0 ? (
-                      historySessions.map(session => (
-                        <TableRow key={session.id}>
+                    {historyPackages.length > 0 ? (
+                      historyPackages.map(record => (
+                        <TableRow key={record.id}>
                           <TableCell className="font-medium">
-                            {format(parseISO(session.date), 'MMM d, yyyy @ h:mm a')}
+                            {format(parseISO(record.date), 'MMM d, yyyy @ h:mm a')}
                           </TableCell>
                           <TableCell className="text-sm">
-                            {users.find(u => u.id === session.trainerId)?.name || '-'}
+                            {users.find(u => u.id === record.trainerId)?.name || '-'}
                           </TableCell>
                           <TableCell className="text-xs font-bold opacity-70">
-                            {session.branch}
+                            {record.branch}
                           </TableCell>
                           <TableCell>
-                            {getStatusBadge(session.status)}
+                            {getStatusBadge(record.status)}
                           </TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
                         <TableCell colSpan={4} className="text-center py-12 text-muted-foreground italic">
-                          No session history found for this member.
+                          No package history found for this member.
                         </TableCell>
                       </TableRow>
                     )}
