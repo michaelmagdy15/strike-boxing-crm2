@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { CalendarIcon, History, Plus, User, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export default function PrivateSessions() {
   const { clients, privateSessions, addPrivateSession, recordSessionAttendance } = useCRMData();

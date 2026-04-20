@@ -9,9 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, parseISO, isAfter, isBefore, addDays, subDays } from 'date-fns';
-import { Client, isAdmin } from './types';
+import { Client, isAdmin, ClientId, User, Payment } from './types';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Trash2, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, Gift, Phone, Calendar, Download, Search, Filter, MoreHorizontal, User, MapPin, Package, Clock, CreditCard, Shield } from 'lucide-react';
+import { Trash2, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, Gift, Phone, Calendar, Download, Search, Filter, MoreHorizontal, User as UserIcon, MapPin, Package, Clock, CreditCard, Shield } from 'lucide-react';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import ImportData from './ImportData';
 import ImportHistory from './ImportHistory';
@@ -33,12 +33,12 @@ const ClientTableRow = React.memo(({
 }: { 
   client: Client, 
   isSelected: boolean, 
-  onSelect: (id: string, checked: boolean) => void,
-  onDelete: (id: string) => void,
-  onUpdate: (id: string, updates: Partial<Client>) => void,
-  currentUser: any,
-  users: any[],
-  payments: any[],
+  onSelect: (id: ClientId, checked: boolean) => void,
+  onDelete: (id: ClientId) => void,
+  onUpdate: (id: ClientId, updates: Partial<Client>) => void,
+  currentUser: User | null,
+  users: User[],
+  payments: Payment[],
   isSuperUser: boolean,
   isBirthday: boolean
 }) => {
@@ -148,7 +148,7 @@ const ClientTableRow = React.memo(({
                     <DialogHeader>
                         <div className="flex items-center gap-6">
                             <div className="h-20 w-20 rounded-[28px] bg-primary flex items-center justify-center shadow-2xl shadow-primary/30">
-                                <User className="h-10 w-10 text-primary-foreground" />
+                                <UserIcon className="h-10 w-10 text-primary-foreground" />
                             </div>
                             <div className="flex flex-col">
                                 <DialogTitle className="text-4xl font-black tracking-tight">{client.name}</DialogTitle>
@@ -208,7 +208,8 @@ const ClientTableRow = React.memo(({
                                             defaultValue={client.sessionsRemaining} 
                                             onChange={(e) => {
                                                 const val = e.target.value;
-                                                onUpdate(client.id, { sessionsRemaining: isNaN(Number(val)) ? val : Number(val) });
+                                                const numVal = Number(val);
+                                                onUpdate(client.id, { sessionsRemaining: isNaN(numVal) ? val : numVal });
                                             }}
                                         />
                                     </div>
@@ -296,10 +297,10 @@ export default function Clients() {
   const { payments } = useCRMData();
   
   const [activeTab, setActiveTab] = useState('all');
-  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+  const [selectedClientIds, setSelectedClientIds] = useState<ClientId[]>([]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
-  const [clientToDelete, setClientToDelete] = useState<string | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<ClientId | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const itemsPerPage = 12;
@@ -356,7 +357,7 @@ export default function Clients() {
     }
   }, [paginatedMembers]);
 
-  const handleSelectClient = useCallback((id: string, checked: boolean) => {
+  const handleSelectClient = useCallback((id: ClientId, checked: boolean) => {
     if (checked) {
       setSelectedClientIds(prev => [...prev, id]);
     } else {
@@ -365,18 +366,18 @@ export default function Clients() {
   }, []);
 
   const confirmBulkDelete = async () => {
-    await deleteMultipleClients(selectedClientIds);
+    await deleteMultipleClients(selectedClientIds as unknown as ClientId[]);
     setSelectedClientIds([]);
   };
 
-  const handleDeleteClient = useCallback((id: string) => {
+  const handleDeleteClient = useCallback((id: ClientId) => {
     setClientToDelete(id);
     setIsDeleteDialogOpen(true);
   }, []);
 
   const confirmDeleteClient = async () => {
     if (clientToDelete) {
-      await deleteClient(clientToDelete);
+      await deleteClient(clientToDelete as ClientId);
       setClientToDelete(null);
     }
   };
@@ -506,15 +507,15 @@ export default function Clients() {
                                         className="border-zinc-300 dark:border-zinc-700 data-[state=checked]:bg-primary rounded-md"
                                     />
                                 </TableHead>
-                                <TableHead className="font-black uppercase text-[10px] tracking-widest text-muted-foreground">Sig-ID</TableHead>
-                                <TableHead className="font-black uppercase text-[10px] tracking-widest text-muted-foreground">Identity</TableHead>
-                                <TableHead className="hidden md:table-cell font-black uppercase text-[10px] tracking-widest text-muted-foreground">Operational Sector</TableHead>
-                                <TableHead className="hidden md:table-cell font-black uppercase text-[10px] tracking-widest text-muted-foreground">Deployment</TableHead>
-                                <TableHead className="font-black uppercase text-[10px] tracking-widest text-muted-foreground">Unit State</TableHead>
+                                <TableHead className="font-black uppercase text-[10px] tracking-widest text-muted-foreground">Member ID</TableHead>
+                                <TableHead className="font-black uppercase text-[10px] tracking-widest text-muted-foreground">Name</TableHead>
+                                <TableHead className="hidden md:table-cell font-black uppercase text-[10px] tracking-widest text-muted-foreground">Branch</TableHead>
+                                <TableHead className="hidden md:table-cell font-black uppercase text-[10px] tracking-widest text-muted-foreground">Package</TableHead>
+                                <TableHead className="font-black uppercase text-[10px] tracking-widest text-muted-foreground">Sessions</TableHead>
                                 <TableHead className="font-black uppercase text-[10px] tracking-widest text-muted-foreground">Status</TableHead>
-                                <TableHead className="hidden sm:table-cell font-black uppercase text-[10px] tracking-widest text-muted-foreground">Event Horizon</TableHead>
-                                {isAdmin(currentUser?.role) && <TableHead className="hidden lg:table-cell font-black uppercase text-[10px] tracking-widest text-muted-foreground">Commercial Value</TableHead>}
-                                <TableHead className="text-right pr-6 font-black uppercase text-[10px] tracking-widest text-muted-foreground">Cmds</TableHead>
+                                <TableHead className="hidden sm:table-cell font-black uppercase text-[10px] tracking-widest text-muted-foreground">Expiry</TableHead>
+                                {isAdmin(currentUser?.role) && <TableHead className="hidden lg:table-cell font-black uppercase text-[10px] tracking-widest text-muted-foreground">Total Paid</TableHead>}
+                                <TableHead className="text-right pr-6 font-black uppercase text-[10px] tracking-widest text-muted-foreground">Actions</TableHead>
                             </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -538,8 +539,8 @@ export default function Clients() {
                                     <TableCell colSpan={10} className="py-32 text-center">
                                         <div className="flex flex-col items-center gap-4 opacity-30">
                                             <Search className="h-16 w-16" />
-                                            <h3 className="text-2xl font-black uppercase tracking-[4px]">No Signature Found</h3>
-                                            <p className="font-bold italic">Refine search query to locate operational units.</p>
+                                            <h3 className="text-2xl font-black uppercase tracking-[4px]">No Member Found</h3>
+                                            <p className="font-bold italic">Refine search query to locate members.</p>
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -552,7 +553,7 @@ export default function Clients() {
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4 px-6 bg-zinc-100 dark:bg-zinc-800/50 rounded-[28px]">
                 <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-                    Indexing <span className="text-foreground">{(currentPage - 1) * itemsPerPage + 1}—{Math.min(currentPage * itemsPerPage, filteredMembers.length)}</span> of <span className="text-foreground">{filteredMembers.length}</span> global units
+                    Showing <span className="text-foreground">{(currentPage - 1) * itemsPerPage + 1}—{Math.min(currentPage * itemsPerPage, filteredMembers.length)}</span> of <span className="text-foreground">{filteredMembers.length}</span> members
                 </p>
                 <div className="flex items-center gap-3">
                     <Button 
@@ -585,10 +586,10 @@ export default function Clients() {
             <Card className="border-none shadow-2xl bg-zinc-900 text-white rounded-[32px] overflow-hidden">
                 <CardHeader className="p-8 pb-0">
                     <div className="flex items-center gap-3 opacity-60">
-                        <Shield className="h-4 w-4" />
-                        <span className="text-[10px] font-black uppercase tracking-[4px]">Analytics Node</span>
+                        <Package className="h-4 w-4" />
+                        <span className="text-[10px] font-black uppercase tracking-[4px]">Analytics</span>
                     </div>
-                    <CardTitle className="text-3xl font-black tracking-tight mt-2">Fleet Pulse</CardTitle>
+                    <CardTitle className="text-3xl font-black tracking-tight mt-2">Member Stats</CardTitle>
                 </CardHeader>
                 <CardContent className="p-8 pt-6 space-y-6">
                     <div className="space-y-4">
@@ -613,7 +614,7 @@ export default function Clients() {
                             { label: 'Total Expired', value: stats.expired.length, color: 'text-rose-400' }
                         ].map((stat, i) => (
                             <div key={i} className="flex justify-between items-center">
-                                <span className="text-[10px] font-black text-white/40 uppercase tracking-[2px]">{stat.label}</span>
+                                <span className="text-[10px] font-black text-white/40 uppercase tracking-[2px]">{stat.label.replace('Units', 'Members').replace('Status', '').replace('Now', 'Soon')}</span>
                                 <span className={cn("text-xl font-black", stat.color)}>{stat.value}</span>
                             </div>
                         ))}
@@ -622,13 +623,13 @@ export default function Clients() {
             </Card>
 
             <div className="p-6 rounded-[32px] bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex flex-col gap-4">
-                <h4 className="font-black uppercase text-[10px] tracking-[4px] text-muted-foreground text-center">Protocol Actions</h4>
+                <h4 className="font-black uppercase text-[10px] tracking-[4px] text-muted-foreground text-center">Actions</h4>
                 <Button className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20">
-                    Register New Unit
+                    Add Member
                 </Button>
                 {selectedClientIds.length > 0 && isSuperUser && (
                    <Button variant="destructive" className="w-full h-14 rounded-2xl font-black text-lg shadow-xl" onClick={() => setIsBulkDeleteDialogOpen(true)}>
-                       Wipe {selectedClientIds.length} Signatures
+                       Delete {selectedClientIds.length} Members
                    </Button>
                 )}
             </div>
@@ -638,21 +639,21 @@ export default function Clients() {
       <ConfirmDialog 
         isOpen={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
-        title="Terminal Logic: ERASE"
-        description="Proceeding with the erasure of this identity signature? This action will permanently remove all historical logs and commercial ties associated with this unit."
+        title="Delete Member"
+        description="Are you sure you want to delete this member? This action will permanently remove all their associated logs and payments."
         onConfirm={confirmDeleteClient}
         variant="destructive"
-        confirmText="Confirm Erasure"
+        confirmText="Confirm Delete"
       />
 
       <ConfirmDialog 
         isOpen={isBulkDeleteDialogOpen}
         onOpenChange={setIsBulkDeleteDialogOpen}
-        title="Strategic Purge Requested"
-        description={`Initiating a mass erasure protocol for ${selectedClientIds.length} units. This action will permanently purge their data from the active environment.`}
+        title="Bulk Delete"
+        description={`Are you sure you want to delete ${selectedClientIds.length} members? This action will permanently remove their data from the system.`}
         onConfirm={confirmBulkDelete}
         variant="destructive"
-        confirmText="Execute Terminal Purge"
+        confirmText="Execute Deletion"
       />
     </div>
   );

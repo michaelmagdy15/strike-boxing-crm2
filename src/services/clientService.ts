@@ -9,7 +9,7 @@ import {
   writeBatch 
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Client, ClientId, UserId } from '../types';
+import { Client, ClientId, UserId, SessionId } from '../types';
 import { cleanData } from '../utils';
 import { addAuditLog } from './auditService';
 
@@ -182,4 +182,13 @@ export const recordSessionAttendance = async (
     sessionId, 
     `Updated session status to ${status} for client ${client.name}`
   );
+};
+
+export const deleteMultipleClients = async (ids: ClientId[]): Promise<void> => {
+  const batch = writeBatch(db);
+  ids.forEach(id => {
+    batch.delete(doc(db, 'clients', id));
+  });
+  await batch.commit();
+  await addAuditLog('DELETE', 'CLIENT', 'multiple', `Bulk deleted ${ids.length} clients/leads`);
 };

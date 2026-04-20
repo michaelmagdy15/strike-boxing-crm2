@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, parseISO, isBefore, addDays } from 'date-fns';
-import { Client, LeadCategory, LeadInterest, LeadSource, LeadStage, Branch, isAdmin } from './types';
+import { Client, LeadCategory, LeadInterest, LeadSource, LeadStage, Branch, isAdmin, ClientId, UserId, LeadClient } from './types';
 import { Phone, Calendar, MessageSquare, Plus, Download, UserCheck, ArrowRight, Trash2, ChevronLeft, ChevronRight, Target, Zap, Globe, Info, Clock, UserPlus, Search } from 'lucide-react';
 import ImportData from './ImportData';
 import ImportHistory from './ImportHistory';
@@ -29,14 +29,16 @@ const LeadTableRow = React.memo(({
   onLogActivity,
   currentUser, 
   users, 
-  isSuperUser
+  isSuperUser,
+  onStageChange
 }: { 
-  lead: Client, 
+  lead: LeadClient, 
   isSelected: boolean, 
-  onSelect: (id: string, checked: boolean) => void,
-  onDelete: (id: string) => void,
-  onUpdate: (id: string, updates: Partial<Client>) => void,
-  onLogActivity: (lead: Client) => void,
+  onSelect: (id: ClientId, checked: boolean) => void,
+  onDelete: (id: ClientId) => void,
+  onUpdate: (id: ClientId, updates: Partial<LeadClient>) => void,
+  onLogActivity: (lead: LeadClient) => void,
+  onStageChange?: (lead: LeadClient, stage: LeadStage) => void,
   currentUser: any,
   users: any[],
   isSuperUser: boolean
@@ -70,7 +72,7 @@ const LeadTableRow = React.memo(({
       <TableCell>
         <div className="flex flex-col">
           <span className="font-black text-sm tracking-tight uppercase">{lead.name}</span>
-          <span className="text-[10px] font-bold text-muted-foreground opacity-60 uppercase">{lead.category || 'NO CATEGORY'}</span>
+          <span className="text-[10px] font-bold text-muted-foreground opacity-60 uppercase">{(lead as any).category || 'NO CATEGORY'}</span>
         </div>
       </TableCell>
       <TableCell>
@@ -83,19 +85,19 @@ const LeadTableRow = React.memo(({
         <Badge variant="outline" className="font-black text-[10px] uppercase border-white/10 bg-white/5">{lead.branch || 'UNASSIGNED'}</Badge>
       </TableCell>
       <TableCell className="hidden md:table-cell">
-        <Badge variant="outline" className="font-black text-[10px] uppercase border-white/10">{lead.source || 'UNKNOWN'}</Badge>
+        <Badge variant="outline" className="font-black text-[10px] uppercase border-white/10">{(lead as any).source || 'UNKNOWN'}</Badge>
       </TableCell>
       <TableCell>
         <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] uppercase tracking-widest">
-          {lead.stage || 'NEW'}
+          {(lead as any).stage || 'NEW'}
         </Badge>
       </TableCell>
-      <TableCell className="hidden lg:table-cell">{getInterestBadge(lead.interest)}</TableCell>
+      <TableCell className="hidden lg:table-cell">{getInterestBadge((lead as any).interest)}</TableCell>
       <TableCell className="hidden xl:table-cell">
-        {lead.trialDate || lead.expectedVisitDate ? (
+        {(lead as any).trialDate || (lead as any).expectedVisitDate ? (
           <div className="flex items-center font-bold text-xs">
             <Calendar className="h-3 w-3 mr-2 text-primary opacity-60" />
-            {format(parseISO((lead.trialDate || lead.expectedVisitDate)!), 'MMM d, yyyy')}
+            {format(parseISO(((lead as any).trialDate || (lead as any).expectedVisitDate)!), 'MMM d, yyyy')}
           </div>
         ) : (
           <span className="text-muted-foreground text-[10px] font-black uppercase tracking-widest opacity-30">TBD</span>
@@ -120,8 +122,8 @@ const LeadTableRow = React.memo(({
       {isAdmin(currentUser?.role) && (
         <TableCell className="hidden lg:table-cell">
           <Select 
-            defaultValue={lead.assignedTo || 'unassigned'}
-            onValueChange={(v) => onUpdate(lead.id, { assignedTo: v === 'unassigned' ? undefined : v })}
+            defaultValue={(lead.assignedTo as string) || 'unassigned'}
+            onValueChange={(v) => onUpdate(lead.id, { assignedTo: v === 'unassigned' ? undefined : v as UserId })}
           >
             <SelectTrigger className="w-[120px] h-8 text-[10px] font-black uppercase tracking-tight bg-white/5 border-white/10">
               <SelectValue placeholder="REP" />
@@ -157,7 +159,7 @@ export default function Leads() {
   const { isSuperUser, currentUser, users } = useAuth();
   
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
-  const [selectedLead, setSelectedLead] = useState<Client | null>(null);
+  const [selectedLead, setSelectedLead] = useState<LeadClient | null>(null);
   const [newComment, setNewComment] = useState('');
   const [isNewLeadOpen, setIsNewLeadOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
@@ -173,7 +175,7 @@ export default function Leads() {
   const [newLeadBranch, setNewLeadBranch] = useState<Branch | ''>('');
   
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
-  const [leadToConvert, setLeadToConvert] = useState<Client | null>(null);
+  const [leadToConvert, setLeadToConvert] = useState<LeadClient | null>(null);
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
@@ -183,7 +185,7 @@ export default function Leads() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
-  const allLeads = useMemo(() => clients.filter(c => c.status === 'Lead'), [clients]);
+  const allLeads = useMemo(() => clients.filter((c): c is LeadClient => c.status === 'Lead'), [clients]);
   
   const filteredLeads = useMemo(() => {
     let filtered = allLeads;
@@ -255,14 +257,14 @@ export default function Leads() {
 
   const handleBulkStageUpdate = async (stage: LeadStage) => {
     for (const id of selectedLeadIds) {
-      await updateClient(id, { stage });
+      await updateClient(id as ClientId, { stage });
     }
     setSelectedLeadIds([]);
   };
 
-  const handleBulkAssign = async (userId: string) => {
+  const handleBulkAssign = async (userId: string | null) => {
     for (const id of selectedLeadIds) {
-      await updateClient(id, { assignedTo: userId === 'unassigned' ? undefined : userId });
+      await updateClient(id as ClientId, { assignedTo: (userId === 'unassigned' || !userId) ? undefined : userId as UserId });
     }
     setSelectedLeadIds([]);
   };
@@ -270,18 +272,18 @@ export default function Leads() {
   const handleBulkDelete = () => setIsBulkDeleteDialogOpen(true);
 
   const confirmBulkDelete = async () => {
-    await deleteMultipleClients(selectedLeadIds);
+    await deleteMultipleClients(selectedLeadIds as ClientId[]);
     setSelectedLeadIds([]);
   };
 
   const handleDeleteLead = useCallback((id: string) => {
-    setLeadToDelete(id);
+    setLeadToDelete(id as any);
     setIsDeleteDialogOpen(true);
   }, []);
 
   const confirmDeleteLead = async () => {
     if (leadToDelete) {
-      await deleteClient(leadToDelete);
+      await deleteClient(leadToDelete as ClientId);
       setLeadToDelete(null);
     }
   };
@@ -291,7 +293,7 @@ export default function Leads() {
   const confirmDeleteAllLeads = async () => {
     const allLeadIds = allLeads.map(l => l.id);
     if (allLeadIds.length > 0) {
-      await deleteMultipleClients(allLeadIds);
+      await deleteMultipleClients(allLeadIds as ClientId[]);
       setSelectedLeadIds([]);
     }
     setIsDeleteAllLeadsDialogOpen(false);
@@ -318,7 +320,7 @@ export default function Leads() {
         assignedTo: (currentUser?.role === 'rep' ? currentUser.id : undefined) as any,
         lastContactDate: new Date().toISOString().split('T')[0],
         nextReminderDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-      };
+      } as any;
       addClient(newLead);
       setIsNewLeadOpen(false);
       setNewLeadName('');
@@ -328,7 +330,7 @@ export default function Leads() {
     }
   };
 
-  const handleStageChange = useCallback((lead: Client, newStage: LeadStage) => {
+  const handleStageChange = useCallback((lead: LeadClient, newStage: LeadStage) => {
     if (newStage === 'Converted') {
       setLeadToConvert(lead);
       setIsConvertDialogOpen(true);
@@ -392,19 +394,19 @@ export default function Leads() {
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
         <div>
-            <h2 className="text-4xl font-black tracking-tighter uppercase mb-2">Intelligence Pipeline</h2>
+            <h2 className="text-4xl font-black tracking-tighter uppercase mb-2">Leads Management</h2>
             <div className="flex items-center gap-4">
-                <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] tracking-widest px-3 py-1">OPERATIONAL</Badge>
+                <Badge className="bg-primary/10 text-primary border-none font-black text-[10px] tracking-widest px-3 py-1">ACTIVE</Badge>
                 <div className="flex items-center gap-1.5 opacity-40">
                     <Target className="h-3.5 w-3.5" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">{filteredLeads.length} Targets Found</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">{filteredLeads.length} Leads Found</span>
                 </div>
             </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
           <Button variant="outline" onClick={exportToCSV} className="h-12 px-6 rounded-2xl border-none bg-white dark:bg-zinc-900 font-black text-[10px] uppercase tracking-widest shadow-xl hover:shadow-2xl transition-all">
-            <Download className="mr-3 h-4 w-4" /> Export Intel
+            <Download className="mr-3 h-4 w-4" /> Export Leads
           </Button>
           <div className="flex bg-white dark:bg-zinc-900 rounded-2xl p-1 shadow-xl">
             <ImportData type="Lead" />
@@ -413,15 +415,15 @@ export default function Leads() {
           </div>
           {isSuperUser && (
             <Button variant="ghost" onClick={handleDeleteAllLeads} className="h-12 px-6 rounded-2xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 font-black text-[10px] uppercase tracking-widest">
-              <Trash2 className="mr-3 h-4 w-4" /> Purge Database
+              <Trash2 className="mr-3 h-4 w-4" /> Clear Database
             </Button>
           )}
           <Dialog open={isNewLeadOpen} onOpenChange={setIsNewLeadOpen}>
-            <DialogTrigger asChild>
+            <DialogTrigger render={
                 <Button className="h-12 px-8 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
-                  <Plus className="mr-3 h-4 w-4" /> Register New Target
+                  <Plus className="mr-3 h-4 w-4" /> Add New Lead
                 </Button>
-            </DialogTrigger>
+            } />
             <DialogContent className="rounded-[40px] border-none shadow-[0_40px_100px_rgba(0,0,0,0.5)] p-0 overflow-hidden bg-white dark:bg-zinc-950">
               <div className="p-10 space-y-8">
                  <div className="flex items-center gap-4">
@@ -502,11 +504,11 @@ export default function Leads() {
       <Card className="rounded-[40px] border-none bg-white dark:bg-zinc-900 shadow-[0_30px_100px_rgba(0,0,0,0.05)] dark:shadow-none p-8 space-y-8">
         <div className="flex flex-col lg:flex-row gap-8">
           <div className="flex-1 flex flex-col gap-3">
-            <Label className="text-[10px] font-black uppercase tracking-widest opacity-40 pl-4">Tactical Search</Label>
+            <Label className="text-[10px] font-black uppercase tracking-widest opacity-40 pl-4">Search Leads</Label>
             <div className="relative group">
                 <Search className="absolute left-6 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                 <Input 
-                  placeholder="Identify target by alias or signature..." 
+                  placeholder="Search by name or phone..." 
                   value={searchTerm} 
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="h-16 pl-14 bg-zinc-50 dark:bg-zinc-950 border-none rounded-[20px] font-black text-sm shadow-inner"
@@ -517,7 +519,7 @@ export default function Leads() {
                 {[
                     { label: 'Branch', value: filterBranch, setter: setFilterBranch, options: ['All', 'COMPLEX', 'MIVIDA'] },
                     { label: 'Stage', value: filterStage, setter: setFilterStage, options: ['All', 'New', 'Follow Up', 'Trial', 'Interested', 'Not Interested'] },
-                    { label: 'Intel Tier', value: filterInterest, setter: setFilterInterest, options: ['All', 'Interested', 'Pending', 'Not Interested'] },
+                    { label: 'Interest Level', value: filterInterest, setter: setFilterInterest, options: ['All', 'Interested', 'Pending', 'Not Interested'] },
                 ].map((filter, i) => (
                     <div key={i} className="space-y-3">
                         <Label className="text-[10px] font-black uppercase tracking-widest opacity-40 pl-2">{filter.label}</Label>
@@ -557,18 +559,18 @@ export default function Leads() {
                         onCheckedChange={(checked) => handleSelectAll(!!checked)}
                       />
                     </TableHead>
-                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Identify</TableHead>
-                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Comms</TableHead>
-                    <TableHead className="hidden md:table-cell font-black text-[10px] uppercase tracking-widest">Sector</TableHead>
-                    <TableHead className="hidden md:table-cell font-black text-[10px] uppercase tracking-widest">Vector</TableHead>
-                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Pipeline</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Name</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Phone</TableHead>
+                    <TableHead className="hidden md:table-cell font-black text-[10px] uppercase tracking-widest">Branch</TableHead>
+                    <TableHead className="hidden md:table-cell font-black text-[10px] uppercase tracking-widest">Source</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Stage</TableHead>
                     <TabsTrigger value="none" className="hidden" /> {/* Tab Trigger placeholder if needed */}
                     <TableHead className="hidden lg:table-cell font-black text-[10px] uppercase tracking-widest">Priority</TableHead>
-                    <TableHead className="hidden lg:table-cell font-black text-[10px] uppercase tracking-widest">Context</TableHead>
-                    <TableHead className="hidden xl:table-cell font-black text-[10px] uppercase tracking-widest">Deployment</TableHead>
-                    <TableHead className="hidden md:table-cell font-black text-[10px] uppercase tracking-widest">Last Intel</TableHead>
-                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Deadline</TableHead>
-                    {isAdmin(currentUser?.role) && <TableHead className="hidden lg:table-cell font-black text-[10px] uppercase tracking-widest">Handler</TableHead>}
+                    <TableHead className="hidden lg:table-cell font-black text-[10px] uppercase tracking-widest">Details</TableHead>
+                    <TableHead className="hidden xl:table-cell font-black text-[10px] uppercase tracking-widest">Trial Date</TableHead>
+                    <TableHead className="hidden md:table-cell font-black text-[10px] uppercase tracking-widest">Last Contact</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Next Step</TableHead>
+                    {isAdmin(currentUser?.role) && <TableHead className="hidden lg:table-cell font-black text-[10px] uppercase tracking-widest">Assigned To</TableHead>}
                     <TableHead className="pr-8 text-right font-black text-[10px] uppercase tracking-widest">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -597,7 +599,7 @@ export default function Leads() {
             {totalPages > 1 && (
             <div className="flex items-center justify-between pb-4">
                 <p className="text-[10px] font-black uppercase tracking-widest opacity-40">
-                Synchronizing {Math.min(currentPage * itemsPerPage, filteredLeads.length)} of {filteredLeads.length} Tactical Units
+                Showing {Math.min(currentPage * itemsPerPage, filteredLeads.length)} of {filteredLeads.length} leads
                 </p>
                 <div className="flex items-center gap-4">
                 <Button 
@@ -609,7 +611,7 @@ export default function Leads() {
                 >
                     <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="text-[10px] font-black uppercase tracking-widest">Phase {currentPage} / {totalPages}</span>
+                <span className="text-[10px] font-black uppercase tracking-widest">Page {currentPage} / {totalPages}</span>
                 <Button 
                     variant="outline" 
                     size="icon" 
@@ -689,7 +691,7 @@ export default function Leads() {
                             </Select>
                         </div>
                         <div className="space-y-4">
-                            <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Interest Tier</Label>
+                            <Label className="text-[10px] font-black uppercase tracking-widest opacity-40">Interest Level</Label>
                             <Select defaultValue={selectedLead.interest} onValueChange={(v) => updateClient(selectedLead.id, { interest: v as LeadInterest })}>
                                 <SelectTrigger className="h-16 bg-white dark:bg-zinc-900 border-none rounded-2xl font-black text-sm px-6 shadow-sm">
                                     <SelectValue />

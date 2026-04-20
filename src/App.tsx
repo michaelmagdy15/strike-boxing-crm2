@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { 
   Users, 
   UserPlus, 
+  UserCheck,
   CreditCard, 
   LogOut, 
   Calendar as CalendarIcon, 
@@ -41,14 +42,14 @@ function AppContent() {
 
   if (!isAuthReady) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-950 gap-8">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 gap-8">
         <div className="relative">
-            <div className="h-24 w-24 rounded-full border-4 border-primary/20 animate-ping absolute inset-0" />
+            <div className="h-24 w-24 rounded-full border-4 border-primary/10 animate-ping absolute inset-0" />
             <div className="h-24 w-24 rounded-full border-t-4 border-primary animate-spin" />
         </div>
         <div className="flex flex-col items-center gap-2">
-            <h2 className="text-white font-black uppercase tracking-[8px] text-xl">Strike Intelligence</h2>
-            <p className="text-zinc-500 font-bold italic">Synchronizing Tactical Environment...</p>
+            <h2 className="text-zinc-900 dark:text-white font-black uppercase tracking-[4px] text-xl">Strike Boxing CRM</h2>
+            <p className="text-zinc-500 font-bold">Initalizing System...</p>
         </div>
       </div>
     );
@@ -69,12 +70,12 @@ function AppContent() {
             className="bg-amber-500 text-white text-[10px] font-black py-1.5 px-4 flex items-center justify-center space-x-4 z-[60] sticky top-0 shadow-lg uppercase tracking-widest"
         >
           <ShieldAlert className="h-3 w-3" />
-          <span>Simulation Active: {effectiveRole?.replace('_', ' ')} Context</span>
+          <span>Viewing as: {effectiveRole?.replace('_', ' ')}</span>
           <button 
             onClick={() => setPreviewRole(null)}
             className="ml-4 px-3 py-0.5 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
           >
-            Terminate
+            Exit Preview
           </button>
         </motion.div>
       )}
@@ -89,9 +90,9 @@ function AppContent() {
               </div>
               <div className="flex flex-col">
                 <h1 className="text-xl font-black tracking-tighter uppercase leading-none">
-                  Strike<span className="text-primary italic">Intelligence</span>
+                  Strike<span className="text-primary italic">Boxing</span>
                 </h1>
-                <span className="text-[8px] font-black uppercase tracking-[0.3em] opacity-40 mt-1">Tactical Ops v4.0</span>
+                <span className="text-[8px] font-black uppercase tracking-[0.3em] opacity-40 mt-1">Management Console v4.0</span>
               </div>
             </div>
           </div>
@@ -101,7 +102,7 @@ function AppContent() {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
               <Input
                 type="search"
-                placeholder="Synchronize Intelligence: Name, Identity or Signature..."
+                placeholder="Search across CRM: Name, Phone or ID..."
                 className="w-full h-11 pl-12 bg-zinc-100/50 dark:bg-zinc-900/50 border-none rounded-xl font-bold transition-all focus:ring-2 focus:ring-primary/50 shadow-inner text-sm"
                 value={searchQuery || ''}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -124,10 +125,10 @@ function AppContent() {
                      </div>
                    </SelectTrigger>
                    <SelectContent className="rounded-xl border-none shadow-2xl bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl">
-                     <SelectItem value="none" className="font-black text-[10px] uppercase tracking-widest">Master Intel</SelectItem>
-                     <SelectItem value="manager" className="font-black text-[10px] uppercase tracking-widest">Regional Direct</SelectItem>
-                     <SelectItem value="rep" className="font-black text-[10px] uppercase tracking-widest">Field Agent</SelectItem>
-                     <SelectItem value="coach" className="font-black text-[10px] uppercase tracking-widest">Tactical Coach</SelectItem>
+                     <SelectItem value="none" className="font-black text-[10px] uppercase tracking-widest">Administrator</SelectItem>
+                     <SelectItem value="manager" className="font-black text-[10px] uppercase tracking-widest">Manager</SelectItem>
+                     <SelectItem value="rep" className="font-black text-[10px] uppercase tracking-widest">Representative</SelectItem>
+                     <SelectItem value="coach" className="font-black text-[10px] uppercase tracking-widest">Coach</SelectItem>
                    </SelectContent>
                  </Select>
                )}
@@ -153,35 +154,35 @@ function AppContent() {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col pt-8 px-6 max-w-[1800px] mx-auto w-full relative z-10 tactical-grid">
+      <main className="flex-1 flex flex-col pt-8 px-6 max-w-[1800px] mx-auto w-full relative z-10">
         <Tabs defaultValue="dashboard" className="flex-1 flex flex-col space-y-8">
           <div className="flex justify-between items-center sm:sticky sm:top-[100px] z-40">
              <div className="hidden lg:flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-widest opacity-40">System Operational</span>
+                <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="text-[10px] font-black uppercase tracking-widest opacity-40">System Online</span>
              </div>
 
             <TabsList className="h-12 bg-zinc-900/5 dark:bg-zinc-100/5 backdrop-blur-md p-1 rounded-xl border border-zinc-200/50 dark:border-zinc-800/50 shadow-sm flex items-center gap-1 overflow-x-auto no-scrollbar">
               <TabsTrigger value="dashboard" className="h-full rounded-lg px-4 font-black text-[9px] uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white transition-all">
-                <LayoutDashboard className="h-3 w-3 mr-1.5" /> Hub
+                <LayoutDashboard className="h-3 w-3 mr-1.5" /> Dashboard
               </TabsTrigger>
               <TabsTrigger value="leads" className="h-full rounded-lg px-4 font-black text-[9px] uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white transition-all">
-                <UserPlus className="h-3 w-3 mr-1.5" /> Intel
+                <UserCheck className="h-3 w-3 mr-1.5" /> Leads
               </TabsTrigger>
               <TabsTrigger value="clients" className="h-full rounded-lg px-4 font-black text-[9px] uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white transition-all">
-                <Users className="h-3 w-3 mr-1.5" /> Ops
+                <Users className="h-3 w-3 mr-1.5" /> Clients
               </TabsTrigger>
               <TabsTrigger value="tasks" className="h-full rounded-lg px-4 font-black text-[9px] uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white transition-all">
-                <CheckSquare className="h-3 w-3 mr-1.5" /> Goals
+                <CheckSquare className="h-3 w-3 mr-1.5" /> Tasks
               </TabsTrigger>
               
               {isAdmin(currentUser.role) && (
                 <>
                   <TabsTrigger value="payments" className="h-full rounded-lg px-4 font-black text-[9px] uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white transition-all">
-                    <CreditCard className="h-3 w-3 mr-1.5" /> Flow
+                    <CreditCard className="h-3 w-3 mr-1.5" /> Payments
                   </TabsTrigger>
                   <TabsTrigger value="sessions" className="h-full rounded-lg px-4 font-black text-[9px] uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white transition-all">
-                    <CalendarIcon className="h-3 w-3 mr-1.5" /> Field
+                    <CalendarIcon className="h-3 w-3 mr-1.5" /> Private Sessions
                   </TabsTrigger>
                 </>
               )}
@@ -189,10 +190,10 @@ function AppContent() {
               {isAdmin(currentUser.role) && (
                 <>
                   <TabsTrigger value="audit" className="h-full rounded-lg px-4 font-black text-[9px] uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white transition-all">
-                    <ShieldCheck className="h-3 w-3 mr-1.5" /> Logs
+                    <ShieldCheck className="h-3 w-3 mr-1.5" /> Audit Logs
                   </TabsTrigger>
                   <TabsTrigger value="settings" className="h-full rounded-lg px-4 font-black text-[9px] uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white transition-all">
-                    <SettingsIcon className="h-3 w-3 mr-1.5" /> Core
+                    <SettingsIcon className="h-3 w-3 mr-1.5" /> Settings
                   </TabsTrigger>
                 </>
               )}
@@ -200,8 +201,8 @@ function AppContent() {
 
             <div className="hidden lg:flex items-center gap-4">
                <div className="flex flex-col items-end opacity-40">
-                  <span className="text-[10px] font-black uppercase tracking-widest">Last Update</span>
-                  <span className="text-[9px] font-bold">2 SEC AGO</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest">Last Updated</span>
+                  <span className="text-[9px] font-bold">JUST NOW</span>
                </div>
             </div>
           </div>
@@ -264,8 +265,8 @@ function AppContent() {
       <footer className="mt-20 py-10 px-6 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
         <div className="max-w-[1800px] mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-4 opacity-40 grayscale">
-                 <h2 className="text-sm font-black uppercase tracking-[4px]">Strike Intelligence Terminal</h2>
-                 <span className="text-[10px] font-bold">Build 2024.11.08</span>
+                 <h2 className="text-sm font-black uppercase tracking-[4px]">Strike Boxing Egypt</h2>
+                 <span className="text-[10px] font-bold">Version 2024.11.08</span>
             </div>
             <div className="flex gap-8 opacity-40">
                 {['Protocol', 'Vector', 'Archive', 'Privacy'].map((item) => (
@@ -273,7 +274,7 @@ function AppContent() {
                 ))}
             </div>
             <div className="text-[10px] font-bold text-muted-foreground italic">
-                &copy; {new Date().getFullYear()} Strike Boxing Egypt. Licensed for Private Tactical Use.
+                &copy; {new Date().getFullYear()} Strike Boxing Egypt. All Rights Reserved.
             </div>
         </div>
       </footer>

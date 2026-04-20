@@ -69,7 +69,7 @@ export default function Login() {
               >
                 <div className="h-px w-12 bg-white/20" />
                 <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.8em]">
-                    Advanced CRM Operations
+                    CRM Management Console
                 </p>
                 <div className="h-px w-12 bg-white/20" />
               </motion.div>
@@ -82,8 +82,8 @@ export default function Login() {
             <div className="mx-auto bg-primary/10 h-16 w-16 rounded-2xl flex items-center justify-center mb-6 border border-primary/20">
                 <Shield className="h-8 w-8 text-primary" />
             </div>
-            <CardTitle className="text-3xl font-black tracking-tight text-white mb-2 underline decoration-primary decoration-4 underline-offset-8">Authorized Access Only</CardTitle>
-            <CardDescription className="text-zinc-400 font-medium text-lg mt-4">Initialize secure session via authenticated provider.</CardDescription>
+            <CardTitle className="text-3xl font-black tracking-tight text-white mb-2">Secure CRM Access</CardTitle>
+            <CardDescription className="text-zinc-400 font-medium text-lg mt-4">Sign in to manage your leads and clients.</CardDescription>
           </CardHeader>
           <CardContent className="p-12 pt-6">
             <Button
@@ -110,7 +110,7 @@ export default function Login() {
                     d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
                   />
                 </svg>
-                <span className="font-black italic uppercase tracking-wider">Access with Google</span>
+                <span className="font-black uppercase tracking-wider">Sign in with Google</span>
               </div>
             </Button>
             
@@ -129,7 +129,7 @@ export default function Login() {
       
       {/* Footer Branding */}
       <div className="absolute bottom-12 left-0 right-0 text-center opacity-20 hover:opacity-100 transition-opacity">
-        <p className="text-[10px] font-black tracking-[1em] uppercase">Built for Champions | Powered by Combat Science</p>
+        <p className="text-[10px] font-black tracking-[0.5em] uppercase">Strike Boxing CRM | Management Console</p>
       </div>
     </div>
   );

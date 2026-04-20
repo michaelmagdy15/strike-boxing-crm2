@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { UserRole, isAdmin, isSuperAdmin } from './types';
+import { UserRole, isAdmin, isSuperAdmin, UserId, ClientId } from './types';
 import { Shield, User as UserIcon, Plus, Trash2, Mail, Users as UsersIcon, Lock, Fingerprint, Activity, ShieldCheck, Key } from 'lucide-react';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { motion, AnimatePresence } from 'motion/react';
@@ -43,7 +43,7 @@ export default function Users() {
   const canChangeRoles = isSuperAdmin(currentUser?.role);
 
   const handleRoleChange = (userId: string, newRole: UserRole) => {
-    updateUser(userId, { role: newRole });
+    updateUser(userId as UserId, { role: newRole });
   };
 
   const getRoleBadge = (role: UserRole) => {
@@ -83,7 +83,7 @@ export default function Users() {
         
         {canChangeRoles && (
           <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
-            <DialogTrigger asChild>
+            <DialogTrigger>
                 <Button className="h-16 px-10 rounded-[20px] font-black text-[10px] uppercase tracking-[4px] shadow-2xl shadow-primary/20 hover:scale-105 transition-all">
                   <Plus className="mr-3 h-5 w-5" /> Recruit Personnel
                 </Button>
@@ -242,7 +242,7 @@ export default function Users() {
         variant="destructive"
         onConfirm={() => {
           if (userToDelete) {
-            deleteUser(userToDelete);
+            deleteUser(userToDelete as UserId);
             setUserToDelete(null);
           }
         }}

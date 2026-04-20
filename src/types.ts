@@ -112,6 +112,13 @@ interface BaseClient {
   comments: Comment[];
   lastContactDate: string; // ISO string
   nextReminderDate?: string; // ISO string
+  memberId?: string;
+  packageType?: string;
+  sessionsRemaining?: number | string;
+  startDate?: string; // ISO string
+  membershipExpiry?: string; // ISO string
+  dateOfBirth?: string; // ISO string
+  points?: number;
 }
 
 /**
@@ -132,19 +139,24 @@ export interface LeadClient extends BaseClient {
  */
 export interface MemberClient extends BaseClient {
   status: 'Active' | 'Nearly Expired' | 'Expired';
-  memberId: string; // Sequential ID for members
+  memberId: string; // Required for members
   packageType: string;
   sessionsRemaining: number | string;
-  startDate: string; // ISO string
-  membershipExpiry: string; // ISO string
-  dateOfBirth?: string; // ISO string
-  points?: number;
+  startDate: string;
+  membershipExpiry: string;
 }
 
 /**
  * Discriminated union for Client to ensure type safety based on status.
  */
 export type Client = LeadClient | MemberClient;
+
+/**
+ * Type used for updating clients. It allows properties from both LeadClient and MemberClient
+ * to be passed during updates, ignoring the status literal conflict.
+ */
+export type ClientUpdates = Partial<Omit<LeadClient, 'status'> & Omit<MemberClient, 'status'>> & { status?: ClientStatus };
+
 
 export type TaskStatus = 'Pending' | 'In Progress' | 'Completed';
 export type TaskPriority = 'Low' | 'Medium' | 'High';

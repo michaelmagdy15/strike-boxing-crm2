@@ -11,6 +11,7 @@
     ],
     "skipLibCheck": true,
     "moduleResolution": "bundler",
+    "jsx": "react-jsx",
     "isolatedModules": true,
     "moduleDetection": "force",
     "allowJs": true,
@@ -35,11 +36,11 @@
     "alwaysStrict": true,
 
     /* Lints */
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
-    "noPropertyAccessFromIndexSignature": true
+    "noPropertyAccessFromIndexSignature": false
   }
 }

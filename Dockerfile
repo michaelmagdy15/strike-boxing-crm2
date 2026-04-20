@@ -28,6 +28,7 @@ WORKDIR /app
 
 # Copy the production output from the builder stage
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/dist-server ./dist-server
 COPY --from=builder /app/package*.json ./
 
 # Install only production dependencies
@@ -40,4 +41,4 @@ ENV PORT=8080
 EXPOSE 8080
 
 # Run the bundled server
-CMD ["node", "dist/server.cjs"]
+CMD ["node", "dist-server/server.cjs"]

@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, parseISO, addDays, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
-import { Payment, isAdmin, Client, Package } from './types';
+import { Payment, isAdmin, Client, Package, ClientId, UserId, PaymentId } from './types';
 import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Trash2, TrendingUp, Wallet, Receipt, Calendar, Info, Search, Filter, ArrowUpRight, ArrowDownRight, Zap } from 'lucide-react';
 import { AlertDialog } from './components/AlertDialog';
 import { ConfirmDialog } from './components/ConfirmDialog';
@@ -212,28 +212,28 @@ export default function Payments() {
       }
 
       addPayment({
-        clientId,
+        clientId: clientId as ClientId,
         amount: parseFloat(amount),
         date: new Date().toISOString(),
         method,
         instapayRef: method === 'Instapay' ? instapayRef : undefined,
         packageType: finalPackageType,
         notes,
-        recordedBy: currentUser?.id
+        recordedBy: currentUser?.id as UserId
       });
 
       // Update client with new package info
       const pkg = packages.find(p => p.name === packageType);
       if (pkg) {
         const now = new Date();
-        updateClient(clientId, {
+        updateClient(clientId as ClientId, {
           packageType: pkg.name,
           sessionsRemaining: pkg.sessions,
           membershipExpiry: addDays(now, pkg.expiryDays).toISOString(),
           status: 'Active'
         });
       } else {
-        updateClient(clientId, {
+        updateClient(clientId as ClientId, {
           packageType: finalPackageType,
           status: 'Active'
         });
@@ -369,11 +369,11 @@ export default function Payments() {
         </div>
 
         <Dialog open={isNewPaymentOpen} onOpenChange={setIsNewPaymentOpen}>
-            <DialogTrigger asChild>
+            <DialogTrigger render={
                 <Button className="h-14 px-10 rounded-[20px] font-black text-[10px] uppercase tracking-[4px] shadow-2xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all">
                   <Plus className="mr-3 h-5 w-5" /> Record Transaction
                 </Button>
-            </DialogTrigger>
+            } />
             <DialogContent className="max-w-2xl rounded-[40px] border-none shadow-[0_50px_150px_rgba(0,0,0,0.5)] p-0 overflow-hidden bg-white dark:bg-zinc-950">
               <div className="p-10 space-y-8">
                  <div className="flex items-center gap-4">
@@ -389,7 +389,7 @@ export default function Payments() {
                  <div className="space-y-6">
                     <div className="space-y-3">
                         <Label className="font-black text-[10px] uppercase tracking-widest opacity-40">Target Entity</Label>
-                        <Select value={clientId} onValueChange={setClientId}>
+                        <Select value={clientId} onValueChange={(v) => setClientId(v || '')}>
                             <SelectTrigger className="h-16 bg-zinc-100 dark:bg-zinc-900 border-none rounded-2xl font-black text-sm px-6">
                                 <SelectValue placeholder="Identify Personnel..." />
                             </SelectTrigger>
@@ -411,7 +411,7 @@ export default function Payments() {
                         </div>
                         <div className="space-y-3">
                             <Label className="font-black text-[10px] uppercase tracking-widest opacity-40">Service Package</Label>
-                            <Select value={packageType} onValueChange={handlePackageChange}>
+                            <Select value={packageType} onValueChange={(v) => handlePackageChange(v || '')}>
                                 <SelectTrigger className="h-16 bg-zinc-100 dark:bg-zinc-900 border-none rounded-2xl font-black text-sm px-6">
                                     <SelectValue placeholder="Protocol Type" />
                                 </SelectTrigger>
@@ -434,7 +434,7 @@ export default function Payments() {
 
                     <div className="space-y-3">
                         <Label className="font-black text-[10px] uppercase tracking-widest opacity-40">Transfer Protocol</Label>
-                        <Select value={method} onValueChange={(v) => setMethod(v as any)}>
+                        <Select value={method} onValueChange={(v) => setMethod((v || 'Cash') as any)}>
                             <SelectTrigger className="h-16 bg-zinc-100 dark:bg-zinc-900 border-none rounded-2xl font-black text-sm px-6">
                                 <SelectValue placeholder="Payment Method" />
                             </SelectTrigger>
@@ -592,7 +592,7 @@ export default function Payments() {
         variant="destructive"
         onConfirm={() => {
           if (paymentToDelete) {
-            deletePayment(paymentToDelete);
+            deletePayment(paymentToDelete as PaymentId);
             setPaymentToDelete(null);
           }
         }}

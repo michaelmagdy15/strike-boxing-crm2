@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C c:/Users/Mi5a/strike-boxing-crm2 ls-files --error-unmatch components/ui/tabs.tsx)",
+      "Bash(git -C c:/Users/Mi5a/strike-boxing-crm2 log --oneline -5)",
+      "Bash(git -C c:/Users/Mi5a/strike-boxing-crm2 ls-tree HEAD --name-only)",
+      "Bash(git -C c:/Users/Mi5a/strike-boxing-crm2 ls-tree HEAD lib/)",
+      "Bash(git -C c:/Users/Mi5a/strike-boxing-crm2 ls-tree HEAD components/ui/)",
+      "Bash(git -C c:/Users/Mi5a/strike-boxing-crm2 show --stat 7b341fb)",
+      "Bash(git -C c:/Users/Mi5a/strike-boxing-crm2 show 7b341fb -- vite.config.ts)",
+      "Bash(npm run *)",
+      "Bash(jobs)",
+      "Bash(git ls-tree *)"
+    ]
+  }
+}

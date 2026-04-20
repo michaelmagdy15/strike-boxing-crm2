@@ -14,7 +14,8 @@ import {
   TaskId, 
   PackageId, 
   ImportBatchId,
-  UserId
+  UserId,
+  ClientUpdates
 } from '../types';
 import { db } from '../firebase';
 import { 
@@ -27,7 +28,8 @@ import {
   deleteDoc, 
   doc, 
   updateDoc, 
-  writeBatch 
+  writeBatch,
+  getDocs 
 } from 'firebase/firestore';
 import * as clientService from '../services/clientService';
 import * as sharedService from '../services/sharedServices';
@@ -46,7 +48,7 @@ interface CRMContextType {
   importBatches: ImportBatch[];
   addClient: (client: Client) => Promise<void>;
   bulkAddClients: (clients: Client[]) => Promise<{success: number, failed: number, errors: {row: number, reason: string}[]}>;
-  updateClient: (id: ClientId, updates: Partial<Client>) => Promise<void>;
+  updateClient: (id: ClientId, updates: ClientUpdates) => Promise<void>;
   deleteClient: (id: ClientId) => Promise<void>;
   deleteMultipleClients: (ids: ClientId[]) => Promise<void>;
   addComment: (clientId: ClientId, text: string, author: string) => Promise<void>;
@@ -67,7 +69,7 @@ interface CRMContextType {
   importBackup: (jsonData: string) => Promise<void>;
   recordSessionAttendance: (clientId: ClientId, sessionId: SessionId, status: 'Attended' | 'No Show' | 'Cancelled' | 'Scheduled', client: Client, authorName: string) => Promise<void>;
   analytics: {
-    revenueByMonth: { month: string, revenue: number }[];
+    revenueByMonth: { month: string, revenue: number, sessions: number }[];
     leadsByStage: { stage: string, count: number }[];
     membershipStats: { name: string, value: number }[];
     conversionRate: number;
@@ -135,7 +137,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     const unsubSessions = onSnapshot(collection(db, 'sessions'), (snapshot) => {
-      setPrivateSessions(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id as PrivateSessionId } as PrivateSession)));
+      setPrivateSessions(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id as SessionId } as PrivateSession)));
     });
 
     const unsubTasks = onSnapshot(collection(db, 'tasks'), (snapshot) => {
@@ -204,9 +206,9 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addClient = async (client: Client) => { await clientService.addClient(client); };
   const bulkAddClients = async (newClients: Client[]) => { return await clientService.bulkAddClients(newClients); };
   
-  const updateClient = async (id: ClientId, updates: Partial<Client>) => {
+  const updateClient = async (id: ClientId, updates: ClientUpdates) => {
     const currentName = fullClients.find(c => c.id === id)?.name;
-    await clientService.updateClient(id, updates, currentName);
+    await clientService.updateClient(id, updates as any, currentName);
   };
   
   const deleteClient = async (id: ClientId) => {
@@ -240,12 +242,12 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     client: Client,
     authorName: string
   ) => {
-    await clientService.recordSessionAttendance(clientId, sessionId as any, status, client, authorName);
+    await clientService.recordSessionAttendance(clientId, sessionId, status, client, authorName);
   };
   
-  const addTask = async (task: Omit<Task, 'id' | 'createdAt' | 'createdBy'>, client?: Client) => {
+  const addTask = async (task: Omit<Task, 'id' | 'createdAt' | 'createdBy'>) => {
     if (!currentUser) return;
-    await sharedService.addTask({ ...task, createdBy: currentUser.id, createdAt: new Date().toISOString() }, client);
+    await sharedService.addTask({ ...task, createdBy: currentUser.id, createdAt: new Date().toISOString() });
   };
   
   const updateTask = async (id: TaskId, updates: Partial<Task>) => { await sharedService.updateTask(id, updates); };
@@ -270,7 +272,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!isSuperUser) throw new Error("Unauthorized");
     const collectionsToClear = ['clients', 'payments', 'sessions', 'tasks', 'packages', 'auditLogs', 'importBatches'];
     for (const collName of collectionsToClear) {
-      const snapshot = await sharedService.getDocs(collection(db, collName));
+      const snapshot = await getDocs(collection(db, collName));
       let batch = writeBatch(db);
       snapshot.docs.forEach(doc => batch.delete(doc.ref));
       await batch.commit();
@@ -294,15 +296,27 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return acc;
     }, {} as Record<string, number>);
 
+    const sessionsByMonthMap = privateSessions.reduce((acc, s) => {
+      if (s.status === 'Attended') {
+        const date = new Date(s.date || Date.now());
+        if (date.getFullYear() === currentYear) {
+          const monthName = months[date.getMonth()]!;
+          acc[monthName] = (acc[monthName] || 0) + 1;
+        }
+      }
+      return acc;
+    }, {} as Record<string, number>);
+
     const revenueByMonth = months.map(m => ({
       month: m,
-      revenue: revenueByMonthMap[m] || 0
+      revenue: revenueByMonthMap[m] || 0,
+      sessions: sessionsByMonthMap[m] || 0
     })).slice(0, new Date().getMonth() + 1);
 
     // 2. Leads by Stage
     const leadsByStage = [
       { stage: 'Leads', count: fullClients.filter(c => c.status === 'Lead').length },
-      { stage: 'Trial', count: fullClients.filter(c => c.status === 'Trial').length },
+      { stage: 'Trial', count: fullClients.filter(c => (c as any).stage === 'Trial').length },
       { stage: 'Member', count: fullClients.filter(c => c.status === 'Active' || c.status === 'Nearly Expired').length },
     ];
 
@@ -316,7 +330,7 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ];
 
     // 4. Conversion Rate
-    const leadsCount = fullClients.filter(c => c.status === 'Lead' || c.status === 'Trial').length;
+    const leadsCount = fullClients.filter(c => c.status === 'Lead').length;
     const membersCount = fullClients.filter(c => c.status === 'Active').length;
     const conversionRate = leadsCount > 0 ? Math.round((membersCount / (leadsCount + membersCount)) * 100) : 0;
 

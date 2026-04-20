@@ -218,19 +218,6 @@
     box-shadow: 0 40px 80px -20px oklch(0 0 0 / 50%), 0 0 40px -10px oklch(from var(--primary) l c h / 30%);
   }
 
-  /* Tactical Grid & Accents */
-  .tactical-grid {
-    background-image: 
-      linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
-    background-size: 60px 60px;
-  }
-  .dark .tactical-grid {
-    background-image: 
-      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-  }
-
   /* Glow Systems */
   .glow-rose { box-shadow: 0 0 30px -10px oklch(0.62 0.2 25 / 30%); }
   .glow-orange { box-shadow: 0 0 30px -10px oklch(0.7 0.2 45 / 30%); }
@@ -244,29 +231,15 @@
     to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
   }
 
-  @keyframes pulse-tactical {
-    0%, 100% { opacity: 1; transform: scale(1); filter: brightness(1); }
-    50% { opacity: 0.8; transform: scale(0.98); filter: brightness(1.2); }
-  }
-
-  @keyframes scanline {
-    from { transform: translateY(-100%); }
-    to { transform: translateY(100%); }
-  }
-
   .animate-chart {
     animation: chart-reveal 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-  }
-
-  .animate-pulse-tactical {
-    animation: pulse-tactical 3s ease-in-out infinite;
   }
 
   .animate-shimmer {
     background: linear-gradient(
       90deg, 
       transparent, 
-      rgba(var(--primary), 0.05) 50%, 
+      oklch(from var(--primary) l c h / 5%) 50%, 
       transparent
     );
     background-size: 200% 100%;

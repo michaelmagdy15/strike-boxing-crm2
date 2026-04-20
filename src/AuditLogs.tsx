@@ -5,11 +5,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format, parseISO } from 'date-fns';
-import { AuditLog } from './types';
+import { AuditLog, UserId } from './types';
 import { ChevronLeft, ChevronRight, Search, Activity, History, Shield, Fingerprint, Database, Terminal } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion, AnimatePresence } from 'motion/react';
+import { cn } from '@/lib/utils';
 
 const ActionBadge = ({ action }: { action: AuditLog['action'] }) => {
   const base = "border-none font-black text-[9px] uppercase tracking-widest px-2 py-0.5 shadow-sm";
@@ -50,7 +51,7 @@ export default function AuditLogs() {
       .filter(log => {
         const matchesType = filter === 'ALL' || log.entityType === filter;
         const matchesSearch = log.details.toLowerCase().includes(search.toLowerCase()) ||
-                             (users.find(u => u.id === log.userId)?.name || '').toLowerCase().includes(search.toLowerCase());
+                             (users.find(u => u.id === log.userId as UserId)?.name || '').toLowerCase().includes(search.toLowerCase());
         return matchesType && matchesSearch;
       });
   }, [auditLogs, filter, search, users]);
@@ -89,7 +90,7 @@ export default function AuditLogs() {
           </div>
           
           <Select value={filter} onValueChange={(val) => {
-            setFilter(val);
+            setFilter(val || 'ALL');
             setCurrentPage(1);
           }}>
             <SelectTrigger className="h-14 xl:w-[220px] bg-white dark:bg-zinc-900 border-none rounded-2xl font-black text-[10px] uppercase tracking-widest px-6 italic">
@@ -126,7 +127,7 @@ export default function AuditLogs() {
               <AnimatePresence mode="popLayout" initial={false}>
                 {paginatedLogs.length > 0 ? (
                   paginatedLogs.map((log, index) => {
-                    const user = users.find(u => u.id === log.userId);
+                    const user = users.find(u => u.id === log.userId as UserId);
                     return (
                       <motion.tr 
                         key={log.id}

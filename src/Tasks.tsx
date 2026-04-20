@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Plus, Calendar as CalendarIcon, CheckCircle2, Circle, Clock, AlertCircle, Trash2, Edit, CheckSquare, ListTodo } from 'lucide-react';
 import { format, parseISO, isBefore, isToday } from 'date-fns';
-import { Task, TaskStatus, TaskPriority } from './types';
+import { Task, TaskStatus, TaskPriority, UserId, ClientId } from './types';
 import { Badge } from '@/components/ui/badge';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -27,7 +27,7 @@ export default function Tasks() {
     dueDate: format(new Date(), 'yyyy-MM-dd'),
     status: 'Pending',
     priority: 'Medium',
-    assignedTo: (currentUser?.id || '') as any,
+    assignedTo: (currentUser?.id || '') as UserId,
     clientId: 'none' as any
   });
 
@@ -40,8 +40,8 @@ export default function Tasks() {
       dueDate: newTask.dueDate,
       status: newTask.status as TaskStatus,
       priority: newTask.priority as TaskPriority,
-      assignedTo: newTask.assignedTo,
-      clientId: newTask.clientId === 'none' ? undefined : newTask.clientId,
+      assignedTo: newTask.assignedTo as UserId,
+      clientId: (newTask.clientId === 'none' ? undefined : newTask.clientId) as ClientId | undefined,
     });
     
     setIsAddOpen(false);
@@ -51,8 +51,8 @@ export default function Tasks() {
       dueDate: format(new Date(), 'yyyy-MM-dd'),
       status: 'Pending',
       priority: 'Medium',
-      assignedTo: currentUser?.id || '',
-      clientId: 'none'
+      assignedTo: (currentUser?.id || '') as UserId,
+      clientId: 'none' as any
     });
   };
 
@@ -65,8 +65,8 @@ export default function Tasks() {
       dueDate: editingTask.dueDate,
       status: editingTask.status,
       priority: editingTask.priority,
-      assignedTo: editingTask.assignedTo,
-      clientId: (editingTask.clientId === ('none' as any) ? undefined : editingTask.clientId) as any,
+      assignedTo: editingTask.assignedTo as UserId,
+      clientId: (editingTask.clientId === ('none' as any) ? undefined : editingTask.clientId) as ClientId | undefined,
     });
     
     setIsEditOpen(false);
@@ -112,7 +112,7 @@ export default function Tasks() {
         </div>
         
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v || 'ALL')}>
             <SelectTrigger className="w-full md:w-[160px] bg-white/50 backdrop-blur-sm shadow-sm border-white/20">
               <SelectValue placeholder="All Tasks" />
             </SelectTrigger>
@@ -166,7 +166,7 @@ export default function Tasks() {
                     </div>
                     <div className="space-y-2">
                         <Label className="font-bold">Urgency Level</Label>
-                        <Select value={newTask.priority} onValueChange={(v: TaskPriority) => setNewTask({...newTask, priority: v})}>
+                        <Select value={newTask.priority} onValueChange={(v) => setNewTask({...newTask, priority: (v as TaskPriority) || 'Medium'})}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="Low">Low Priority</SelectItem>
@@ -179,7 +179,7 @@ export default function Tasks() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="font-bold">Ownership</Label>
-                      <Select value={newTask.assignedTo} onValueChange={v => setNewTask({...newTask, assignedTo: v})}>
+                      <Select value={newTask.assignedTo} onValueChange={v => setNewTask({...newTask, assignedTo: (v as UserId) || ('' as UserId)})}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {users.map(u => (
@@ -190,7 +190,7 @@ export default function Tasks() {
                     </div>
                     <div className="space-y-2">
                       <Label className="font-bold">Link Contact</Label>
-                      <Select value={newTask.clientId || 'none'} onValueChange={v => setNewTask({...newTask, clientId: v})}>
+                      <Select value={(newTask.clientId as string) || 'none'} onValueChange={v => setNewTask({...newTask, clientId: (v as any)})}>
                         <SelectTrigger><SelectValue placeholder="Select contact" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Independent Task</SelectItem>
@@ -356,7 +356,7 @@ export default function Tasks() {
                   </div>
                   <div className="space-y-2">
                     <Label className="font-bold">Status</Label>
-                    <Select value={editingTask.status} onValueChange={(v: TaskStatus) => setEditingTask({...editingTask, status: v})}>
+                    <Select value={editingTask.status} onValueChange={(v) => setEditingTask({...editingTask, status: (v as TaskStatus) || 'Pending'})}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Pending">Pending</SelectItem>
@@ -369,7 +369,7 @@ export default function Tasks() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="font-bold">Urgency</Label>
-                    <Select value={editingTask.priority} onValueChange={(v: TaskPriority) => setEditingTask({...editingTask, priority: v})}>
+                    <Select value={editingTask.priority} onValueChange={(v) => setEditingTask({...editingTask, priority: (v as TaskPriority) || 'Medium'})}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Low">Low</SelectItem>
@@ -380,7 +380,7 @@ export default function Tasks() {
                   </div>
                   <div className="space-y-2">
                     <Label className="font-bold">Owner</Label>
-                    <Select value={editingTask.assignedTo} onValueChange={v => setEditingTask({...editingTask, assignedTo: v})}>
+                    <Select value={editingTask.assignedTo} onValueChange={v => setEditingTask({...editingTask, assignedTo: (v as UserId) || ('' as UserId)})}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {users.map(u => (
@@ -392,7 +392,7 @@ export default function Tasks() {
                 </div>
                 <div className="space-y-2">
                     <Label className="font-bold">Linked Contact</Label>
-                    <Select value={editingTask.clientId || 'none'} onValueChange={v => setEditingTask({...editingTask, clientId: v})}>
+                    <Select value={(editingTask.clientId as string) || 'none'} onValueChange={v => setEditingTask({...editingTask, clientId: (v as any)})}>
                     <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="none">Independent</SelectItem>
