@@ -53,11 +53,17 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
         const pDate = parseISO(p.date);
         if (!isWithinInterval(pDate, { start, end })) return false;
         
+        const client = clients.find(c => c.id === p.clientId);
+        
+        // Branch Check
+        if (user.branch && user.branch.toLowerCase() !== 'all') {
+          if (client?.branch !== user.branch) return false;
+        }
+
         if (p.recordedBy === user.id) return true;
         // Fallback for older data: if recordedBy is missing, check if the client is currently assigned to this rep
-        if (!p.recordedBy) {
-          const client = clients.find(c => c.id === p.clientId);
-          if (client && client.assignedTo === user.id) return true;
+        if (!p.recordedBy && client) {
+          if (client.assignedTo === user.id) return true;
         }
         return false;
       });
@@ -167,8 +173,8 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
                       <span className="text-xs font-semibold bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded">
                         {currentMonthData?.privateSessionsSold} sessions
                       </span>
-                      {currentMonthData?.privateTarget > 0 && (
-                        <span className="text-[10px] text-muted-foreground block mt-0.5">of {currentMonthData.privateTarget} target</span>
+                      {(currentMonthData?.privateTarget ?? 0) > 0 && (
+                        <span className="text-[10px] text-muted-foreground block mt-0.5">of {currentMonthData?.privateTarget} target</span>
                       )}
                     </div>
                   </div>
@@ -184,8 +190,8 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
                       <span className="text-xs font-semibold bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded">
                         {currentMonthData?.groupSessionsSold} sessions
                       </span>
-                      {currentMonthData?.groupTarget > 0 && (
-                        <span className="text-[10px] text-muted-foreground block mt-0.5">of {currentMonthData.groupTarget} target</span>
+                      {(currentMonthData?.groupTarget ?? 0) > 0 && (
+                        <span className="text-[10px] text-muted-foreground block mt-0.5">of {currentMonthData?.groupTarget} target</span>
                       )}
                     </div>
                   </div>
@@ -203,7 +209,7 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
                   <XAxis dataKey="month" />
                   <YAxis />
                   <Tooltip 
-                    formatter={(value: number) => [`${value.toLocaleString()}`, 'Amount']}
+                    formatter={(value: any) => [`${Number(value || 0).toLocaleString()}`, 'Amount']}
                     cursor={{fill: 'transparent'}}
                   />
                   <Legend />

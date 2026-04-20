@@ -22,7 +22,7 @@ import ImportHistory from './ImportHistory';
 import RenewalPipeline from './components/RenewalPipeline';
 
 export default function Clients() {
-  const { clients, addClient, updateClient, deleteMultipleClients, deleteClient, currentUser, users, payments, packages, canViewGlobalDashboard, canDeleteRecords, recalculateAllPackages, mergeDuplicates, isManagerOrSama, addInteraction, addComment } = useAppContext();
+  const { clients, addClient, updateClient, deleteMultipleClients, deleteClient, currentUser, users, payments, packages, canViewGlobalDashboard, canDeleteRecords, recalculateAllPackages, mergeDuplicates, isManagerOrSama, addInteraction, addComment, branches } = useAppContext();
   const [activeTab, setActiveTab] = useState('active');
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -82,6 +82,7 @@ export default function Clients() {
       type: interactionType,
       outcome: interactionOutcome,
       notes: interactionNotes,
+      date: new Date().toISOString(),
       nextFollowUp: nextFollowUpDate || undefined
     });
 
@@ -493,9 +494,9 @@ export default function Clients() {
                                     onChange={(e) => updateClient(client.id, { branch: e.target.value as any })}
                                   >
                                     <option value="" disabled>Select Branch</option>
-                                    <option value="COMPLEX">COMPLEX</option>
-                                    <option value="MIVIDA">MIVIDA</option>
-                                    <option value="Strike IMPACT">Strike IMPACT</option>
+                                    {branches.map(b => (
+                                      <option key={b} value={b}>{b}</option>
+                                    ))}
                                   </select>
                                 </div>
                                 <div className="space-y-2">
@@ -522,7 +523,7 @@ export default function Clients() {
                                           membershipExpiry: addDays(startDate, pkg.expiryDays).toISOString()
                                         });
                                       } else {
-                                        updateClient(client.id, { packageType: val });
+                                        updateClient(client.id, { packageType: val || undefined });
                                       }
                                     }}
                                   >
@@ -803,11 +804,11 @@ export default function Clients() {
                           <TabsContent value="comments" className="mt-0 outline-none">
                             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
                               <div className="lg:col-span-7 space-y-6">
-                                <div className="h-[400px] overflow-y-auto space-y-4 pr-4 custom-scrollbar bg-muted/10 p-6 rounded-[24px] border border-white/5">
-                                  {client.comments.length > 0 ? (
-                                    [...client.comments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(comment => (
-                                      <div key={comment.id} className="bg-background/40 p-4 rounded-2xl text-sm border border-white/5 shadow-sm">
-                                        <p className="leading-relaxed text-foreground/90">{comment.text}</p>
+                                  <div className="h-[400px] overflow-y-auto space-y-4 pr-4 custom-scrollbar bg-muted/10 p-6 rounded-[24px] border border-white/5">
+                                    {(client.comments || []).length > 0 ? (
+                                      [...(client.comments || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(comment => (
+                                        <div key={comment.id} className="bg-background/40 p-4 rounded-2xl text-sm border border-white/5 shadow-sm">
+                                          <p className="leading-relaxed text-foreground/90">{comment.text}</p>
                                         <div className="flex justify-between mt-3 text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground/60">
                                           <span className="flex items-center gap-1.5"><User className="h-3 w-3" /> {comment.author}</span>
                                           <span>{format(parseISO(comment.date), 'MMM d, h:mm a')}</span>
@@ -978,20 +979,20 @@ export default function Clients() {
                 </div>
                 <div className="space-y-3">
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Branch</Label>
-                  <Select value={newMemberBranch} onValueChange={setNewMemberBranch}>
+                  <Select value={newMemberBranch} onValueChange={(v) => setNewMemberBranch(v || '')}>
                     <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
                       <SelectValue placeholder="Select branch" />
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl border-none shadow-2xl">
-                      <SelectItem value="COMPLEX" className="rounded-xl py-3 px-4">COMPLEX</SelectItem>
-                      <SelectItem value="MIVIDA" className="rounded-xl py-3 px-4">MIVIDA</SelectItem>
-                      <SelectItem value="Strike IMPACT" className="rounded-xl py-3 px-4">Strike IMPACT</SelectItem>
+                      {branches.map(b => (
+                        <SelectItem key={b} value={b} className="rounded-xl py-3 px-4">{b}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-3">
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Initial Assignment</Label>
-                  <Select value={newMemberAssignedTo} onValueChange={setNewMemberAssignedTo}>
+                  <Select value={newMemberAssignedTo} onValueChange={(v) => setNewMemberAssignedTo(v || '')}>
                     <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
                       <SelectValue placeholder="Select assignment" />
                     </SelectTrigger>
@@ -1047,9 +1048,9 @@ export default function Clients() {
               onChange={(e) => setFilterBranch(e.target.value)}
             >
               <option value="All">All Branches</option>
-              <option value="COMPLEX">COMPLEX</option>
-              <option value="MIVIDA">MIVIDA</option>
-              <option value="Strike IMPACT">Strike IMPACT</option>
+              {branches.map(b => (
+                <option key={b} value={b}>{b}</option>
+              ))}
             </select>
           </div>
 

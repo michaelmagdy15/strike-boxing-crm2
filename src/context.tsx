@@ -169,6 +169,8 @@ interface AppContextType {
   updateCommissionRates: (rates: CommissionRates) => Promise<void>;
   isManagerOrSama: boolean;
   isAtefStrict: boolean;
+  branches: Branch[];
+  updateBranches: (branches: Branch[]) => Promise<void>;
 }
 
 const AppContext = React.createContext<AppContextType | undefined>(undefined);
@@ -215,6 +217,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ptRate: 8,
     groupRate: 5
   });
+  const [branches, setBranches] = useState<Branch[]>(['COMPLEX', 'MIVIDA', 'Strike IMPACT']);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [previewRole, setPreviewRole] = useState<UserRole | null>(null);
@@ -430,6 +433,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCommissionRates(snapshot.data() as CommissionRates);
       }
     }, (error) => handleFirestoreError(error, OperationType.GET, 'settings/commission'));
+
+    const unsubSalesTarget = onSnapshot(doc(db, 'settings', 'sales_target'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data && data.globalSalesTarget !== undefined) {
+          setGlobalSalesTarget(data.globalSalesTarget);
+        }
+      }
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'settings/sales_target'));
+
+    const unsubBranches = onSnapshot(doc(db, 'settings', 'branches'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data && data.branches && Array.isArray(data.branches)) {
+          setBranches(data.branches);
+        }
+      }
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'settings/branches'));
 
     return () => {
       unsubUsers();
@@ -761,8 +782,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSalesTarget = async (target: number) => {
-    setGlobalSalesTarget(target);
-    await addAuditLog('UPDATE', 'TARGET', 'sales-target', `Updated sales target to ${target}`);
+    try {
+      await setDoc(doc(db, 'settings', 'sales_target'), { globalSalesTarget: target }, { merge: true });
+      await addAuditLog('UPDATE', 'TARGET', 'sales-target', `Updated sales target to ${target}`);
+      setGlobalSalesTarget(target);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'settings/sales_target');
+    }
+  };
+
+  const updateBranches = async (newBranches: Branch[]) => {
+    try {
+      await setDoc(doc(db, 'settings', 'branches'), { branches: newBranches }, { merge: true });
+      await addAuditLog('UPDATE', 'SYSTEM', 'branches', `Updated system branches`);
+      setBranches(newBranches);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'settings/branches');
+    }
   };
 
   const updateUserTarget = async (userId: string, month: string, total: number, privateTarget: number, groupTarget: number) => {
@@ -1118,7 +1154,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addPayment, 
     deletePayment,
     updateSalesTarget,
+    updateBranches,
     updateUserTarget,
+    branches,
+    commissionRates,
+    updateCommissionRates,
     addPTPackageRecord,
     updatePTPackageRecord,
     addTask,
@@ -1571,7 +1611,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     isAtefStrict,
     addAuditLog,
     commissionRates,
-    updateCommissionRates
+    updateCommissionRates,
+    branches,
+    updateBranches
   ]);
 
   return (

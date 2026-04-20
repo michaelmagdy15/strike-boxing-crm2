@@ -8,7 +8,7 @@ export type UserRole = 'manager' | 'rep' | 'admin' | 'super_admin' | 'crm_admin'
 export type InteractionType = 'Call' | 'WhatsApp' | 'Email' | 'Visit';
 export type InteractionOutcome = 'Interested' | 'Not Answered' | 'Scheduled Trial' | 'Rejected' | 'Other';
 
-export type Branch = 'COMPLEX' | 'MIVIDA' | 'Strike IMPACT';
+export type Branch = string;
 
 export interface Package {
   id: string;
@@ -41,6 +41,7 @@ export interface User {
   name: string;
   role: UserRole;
   email: string;
+  branch?: Branch;
   salesTarget?: number;
   can_delete_payments?: boolean;
   can_view_global_dashboard?: boolean;
@@ -80,7 +81,7 @@ export interface AuditLog {
   id: string;
   userId: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE';
-  entityType: 'CLIENT' | 'PAYMENT' | 'PACKAGE_RECORD' | 'LEAD' | 'TARGET' | 'ATTENDANCE' | 'COACH';
+  entityType: 'CLIENT' | 'PAYMENT' | 'PACKAGE_RECORD' | 'LEAD' | 'TARGET' | 'ATTENDANCE' | 'COACH' | 'SYSTEM' | 'BRANCH';
   entityId: string;
   details: string;
   timestamp: string;

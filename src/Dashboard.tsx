@@ -52,12 +52,23 @@ function PaginatedList({ items, renderItem, itemsPerPage = 5 }: { items: any[], 
 }
 
 export default function Dashboard() {
-  const { clients, salesTarget, updateSalesTarget, currentUser, payments, userTargets, users, canViewGlobalDashboard, canAccessSettings } = useAppContext();
+  const { clients: allClients, salesTarget, updateSalesTarget, currentUser, payments: allPayments, userTargets, users, canViewGlobalDashboard, canAccessSettings, branches } = useAppContext();
   const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false);
   const [newTarget, setNewTarget] = useState(salesTarget.targetAmount.toString());
   const [selectedRepId, setSelectedRepId] = useState<string>('all');
+  const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [selectedMonthOffset, setSelectedMonthOffset] = useState(0);
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
+
+  const clients = React.useMemo(() => {
+    return selectedBranch === 'all' ? allClients : allClients.filter(c => c.branch === selectedBranch);
+  }, [allClients, selectedBranch]);
+
+  const payments = React.useMemo(() => {
+    if (selectedBranch === 'all') return allPayments;
+    const branchClientIds = new Set(clients.map(c => c.id));
+    return allPayments.filter(p => branchClientIds.has(p.clientId));
+  }, [allPayments, clients, selectedBranch]);
 
   const now = new Date();
   
@@ -93,8 +104,12 @@ export default function Dashboard() {
     if (!c.comments || c.comments.length === 0) return false;
     
     const latestComment = c.comments.reduce((latest, current) => {
+      if (!latest || !latest.date) return current;
+      if (!current || !current.date) return latest;
       return isAfter(parseISO(current.date), parseISO(latest.date)) ? current : latest;
     }, c.comments[0]);
+
+    if (!latestComment || !latestComment.date) return false;
 
     const daysSinceComment = differenceInDays(now, parseISO(latestComment.date));
     return daysSinceComment >= 7;
@@ -113,7 +128,7 @@ export default function Dashboard() {
   // Filtered statistics for rep performance view
   const selectedMonth = subMonths(now, selectedMonthOffset);
   const currentMonthStr = format(selectedMonth, 'yyyy-MM');
-  const reps = users.filter(u => u.role === 'rep' || u.role === 'sales_rep');
+  const reps = users.filter(u => u.role === 'rep');
   
   const filteredSalesData = React.useMemo(() => {
     let targetAmount = salesTarget.targetAmount;
@@ -145,12 +160,10 @@ export default function Dashboard() {
 
     const currentAmount = relevantPayments.reduce((acc, p) => acc + p.amount, 0);
     const privatePayments = relevantPayments.filter(p => 
-      p.session_type === 'Private Training' || 
       /\bpt\b/i.test(p.packageType) || 
       p.packageType.toLowerCase().includes('private')
     );
     const groupPayments = relevantPayments.filter(p => 
-      p.session_type === 'Group Training' || 
       p.packageType.toLowerCase().includes('group') || 
       p.packageType.toLowerCase().includes('gt')
     );
@@ -413,7 +426,7 @@ export default function Dashboard() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          <Select value={selectedRepId} onValueChange={setSelectedRepId}>
+          <Select value={selectedRepId} onValueChange={(v) => setSelectedRepId(v || 'all')}>
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Select representative">
                 {selectedRepId === 'all'
@@ -425,6 +438,17 @@ export default function Dashboard() {
               <SelectItem value="all">All Representatives</SelectItem>
               {reps.map(rep => (
                 <SelectItem key={rep.id} value={rep.id}>{rep.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={selectedBranch} onValueChange={(v) => setSelectedBranch(v || 'all')}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Select branch" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Branches</SelectItem>
+              {branches.map(b => (
+                <SelectItem key={b} value={b}>{b}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -796,7 +820,7 @@ export default function Dashboard() {
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(v: number) => [`${v.toLocaleString()} LE`, 'Revenue']} />
+                    <Tooltip formatter={(v: any) => [`${v.toLocaleString()} LE`, 'Revenue']} />
                     <Area type="monotone" dataKey="Revenue" stroke="#6366f1" fill="url(#revGrad)" strokeWidth={2} dot={{ r: 3 }} />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -816,7 +840,7 @@ export default function Dashboard() {
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip formatter={(v: number) => `${v.toLocaleString()} LE`} />
+                      <Tooltip formatter={(v: any) => `${v.toLocaleString()} LE`} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Bar dataKey="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="Target" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
@@ -839,7 +863,7 @@ export default function Dashboard() {
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(v: number) => `${v.toLocaleString()} LE`} />
+                    <Tooltip formatter={(v: any) => `${v.toLocaleString()} LE`} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     <Bar dataKey="Cash" stackId="a" fill="#22c55e" />
                     <Bar dataKey="Visa" stackId="a" fill="#3b82f6" />
@@ -993,7 +1017,7 @@ export default function Dashboard() {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v: number) => `${v.toLocaleString()} LE`} />
+                  <Tooltip formatter={(v: any) => `${v.toLocaleString()} LE`} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Bar dataKey="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Target" fill="#e2e8f0" radius={[4, 4, 0, 0]} />

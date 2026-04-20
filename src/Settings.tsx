@@ -11,17 +11,18 @@ import UsersManagement from './Users';
 import Packages from './Packages';
 import Coaches from './Coaches';
 import CommissionReport from './components/CommissionReport';
-import { BadgePercent, QrCode, Printer } from 'lucide-react';
+import { BadgePercent, QrCode, Printer, MapPin, Plus } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Branch } from './types';
 
 export default function Settings() {
-  const { branding, updateBranding, currentUser, wipeSystem, canAccessSettings, backfillMemberIds } = useAppContext();
+  const { branding, updateBranding, currentUser, wipeSystem, canAccessSettings, backfillMemberIds, branches, updateBranches } = useAppContext();
   const [companyName, setCompanyName] = useState(branding.companyName);
   const [logoUrl, setLogoUrl] = useState(branding.logoUrl);
   const [kioskPin, setKioskPin] = useState(branding.kioskPin || '');
   const [dailyPin, setDailyPin] = useState(branding.dailyCheckinPin || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [newBranchName, setNewBranchName] = useState('');
   
   const [isWipeDialogOpen, setIsWipeDialogOpen] = useState(false);
   const [wipeStep, setWipeStep] = useState(1);
@@ -46,8 +47,27 @@ export default function Settings() {
     }
   };
 
-  const branches: Branch[] = ['COMPLEX', 'MIVIDA', 'Strike IMPACT'];
   const appUrl = window.location.origin;
+
+  const handleAddBranch = async () => {
+    if (!newBranchName.trim()) return;
+    if (branches.includes(newBranchName.trim())) {
+      alert("Branch already exists");
+      return;
+    }
+    await updateBranches([...branches, newBranchName.trim()]);
+    setNewBranchName('');
+  };
+
+  const handleRemoveBranch = async (branchToRemove: string) => {
+    if (branches.length <= 1) {
+      alert("You must have at least one branch.");
+      return;
+    }
+    const confirm = window.confirm(`Are you sure you want to remove ${branchToRemove}?`);
+    if (!confirm) return;
+    await updateBranches(branches.filter(b => b !== branchToRemove));
+  };
 
   const handlePrintQR = (branch: string) => {
     const printWindow = window.open('', '_blank');
@@ -117,6 +137,10 @@ export default function Settings() {
           <TabsTrigger value="users" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Users
+          </TabsTrigger>
+          <TabsTrigger value="branches" className="flex items-center gap-2">
+            <MapPin className="h-4 w-4" />
+            Branches
           </TabsTrigger>
           <TabsTrigger value="packages" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
@@ -264,6 +288,49 @@ export default function Settings() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="branches" className="animate-in fade-in-50 duration-500">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-primary" />
+                Physical Branches
+              </CardTitle>
+              <CardDescription>
+                Manage the locations/branches of your business. These will appear in dropdowns across the CRM.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex gap-2 max-w-sm">
+                <Input 
+                  placeholder="New Branch Name" 
+                  value={newBranchName}
+                  onChange={(e) => setNewBranchName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddBranch()}
+                />
+                <Button onClick={handleAddBranch}>
+                  <Plus className="h-4 w-4 mr-2" /> Add
+                </Button>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {branches.map(branch => (
+                  <div key={branch} className="flex items-center justify-between p-4 border rounded-lg bg-card">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-primary/10 rounded-md text-primary">
+                        <Building2 className="h-4 w-4" />
+                      </div>
+                      <span className="font-semibold">{branch}</span>
+                    </div>
+                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleRemoveBranch(branch)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="users" className="animate-in fade-in-50 duration-500">

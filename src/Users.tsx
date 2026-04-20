@@ -14,7 +14,7 @@ import { Shield, User as UserIcon, Plus, Trash2, Edit, BarChart } from 'lucide-r
 import { UserPerformanceDialog } from './components/UserPerformanceDialog';
 
 export default function Users() {
-  const { users, currentUser, updateUser, inviteUser, deleteUser } = useAppContext();
+  const { users, currentUser, updateUser, inviteUser, deleteUser, branches } = useAppContext();
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('rep');
@@ -22,6 +22,7 @@ export default function Users() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editBranch, setEditBranch] = useState('');
   const [editTarget, setEditTarget] = useState('');
   const [editCanDeletePayments, setEditCanDeletePayments] = useState(false);
   const [editCanViewGlobalDashboard, setEditCanViewGlobalDashboard] = useState(false);
@@ -48,6 +49,7 @@ export default function Users() {
     setEditingUser(user);
     setEditName(user.name);
     setEditEmail(user.email);
+    setEditBranch(user.branch || '');
     setEditTarget(user.salesTarget?.toString() || '');
     setEditCanDeletePayments(user.can_delete_payments || false);
     setEditCanViewGlobalDashboard(user.can_view_global_dashboard || false);
@@ -59,6 +61,7 @@ export default function Users() {
       updateUser(editingUser.id, { 
         name: editName, 
         email: editEmail,
+        branch: editBranch || undefined,
         salesTarget: editTarget ? parseFloat(editTarget) : undefined,
         can_delete_payments: editCanDeletePayments,
         can_view_global_dashboard: editCanViewGlobalDashboard,
@@ -155,6 +158,7 @@ export default function Users() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Branch</TableHead>
                 <TableHead>Current Role</TableHead>
                 <TableHead>Change Role</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -171,6 +175,13 @@ export default function Users() {
                     </div>
                   </TableCell>
                   <TableCell>{user.email}</TableCell>
+                  <TableCell>
+                    {user.branch ? (
+                      <Badge variant="outline" className="font-normal">{user.branch}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">All</span>
+                    )}
+                  </TableCell>
                   <TableCell>{getRoleBadge(user.role)}</TableCell>
                   <TableCell>
                     {canChangeRoles ? (
@@ -257,6 +268,20 @@ export default function Users() {
                 onChange={(e) => setEditEmail(e.target.value)} 
                 placeholder="User's email"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Branch</Label>
+              <Select value={editBranch} onValueChange={(v) => setEditBranch(v || '')}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Branches" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Branches</SelectItem>
+                  {branches.map(b => (
+                    <SelectItem key={b} value={b}>{b}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Personal Sales Target (Optional)</Label>
