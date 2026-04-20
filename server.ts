@@ -1,13 +1,12 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 
 // Use process.cwd() instead of __dirname to avoid ESM/CJS path resolution issues on Windows
 const __dirname = process.cwd();
 
 async function startServer() {
   const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
+  const PORT = Number(process.env.PORT) || 8080;
 
   // API routes go here
   app.get("/api/health", (req, res) => {
@@ -15,6 +14,7 @@ async function startServer() {
   });
 
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

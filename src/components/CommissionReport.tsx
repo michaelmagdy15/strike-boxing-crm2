@@ -17,11 +17,12 @@ const CommissionReport: React.FC = () => {
   const { payments, commissionRates, updateCommissionRates, currentUser } = useAppContext();
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [editingRates, setEditingRates] = useState(false);
-  const [localRates, setLocalRates] = useState(commissionRates);
+  const safeCommissionRates = commissionRates || { ptRate: 0, groupRate: 0 };
+  const [localRates, setLocalRates] = useState(safeCommissionRates);
   const [saving, setSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  const isManager = currentUser?.role === 'admin' || currentUser?.role === 'sales_manager';
+  const isManager = currentUser?.role === 'admin' || currentUser?.role === 'manager';
 
   const handleSaveRates = async () => {
     setSaving(true);
@@ -38,7 +39,7 @@ const CommissionReport: React.FC = () => {
     const end = endOfMonth(monthDate);
 
     const filteredPayments = payments.filter(p => {
-      const pDate = p.date instanceof Date ? p.date : (p.date as any)?.toDate?.() || parseISO(p.date as any);
+      const pDate = typeof p.date === 'string' ? parseISO(p.date) : (p.date as any)?.toDate?.() || new Date(p.date);
       return isWithinInterval(pDate, { start, end });
     });
 
@@ -74,8 +75,8 @@ const CommissionReport: React.FC = () => {
 
     return Object.values(reps).map(rep => ({
       ...rep,
-      commission: (rep.privateRevenue * (commissionRates.ptRate / 100)) + 
-                  (rep.groupRevenue * (commissionRates.groupRate / 100))
+      commission: (rep.privateRevenue * ((commissionRates?.ptRate || 0) / 100)) + 
+                  (rep.groupRevenue * ((commissionRates?.groupRate || 0) / 100))
     })).sort((a, b) => b.totalRevenue - a.totalRevenue);
   }, [payments, selectedMonth, commissionRates]);
 
@@ -199,7 +200,7 @@ const CommissionReport: React.FC = () => {
                   <button 
                     onClick={() => {
                       setEditingRates(false);
-                      setLocalRates(commissionRates);
+                      setLocalRates(safeCommissionRates);
                     }}
                     className="p-1.5 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 transition-colors"
                   >
@@ -215,7 +216,7 @@ const CommissionReport: React.FC = () => {
                     </div>
                   )}
                   <div className="text-sm text-slate-500">
-                    Rates: <span className="font-semibold text-slate-900">PT {commissionRates.ptRate}%</span>, Group <span className="font-semibold text-slate-900">{commissionRates.groupRate}%</span>
+                    Rates: <span className="font-semibold text-slate-900">PT {safeCommissionRates.ptRate}%</span>, Group <span className="font-semibold text-slate-900">{safeCommissionRates.groupRate}%</span>
                   </div>
                   <button 
                     onClick={() => setEditingRates(true)}

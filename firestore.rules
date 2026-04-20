@@ -14,20 +14,24 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'manager', 'super_admin', 'crm_admin'] ||
-        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true)
+        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'manager', 'super_admin', 'crm_admin'])
       );
     }
 
     function isSuperAdmin() {
       return isAuthenticated() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'crm_admin'] ||
-        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true)
+        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'crm_admin'])
       );
     }
 
     function isRep() {
-      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'rep';
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'rep';
     }
 
     function hasRequiredFields(fields) {
@@ -153,6 +157,19 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
+    }
+
+    match /coaches/{coachId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    match /targets/{targetId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    match /interactions/{interactionId} {
+      allow read, write: if isAuthenticated();
     }
   }
 }

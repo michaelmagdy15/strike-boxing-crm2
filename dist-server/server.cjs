@@ -23853,16 +23853,16 @@ var require_express2 = __commonJS({
 // server.ts
 var import_express = __toESM(require_express2(), 1);
 var import_path = __toESM(require("path"), 1);
-var import_vite = require("vite");
 var __dirname = process.cwd();
 async function startServer() {
   const app = (0, import_express.default)();
-  const PORT = Number(process.env.PORT) || 3e3;
+  const PORT = Number(process.env.PORT) || 8080;
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
   });
   if (process.env.NODE_ENV !== "production") {
-    const vite = await (0, import_vite.createServer)({
+    const { createServer: createViteServer } = await import("vite");
+    const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa"
     });
