@@ -8,7 +8,7 @@ import { Plus, Download, FileSpreadsheet, Link as LinkIcon, Loader2, Upload, Che
 import Papa from 'papaparse';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Client, Package } from './types';
+import { Client, Package, Payment } from './types';
 import { Input } from '@/components/ui/input';
 import { addDays, isBefore, parseISO } from 'date-fns';
 
@@ -17,7 +17,7 @@ interface ImportDataProps {
 }
 
 export default function ImportData({ type }: ImportDataProps) {
-  const { addClient, bulkAddClients, currentUser, packages, addImportBatch } = useAppContext();
+  const { addClient, bulkAddClients, bulkAddPayments, currentUser, packages, addImportBatch } = useAppContext();
   const [isOpen, setIsOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -234,6 +234,7 @@ export default function ImportData({ type }: ImportDataProps) {
     });
 
     const clientsToImport: Client[] = [];
+    const paymentsToImport: Payment[] = [];
     const errors: {row: number, reason: string}[] = [];
     let failedCount = 0;
 
@@ -312,13 +313,23 @@ export default function ImportData({ type }: ImportDataProps) {
         else if (branchRaw.includes('STRIKE IMPACT') || branchRaw.includes('IMPACT')) branch = 'Strike IMPACT';
 
         let paid = false;
+        let paidAmount = 0;
         if (paidRaw) {
-          const p = paidRaw.toString().toLowerCase();
+          const p = paidRaw.toString().toLowerCase().trim();
           paid = p === 'yes' || p === 'paid' || p === 'true' || p === '1' || p === 'تم الدفع';
+          
+          // Try to parse as number
+          const numericValue = parseFloat(p.replace(/[^\d.-]/g, ''));
+          if (!isNaN(numericValue) && numericValue > 0) {
+            paidAmount = numericValue;
+            paid = true;
+          }
         }
 
+        const clientId = Math.random().toString(36).substr(2, 9);
+
         clientsToImport.push({
-          id: Math.random().toString(36).substr(2, 9),
+          id: clientId,
           name, phone, status: status as any, source, branch,
           packageType: packageType || 'Unknown',
           sessionsRemaining, membershipExpiry, startDate,
@@ -328,6 +339,26 @@ export default function ImportData({ type }: ImportDataProps) {
           importBatchId: batchId,
           paid: paid
         });
+
+        if (paidAmount > 0) {
+          paymentsToImport.push({
+            id: '', // Will be set by Firestore docRef in bulkAddPayments
+            clientId: clientId,
+            client_name: name,
+            amount: paidAmount,
+            amount_paid: paidAmount,
+            date: startDate || now.toISOString(), // Use start date if available
+            method: 'Other',
+            packageType: packageType || 'Imported',
+            session_type: (packageType || '').toLowerCase().includes('pt') || (packageType || '').toLowerCase().includes('private') 
+              ? 'Private Training' 
+              : 'Group Training',
+            recordedBy: currentUser?.id || 'system-import',
+            sales_rep_id: currentUser?.id || 'system-import',
+            created_at: now.toISOString(),
+            deleted_at: null
+          } as Payment);
+        }
       } catch (err) {
         failedCount++;
         errors.push({ row: i + 1, reason: err instanceof Error ? err.message : 'Unknown error' });
@@ -337,6 +368,11 @@ export default function ImportData({ type }: ImportDataProps) {
     setProgress(50); // Parsing done, now uploading
 
     const result = await bulkAddClients(clientsToImport);
+    
+    if (result.success > 0 && paymentsToImport.length > 0) {
+      // Only import payments for successfully imported clients (approximate check since we use pre-gen IDs)
+      await bulkAddPayments(paymentsToImport);
+    }
     
     setProgress(100);
     setImportStats({ 

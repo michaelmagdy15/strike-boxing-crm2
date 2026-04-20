@@ -123,6 +123,7 @@ interface AppContextType {
   recordAttendance: (clientId: string, branch: Branch) => Promise<void>;
   deletePayment: (id: string) => Promise<void>;
   wipeSystem: () => Promise<void>;
+  bulkAddPayments: (payments: Payment[]) => Promise<void>;
   canDeletePayments: boolean;
   canAccessSettings: boolean;
   canViewGlobalDashboard: boolean;
@@ -506,7 +507,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           clientData.memberId = (nextMemberId++).toString();
         }
 
-        const docRef = doc(collection(db, 'clients'));
+        const docRef = id ? doc(db, 'clients', id) : doc(collection(db, 'clients'));
         batch.set(docRef, { ...cleanData(clientData), id: docRef.id });
         operationCount++;
 
@@ -843,11 +844,74 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       for (const client of clientsToRollback) {
         await deleteDoc(doc(db, 'clients', client.id));
       }
+      
+      // Also delete any payments linked to these clients
+      const paymentIds = payments
+        .filter(p => clientsToRollback.some(c => c.id === p.clientId))
+        .map(p => p.id);
+      
+      if (paymentIds.length > 0) {
+        let batch = writeBatch(db);
+        let count = 0;
+        for (const pid of paymentIds) {
+          batch.delete(doc(db, 'payments', pid));
+          count++;
+          if (count === 450) {
+            await batch.commit();
+            batch = writeBatch(db);
+            count = 0;
+          }
+        }
+        if (count > 0) await batch.commit();
+      }
+
       // Mark batch as rolled back
       await updateDoc(doc(db, 'importBatches', batchId), { status: 'Rolled Back' });
-      await addAuditLog('DELETE', 'CLIENT', batchId, `Rolled back import batch, deleted ${clientsToRollback.length} records`);
+      await addAuditLog('DELETE', 'CLIENT', batchId, `Rolled back import batch, deleted ${clientsToRollback.length} records and ${paymentIds.length} payments`);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `importBatches/${batchId}`);
+    }
+  };
+
+  const bulkAddPayments = async (newPayments: Payment[]) => {
+    if (!currentUser) return;
+    try {
+      let batch = writeBatch(db);
+      let operationCount = 0;
+
+      for (const payment of newPayments) {
+        const pkgType = payment.packageType || '';
+        const sessionType = pkgType.toLowerCase().includes('pt') || pkgType.toLowerCase().includes('private') 
+          ? 'Private Training' 
+          : 'Group Training';
+
+        const paymentData = {
+          ...payment,
+          amount_paid: payment.amount,
+          sales_rep_id: payment.recordedBy || payment.sales_rep_id || currentUser.id,
+          created_at: payment.created_at || new Date().toISOString(),
+          session_type: payment.session_type || sessionType,
+          deleted_at: null
+        };
+
+        const docRef = doc(collection(db, 'payments'));
+        batch.set(docRef, { ...cleanData(paymentData), id: docRef.id });
+        operationCount++;
+
+        if (operationCount === 500) {
+          await batch.commit();
+          batch = writeBatch(db);
+          operationCount = 0;
+        }
+      }
+
+      if (operationCount > 0) {
+        await batch.commit();
+      }
+      
+      await addAuditLog('CREATE', 'PAYMENT', 'bulk', `Bulk imported ${newPayments.length} payments`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'payments/bulk');
     }
   };
 
@@ -1004,6 +1068,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     },
     branding,
     updateBranding,
+    bulkAddPayments,
     isAuthReady,
     previewRole,
     setPreviewRole,
@@ -1096,7 +1161,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     attendances,
     canDeletePayments,
     canAccessSettings,
-    canViewGlobalDashboard
+    canViewGlobalDashboard,
+    bulkAddPayments
   ]);
 
   return (

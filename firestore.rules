@@ -132,6 +132,7 @@ service cloud.firestore {
 
       match /comments/{commentId} {
         allow read, create: if isAuthenticated();
+        allow delete: if isAdmin();
       }
     }
 
