@@ -16,14 +16,32 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   )
 }
 
-function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
+function SelectValue({
+  className,
+  children,
+  placeholder,
+  ...props
+}: SelectPrimitive.Value.Props) {
+  // When children are provided, render them directly (bypasses Base UI's internal
+  // label-tracking which is unreliable when value !== display text, e.g. Firebase UIDs)
+  if (children != null && children !== '') {
+    return (
+      <span
+        data-slot="select-value"
+        className={cn("flex flex-1 text-left", className)}
+      >
+        {children}
+      </span>
+    );
+  }
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
       className={cn("flex flex-1 text-left", className)}
+      placeholder={placeholder}
       {...props}
     />
-  )
+  );
 }
 
 function SelectTrigger({
@@ -109,8 +127,10 @@ function SelectLabel({
 function SelectItem({
   className,
   children,
+  label,
   ...props
 }: SelectPrimitive.Item.Props) {
+  const derivedLabel = label ?? (typeof children === 'string' ? children : undefined);
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
@@ -118,6 +138,7 @@ function SelectItem({
         "relative flex w-full cursor-default items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
         className
       )}
+      label={derivedLabel}
       {...props}
     >
       <SelectPrimitive.ItemText className="flex flex-1 shrink-0 gap-2 whitespace-nowrap">

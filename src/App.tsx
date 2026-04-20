@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 function AppContent() {
-  const { currentUser, logout, isAuthReady, previewRole, setPreviewRole, searchQuery, setSearchQuery, branding, canAccessSettings } = useAppContext();
+  const { currentUser, logout, isAuthReady, previewRole, setPreviewRole, searchQuery, setSearchQuery, branding, canAccessSettings, canViewGlobalDashboard, canDeletePayments } = useAppContext();
 
   if (!isAuthReady) {
     return (
@@ -149,10 +149,12 @@ function AppContent() {
                 </TabsTrigger>
               )}
               
-              <TabsTrigger value="payments" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                Payments
-              </TabsTrigger>
+              {(canViewGlobalDashboard || canDeletePayments) && (
+                <TabsTrigger value="payments" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
+                  <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                  Payments
+                </TabsTrigger>
+              )}
               <TabsTrigger value="attendance" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
                 <Scan className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
                 Attendance
@@ -193,9 +195,11 @@ function AppContent() {
             </TabsContent>
           )}
 
-          <TabsContent value="payments" className="m-0 animate-in fade-in-50 duration-500">
-            <Payments />
-          </TabsContent>
+          {(canViewGlobalDashboard || canDeletePayments) && (
+            <TabsContent value="payments" className="m-0 animate-in fade-in-50 duration-500">
+              <Payments />
+            </TabsContent>
+          )}
 
           <TabsContent value="attendance" className="m-0 animate-in fade-in-50 duration-500">
             <Attendance />

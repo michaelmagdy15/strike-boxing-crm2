@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from './context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -28,12 +28,24 @@ export default function Payments() {
   const [customPackage, setCustomPackage] = useState('');
   const [coachName, setCoachName] = useState('');
   const [notes, setNotes] = useState('');
+  const [recordedById, setRecordedById] = useState('');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMethod, setFilterMethod] = useState('All');
   const [filterBranch, setFilterBranch] = useState('All');
-  
+
   const canDeletePayment = canDeletePayments;
+
+  const adminUsers = users.filter(u =>
+    ['admin', 'super_admin', 'crm_admin', 'sales_manager', 'manager'].includes(u.role)
+  );
+
+  useEffect(() => {
+    if (recordedById === '' && users.length > 0) {
+      const sama = users.find(u => u.name?.toLowerCase().includes('sama'));
+      setRecordedById(sama?.id || currentUser?.id || '');
+    }
+  }, [users]);
 
   const handleDeletePayment = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this payment record? This action cannot be undone.')) {
@@ -76,7 +88,7 @@ export default function Payments() {
         packageType: finalPackageType,
         coachName: isPT ? coachName : undefined,
         notes,
-        recordedBy: currentUser?.id
+        recordedBy: recordedById || currentUser?.id
       });
 
       // Update client with new package info
@@ -106,6 +118,8 @@ export default function Payments() {
       setCustomPackage('');
       setCoachName('');
       setNotes('');
+      const sama = users.find(u => u.name?.toLowerCase().includes('sama'));
+      setRecordedById(sama?.id || currentUser?.id || '');
     }
   };
 
@@ -210,9 +224,17 @@ export default function Payments() {
     }
   };
 
+  const isRep = currentUser?.role === 'rep' || currentUser?.role === 'sales_rep';
+
   const filteredPayments = payments.filter(payment => {
     const client = clients.find(c => c.id === payment.clientId);
-    
+
+    // Sales reps only see their own payments
+    if (isRep && currentUser) {
+      const ownPayment = payment.sales_rep_id === currentUser.id || payment.recordedBy === currentUser.id;
+      if (!ownPayment) return false;
+    }
+
     // Search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
@@ -221,16 +243,16 @@ export default function Payments() {
       const matchesPhone = client?.phone.includes(term);
       const matchesAmount = payment.amount.toString().includes(term);
       const matchesRef = payment.instapayRef?.toLowerCase().includes(term);
-      
+
       if (!matchesName && !matchesId && !matchesPhone && !matchesAmount && !matchesRef) return false;
     }
-    
+
     // Method filter
     if (filterMethod !== 'All' && payment.method !== filterMethod) return false;
-    
+
     // Branch filter (via client)
     if (filterBranch !== 'All' && client?.branch !== filterBranch) return false;
-    
+
     return true;
   });
 
@@ -338,11 +360,26 @@ export default function Payments() {
               )}
               <div className="space-y-2">
                 <Label>Notes (Optional)</Label>
-                <Input 
-                  placeholder="Any additional notes" 
-                  value={notes} 
-                  onChange={(e) => setNotes(e.target.value)} 
+                <Input
+                  placeholder="Any additional notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>Recorded By</Label>
+                <Select value={recordedById} onValueChange={setRecordedById}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select staff">
+                      {adminUsers.find(u => u.id === recordedById)?.name || undefined}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {adminUsers.map(u => (
+                      <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <Button onClick={handleAddPayment} className="w-full">Save Payment</Button>
             </div>

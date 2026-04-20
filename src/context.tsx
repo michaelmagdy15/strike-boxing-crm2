@@ -634,7 +634,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...payment,
         client_name: clientName,
         amount_paid: payment.amount,
-        sales_rep_id: currentUser.id,
+        sales_rep_id: payment.recordedBy || currentUser.id,
         created_at: new Date().toISOString(),
         session_type: payment.packageType.toLowerCase().includes('pt') || payment.packageType.toLowerCase().includes('private') 
           ? 'Private Training' 

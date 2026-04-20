@@ -55,7 +55,8 @@ export default function Dashboard() {
   const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false);
   const [newTarget, setNewTarget] = useState(salesTarget.targetAmount.toString());
   const [selectedRepId, setSelectedRepId] = useState<string>('all');
-  
+  const [selectedMonthOffset, setSelectedMonthOffset] = useState(0);
+
   const now = new Date();
   
   // Stats
@@ -108,7 +109,8 @@ export default function Dashboard() {
   };
 
   // Filtered statistics for rep performance view
-  const currentMonthStr = format(now, 'yyyy-MM');
+  const selectedMonth = subMonths(now, selectedMonthOffset);
+  const currentMonthStr = format(selectedMonth, 'yyyy-MM');
   const reps = users.filter(u => u.role === 'rep');
   
   const filteredSalesData = React.useMemo(() => {
@@ -168,15 +170,15 @@ export default function Dashboard() {
   const privatePercentage = totalSessionsSold > 0 ? Math.round((filteredSalesData.privateSessionsSold / totalSessionsSold) * 100) : 0;
   const groupPercentage = totalSessionsSold > 0 ? Math.round((filteredSalesData.groupSessionsSold / totalSessionsSold) * 100) : 0;
 
-  // Chart Data
+  // Chart Data (personal - for rep view)
   const chartData = React.useMemo(() => {
     const months = Array.from({ length: 6 }).map((_, i) => subMonths(now, 5 - i));
-    
+
     return months.map(date => {
       const monthStr = format(date, 'yyyy-MM');
       const start = startOfMonth(date);
       const end = endOfMonth(date);
-      
+
       let targetAmount = 0;
       if (currentUser?.role === 'rep') {
         const targetDoc = userTargets.find(t => t.userId === currentUser.id && t.month === monthStr);
@@ -186,8 +188,7 @@ export default function Dashboard() {
       const monthPayments = payments.filter(p => {
         const pDate = parseISO(p.date);
         if (!isWithinInterval(pDate, { start, end })) return false;
-        
-        // For reps, only count their own sales
+
         if (currentUser?.role === 'rep') {
           if (p.recordedBy === currentUser.id) return true;
           if (!p.recordedBy) {
@@ -196,33 +197,120 @@ export default function Dashboard() {
           }
           return false;
         }
-        
-        // Admins/Managers see everything
+
         return true;
       });
 
       const achievedAmount = monthPayments.reduce((sum, p) => sum + p.amount, 0);
 
       return {
-        month: format(date, 'MMM yyyy'),
-        targetAmount,
-        achievedAmount,
+        month: format(date, 'MMM yy'),
+        Target: targetAmount,
+        Revenue: achievedAmount,
       };
     });
   }, [userTargets, payments, clients, currentUser]);
 
+  // 6-month team revenue trend (global)
+  const teamRevenueData = React.useMemo(() => {
+    const months = Array.from({ length: 6 }).map((_, i) => subMonths(now, 5 - i));
+    return months.map(date => {
+      const start = startOfMonth(date);
+      const end = endOfMonth(date);
+      const mp = payments.filter(p => isWithinInterval(parseISO(p.date), { start, end }));
+      return {
+        month: format(date, 'MMM yy'),
+        Revenue: mp.reduce((s, p) => s + p.amount, 0),
+      };
+    });
+  }, [payments]);
+
+  // Per-rep revenue vs target for selected month
+  const repComparisonData = React.useMemo(() => {
+    if (!canViewGlobalDashboard) return [];
+    return reps.map(rep => {
+      const repTarget = userTargets.find(t => t.userId === rep.id && t.month === currentMonthStr);
+      const repPayments = payments.filter(p =>
+        format(parseISO(p.date), 'yyyy-MM') === currentMonthStr &&
+        (p.sales_rep_id === rep.id || p.recordedBy === rep.id)
+      );
+      return {
+        name: (rep.name || rep.email || 'Unknown').split(' ')[0],
+        Revenue: repPayments.reduce((s, p) => s + p.amount, 0),
+        Target: repTarget?.targetAmount || 0,
+      };
+    });
+  }, [reps, payments, userTargets, currentMonthStr, canViewGlobalDashboard]);
+
+  // 6-month payment method breakdown
+  const monthlyMethodData = React.useMemo(() => {
+    const months = Array.from({ length: 6 }).map((_, i) => subMonths(now, 5 - i));
+    return months.map(date => {
+      const start = startOfMonth(date);
+      const end = endOfMonth(date);
+      const mp = payments.filter(p => isWithinInterval(parseISO(p.date), { start, end }));
+      return {
+        month: format(date, 'MMM yy'),
+        Cash: mp.filter(p => p.method === 'Cash').reduce((s, p) => s + p.amount, 0),
+        Visa: mp.filter(p => p.method === 'Credit Card').reduce((s, p) => s + p.amount, 0),
+        Instapay: mp.filter(p => p.method === 'Instapay').reduce((s, p) => s + p.amount, 0),
+      };
+    });
+  }, [payments]);
+
+  // 6-month session type breakdown
+  const monthlySessionData = React.useMemo(() => {
+    const months = Array.from({ length: 6 }).map((_, i) => subMonths(now, 5 - i));
+    return months.map(date => {
+      const start = startOfMonth(date);
+      const end = endOfMonth(date);
+      const mp = payments.filter(p => isWithinInterval(parseISO(p.date), { start, end }));
+      return {
+        month: format(date, 'MMM yy'),
+        Private: mp.filter(p => /\bpt\b/i.test(p.packageType) || p.packageType.toLowerCase().includes('private')).length,
+        Group: mp.filter(p => p.packageType.toLowerCase().includes('group') || p.packageType.toLowerCase().includes('gt')).length,
+      };
+    });
+  }, [payments]);
+
   return (
     <div className="space-y-6">
       {canViewGlobalDashboard && (
-        <div className="flex items-center space-x-4 bg-muted/30 p-4 rounded-lg border border-border/50">
-          <Users className="h-5 w-5 text-muted-foreground" />
-          <div className="flex-1">
+        <div className="flex flex-wrap items-center gap-4 bg-muted/30 p-4 rounded-lg border border-border/50">
+          <Users className="h-5 w-5 text-muted-foreground shrink-0" />
+          <div className="flex-1 min-w-0">
             <h3 className="text-sm font-medium">Representative Performance</h3>
             <p className="text-xs text-muted-foreground">Filter statistics by sales representative</p>
           </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setSelectedMonthOffset(o => o + 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium w-28 text-center">
+              {format(selectedMonth, 'MMM yyyy')}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setSelectedMonthOffset(o => Math.max(0, o - 1))}
+              disabled={selectedMonthOffset === 0}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
           <Select value={selectedRepId} onValueChange={setSelectedRepId}>
             <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select representative" />
+              <SelectValue placeholder="Select representative">
+                {selectedRepId === 'all'
+                  ? 'All Representatives'
+                  : reps.find(r => r.id === selectedRepId)?.name ?? selectedRepId}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Representatives</SelectItem>
@@ -546,6 +634,126 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Team Charts (managers see global, reps see personal) ── */}
+      {canViewGlobalDashboard ? (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold tracking-tight">Team Analytics</h2>
+
+          {/* Row 1: Revenue Trend + Rep Comparison */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">6-Month Revenue Trend</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={teamRevenueData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip formatter={(v: number) => [`${v.toLocaleString()} LE`, 'Revenue']} />
+                    <Area type="monotone" dataKey="Revenue" stroke="#6366f1" fill="url(#revGrad)" strokeWidth={2} dot={{ r: 3 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Rep Performance — {format(selectedMonth, 'MMMM yyyy')}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {repComparisonData.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-10 text-center">No reps found.</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={repComparisonData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                      <Tooltip formatter={(v: number) => `${v.toLocaleString()} LE`} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <Bar dataKey="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Target" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Row 2: Payment Methods + Session Types */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Payment Methods — 6 Months</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={monthlyMethodData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip formatter={(v: number) => `${v.toLocaleString()} LE`} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="Cash" stackId="a" fill="#22c55e" />
+                    <Bar dataKey="Visa" stackId="a" fill="#3b82f6" />
+                    <Bar dataKey="Instapay" stackId="a" fill="#ec4899" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Session Types — 6 Months</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={monthlySessionData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="Private" stackId="b" fill="#8b5cf6" />
+                    <Bar dataKey="Group" stackId="b" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold tracking-tight">My Performance</h2>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">Revenue vs Target — Last 6 Months</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={chartData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip formatter={(v: number) => `${v.toLocaleString()} LE`} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Target" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

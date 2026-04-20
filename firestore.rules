@@ -9,9 +9,10 @@ service cloud.firestore {
     }
 
     function getUserData() {
-      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
-      return exists(userPath) ? get(userPath).data : {
-        "role": "none", 
+      let uid = request.auth != null ? request.auth.uid : 'anonymous';
+      let userPath = /databases/$(database)/documents/users/$(uid);
+      return (request.auth != null && exists(userPath)) ? get(userPath).data : {
+        "role": "none",
         "name": "Anonymous",
         "can_delete_payments": false,
         "can_access_settings_and_history": false,
@@ -20,15 +21,12 @@ service cloud.firestore {
     }
 
     function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+      return request.auth != null && request.auth.uid == userId;
     }
 
-    // New granular permission helpers matching context.tsx
     function canDeletePayments() {
-      if (!isAuthenticated()) return false;
-      
       let data = getUserData();
-      return (
+      return request.auth != null && (
         data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
         (data.role == 'admin' && data.name.lower().matches('.*sama.*')) ||
         data.can_delete_payments == true
@@ -36,10 +34,8 @@ service cloud.firestore {
     }
 
     function canAccessSettings() {
-      if (!isAuthenticated()) return false;
-      
       let data = getUserData();
-      return (
+      return request.auth != null && (
         data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
         data.name.lower().matches('.*atef.*') ||
         data.can_access_settings_and_history == true
@@ -47,22 +43,17 @@ service cloud.firestore {
     }
 
     function canViewGlobalDashboard() {
-      if (!isAuthenticated()) return false;
-      
       let data = getUserData();
-      return (
+      return request.auth != null && (
         data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
         (data.role == 'admin' && data.name.lower().matches('.*sama.*')) ||
         data.can_view_global_dashboard == true
       );
     }
 
-    // Keep isAdmin for administrative tasks (user management, etc.)
     function isAdmin() {
-      if (!isAuthenticated()) return false;
-      
       let data = getUserData();
-      return (
+      return request.auth != null && (
         data.role in ['admin', 'super_admin', 'crm_admin', 'sales_manager', 'manager']
       );
     }
@@ -73,7 +64,7 @@ service cloud.firestore {
 
     function isSalesRep() {
       let data = getUserData();
-      return isAuthenticated() && (data.role == 'sales_rep' || data.role == 'rep');
+      return request.auth != null && (data.role == 'sales_rep' || data.role == 'rep');
     }
 
     // ===============================================================
@@ -104,23 +95,26 @@ service cloud.firestore {
     }
 
     match /targets/{targetId} {
-      allow read: if canViewGlobalDashboard() || (isSalesRep() && resource.data.sales_rep_id == request.auth.uid);
+      allow get: if canViewGlobalDashboard() || (isSalesRep() && resource.data.sales_rep_id == request.auth.uid);
+      allow list: if canViewGlobalDashboard() || isSalesRep();
       allow write: if isSalesManager();
     }
 
     match /userTargets/{targetId} {
-      allow read: if canViewGlobalDashboard() || (isSalesRep() && resource.data.userId == request.auth.uid);
+      allow get: if canViewGlobalDashboard() || (isSalesRep() && resource.data.userId == request.auth.uid);
+      allow list: if canViewGlobalDashboard() || isSalesRep();
       allow write: if isSalesManager();
     }
 
     match /payments/{paymentId} {
-      allow read: if canViewGlobalDashboard() || (isSalesRep() && resource.data.sales_rep_id == request.auth.uid);
+      allow get: if canViewGlobalDashboard() || (isSalesRep() && resource.data.sales_rep_id == request.auth.uid);
+      allow list: if canViewGlobalDashboard() || isSalesRep();
       allow create: if isAuthenticated() && isValidPayment(request.resource.data);
       allow update, delete: if canDeletePayments();
     }
 
     match /settings/{settingId} {
-      allow read: if isAuthenticated();
+      allow read: if canAccessSettings();
       allow write: if canAccessSettings();
     }
 
@@ -165,9 +159,13 @@ service cloud.firestore {
     match /tasks/{taskId} {
       allow read, write: if isAuthenticated();
     }
-    
+
     match /counters/{counterId} {
       allow read, write: if isAuthenticated();
+    }
+
+    match /importBatches/{batchId} {
+      allow read, write: if isAdmin();
     }
   }
 }

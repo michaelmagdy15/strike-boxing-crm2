@@ -377,7 +377,11 @@ export default function Leads() {
                     onValueChange={(v) => updateClient(lead.id, { assignedTo: v === 'unassigned' ? '' : v })}
                   >
                     <SelectTrigger className="w-[130px] h-8 text-xs">
-                      <SelectValue placeholder="Assign rep" />
+                      <SelectValue placeholder="Assign rep">
+                        {lead.assignedTo && lead.assignedTo !== 'unassigned'
+                          ? users.find(u => u.id === lead.assignedTo)?.name || lead.assignedTo
+                          : undefined}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="unassigned">Unassigned</SelectItem>
@@ -705,7 +709,13 @@ export default function Leads() {
             <Label className="text-xs">Assigned To</Label>
             <Select value={filterAssignedTo} onValueChange={setFilterAssignedTo}>
               <SelectTrigger className="h-9">
-                <SelectValue placeholder="All Reps" />
+                <SelectValue placeholder="All Reps">
+                  {filterAssignedTo === 'All' || !filterAssignedTo
+                    ? undefined
+                    : filterAssignedTo === 'unassigned'
+                      ? 'Unassigned'
+                      : users.find(u => u.id === filterAssignedTo)?.name || filterAssignedTo}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="All">All Reps</SelectItem>
