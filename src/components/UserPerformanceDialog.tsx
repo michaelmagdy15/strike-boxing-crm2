@@ -62,11 +62,16 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
         return false;
       });
 
-      const achievedAmount = monthPayments.reduce((sum, p) => sum + p.amount, 0);
+      const achievedAmount = monthPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       
       // Breakdown by session type
-      const privateSessionsSold = monthPayments.filter(p => p.packageType.toLowerCase().includes('private')).length;
-      const groupSessionsSold = monthPayments.filter(p => p.packageType.toLowerCase().includes('group') || p.packageType.toLowerCase().includes('gt')).length;
+      const privatePayments = monthPayments.filter(p => p.packageType.toLowerCase().includes('private'));
+      const groupPayments = monthPayments.filter(p => p.packageType.toLowerCase().includes('group') || p.packageType.toLowerCase().includes('gt'));
+
+      const privateSessionsSold = privatePayments.length;
+      const groupSessionsSold = groupPayments.length;
+      const privateRevenue = privatePayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+      const groupRevenue = groupPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
 
       return {
         month: format(date, 'MMM yyyy'),
@@ -74,6 +79,8 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
         achievedAmount,
         privateSessionsSold,
         groupSessionsSold,
+        privateRevenue,
+        groupRevenue,
         privateTarget,
         groupTarget,
         isTargetMet: targetAmount > 0 && achievedAmount >= targetAmount
@@ -146,20 +153,40 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
                   </span>
                 </div>
                 
-                <div className="border-t pt-2 mt-2">
-                  <span className="text-xs uppercase font-bold text-muted-foreground">Session Breakdown</span>
-                  <div className="flex justify-between mt-1">
-                    <span className="text-sm text-muted-foreground">Private:</span>
+                <div className="border-t pt-2 mt-2 space-y-3">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground block">Sessions Breakdown</span>
+                  
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-xs text-muted-foreground block">Private Training</span>
+                      <span className="text-base font-bold">
+                        {currentMonthData?.privateRevenue.toLocaleString()} <span className="text-[10px] font-normal">LE</span>
+                      </span>
+                    </div>
                     <div className="text-right">
-                      <span className="font-medium">{currentMonthData?.privateSessionsSold} achieved</span>
-                      {currentMonthData?.privateTarget > 0 && <span className="text-xs text-muted-foreground block">of {currentMonthData.privateTarget} target</span>}
+                      <span className="text-xs font-semibold bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded">
+                        {currentMonthData?.privateSessionsSold} sessions
+                      </span>
+                      {currentMonthData?.privateTarget > 0 && (
+                        <span className="text-[10px] text-muted-foreground block mt-0.5">of {currentMonthData.privateTarget} target</span>
+                      )}
                     </div>
                   </div>
-                  <div className="flex justify-between mt-1">
-                    <span className="text-sm text-muted-foreground">Group:</span>
+
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-xs text-muted-foreground block">Group Training</span>
+                      <span className="text-base font-bold">
+                        {currentMonthData?.groupRevenue.toLocaleString()} <span className="text-[10px] font-normal">LE</span>
+                      </span>
+                    </div>
                     <div className="text-right">
-                      <span className="font-medium">{currentMonthData?.groupSessionsSold} achieved</span>
-                      {currentMonthData?.groupTarget > 0 && <span className="text-xs text-muted-foreground block">of {currentMonthData.groupTarget} target</span>}
+                      <span className="text-xs font-semibold bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded">
+                        {currentMonthData?.groupSessionsSold} sessions
+                      </span>
+                      {currentMonthData?.groupTarget > 0 && (
+                        <span className="text-[10px] text-muted-foreground block mt-0.5">of {currentMonthData.groupTarget} target</span>
+                      )}
                     </div>
                   </div>
                 </div>

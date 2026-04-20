@@ -10,14 +10,15 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Client, Package, Payment } from './types';
 import { Input } from '@/components/ui/input';
-import { addDays, isBefore, parseISO } from 'date-fns';
+import { addDays, isBefore, parseISO, parse, isValid, isAfter, format } from 'date-fns';
+import { PACKAGES } from './constants';
 
 interface ImportDataProps {
   type: 'Lead' | 'Active';
 }
 
 export default function ImportData({ type }: ImportDataProps) {
-  const { addClient, bulkAddClients, bulkAddPayments, currentUser, packages, addImportBatch } = useAppContext();
+  const { addClient, bulkAddClients, bulkAddPayments, currentUser, users, packages, addImportBatch } = useAppContext();
   const [isOpen, setIsOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -276,19 +277,59 @@ export default function ImportData({ type }: ImportDataProps) {
 
         let startDate: string | undefined;
         let membershipExpiry: string | undefined;
+        let parsedStartDate: Date | null = null;
+        let parsedExpiryDate: Date | null = null;
+
+        const robustParse = (raw: any) => {
+          if (!raw) return null;
+          const str = raw.toString().trim();
+          if (!str || str.toLowerCase() === 'hold') return null;
+
+          // Try ISO
+          const iso = parseISO(str);
+          if (isValid(iso) && iso.getFullYear() > 1990 && iso.getFullYear() < 2100) return iso;
+
+          // Try DD/MM/YYYY
+          const ddmmyyyy = parse(str, 'dd/MM/yyyy', new Date());
+          if (isValid(ddmmyyyy) && ddmmyyyy.getFullYear() > 1990 && ddmmyyyy.getFullYear() < 2100) return ddmmyyyy;
+
+          // Try MM/DD/YYYY
+          const mmddyyyy = parse(str, 'MM/dd/yyyy', new Date());
+          if (isValid(mmddyyyy) && mmddyyyy.getFullYear() > 1990 && mmddyyyy.getFullYear() < 2100) return mmddyyyy;
+
+          // Try YYYY-MM-DD
+          const yyyymmdd = parse(str, 'yyyy-MM-dd', new Date());
+          if (isValid(yyyymmdd) && yyyymmdd.getFullYear() > 1990 && yyyymmdd.getFullYear() < 2100) return yyyymmdd;
+
+          // Fallback to native
+          const native = new Date(str);
+          if (isValid(native) && !isNaN(native.getTime()) && native.getFullYear() > 1990) return native;
+
+          return null;
+        };
 
         if (startDateRaw && !isHold) {
-          const date = new Date(startDateRaw);
-          if (!isNaN(date.getTime())) startDate = date.toISOString();
+          parsedStartDate = robustParse(startDateRaw);
+          if (parsedStartDate) startDate = parsedStartDate.toISOString();
         }
 
         if (membershipExpiryRaw && !isHold) {
-          const date = new Date(membershipExpiryRaw);
-          if (!isNaN(date.getTime())) membershipExpiry = date.toISOString();
+          parsedExpiryDate = robustParse(membershipExpiryRaw);
+          if (parsedExpiryDate) membershipExpiry = parsedExpiryDate.toISOString();
         }
 
-        if (!membershipExpiry && !isHold && packageType) {
-          membershipExpiry = addDays(now, 30).toISOString();
+        if (!membershipExpiry && !isHold && packageType && parsedStartDate) {
+          // Fuzzy match package
+          const normalizedPkg = packageType.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const pkgMatch = PACKAGES.find(p => {
+            const pName = p.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            return normalizedPkg.includes(pName) || pName.includes(normalizedPkg) ||
+                   (normalizedPkg.includes(p.sessions.toString()) && p.sessions > 0);
+          });
+
+          const days = pkgMatch?.expiryDays || 30;
+          parsedExpiryDate = addDays(parsedStartDate, days);
+          membershipExpiry = parsedExpiryDate.toISOString();
         }
 
         let status: any = type;
@@ -328,6 +369,9 @@ export default function ImportData({ type }: ImportDataProps) {
 
         const clientId = Math.random().toString(36).substr(2, 9);
 
+        const systemUser = users.find(u => u.name?.toLowerCase().trim() === salesName.toLowerCase());
+        const finalAssignedTo = systemUser ? systemUser.id : (salesName || (currentUser?.role === 'rep' ? currentUser.id : undefined));
+
         clientsToImport.push({
           id: clientId,
           name, phone, status: status as any, source, branch,
@@ -335,7 +379,7 @@ export default function ImportData({ type }: ImportDataProps) {
           sessionsRemaining, membershipExpiry, startDate,
           typeOfClient, salesName,
           comments: [], lastContactDate: now.toISOString(),
-          assignedTo: currentUser?.role === 'rep' ? currentUser.id : undefined,
+          assignedTo: finalAssignedTo,
           importBatchId: batchId,
           paid: paid
         });
@@ -350,7 +394,7 @@ export default function ImportData({ type }: ImportDataProps) {
             date: startDate || now.toISOString(), // Use start date if available
             method: 'Other',
             packageType: packageType || 'Imported',
-            session_type: (packageType || '').toLowerCase().includes('pt') || (packageType || '').toLowerCase().includes('private') 
+            package_category_type: (packageType || '').toLowerCase().includes('pt') || (packageType || '').toLowerCase().includes('private') 
               ? 'Private Training' 
               : 'Group Training',
             recordedBy: currentUser?.id || 'system-import',

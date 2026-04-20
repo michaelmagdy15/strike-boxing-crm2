@@ -35,7 +35,7 @@ export default function AuditLogs() {
       case 'CLIENT': return <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50">Client</Badge>;
       case 'LEAD': return <Badge variant="outline" className="border-amber-200 text-amber-700 bg-amber-50">Lead</Badge>;
       case 'PAYMENT': return <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50">Payment</Badge>;
-      case 'SESSION': return <Badge variant="outline" className="border-purple-200 text-purple-700 bg-purple-50">Session</Badge>;
+      case 'PACKAGE_RECORD': return <Badge variant="outline" className="border-purple-200 text-purple-700 bg-purple-50">Package</Badge>;
       case 'TARGET': return <Badge variant="outline" className="border-indigo-200 text-indigo-700 bg-indigo-50">Target</Badge>;
       case 'ATTENDANCE': return <Badge variant="outline" className="border-pink-200 text-pink-700 bg-pink-50">Attendance</Badge>;
       default: return <Badge variant="outline">{entity}</Badge>;
@@ -90,7 +90,7 @@ export default function AuditLogs() {
               <option value="CLIENT">Clients</option>
               <option value="LEAD">Leads</option>
               <option value="PAYMENT">Payments</option>
-              <option value="SESSION">Sessions</option>
+              <option value="PACKAGE_RECORD">Packages</option>
               <option value="ATTENDANCE">Attendance</option>
               <option value="TARGET">Sales Targets</option>
             </select>

@@ -10,15 +10,15 @@ export const mockUsers: User[] = [
   { id: 'u4', name: 'Admin Assistant', role: 'admin', email: 'assistant@strike.com' },
 ];
 
-export const mockPrivateSessions: import('./types').PrivateSession[] = [];
+export const mockPTPackages: import('./types').PTPackageRecord[] = [];
 
 export const mockSalesTarget: SalesTarget = {
   targetAmount: 50000,
   currentAmount: 32500,
   privateTarget: 25000,
   groupTarget: 25000,
-  privateSessionsSold: 45,
-  groupSessionsSold: 120,
+  privatePackagesSold: 45,
+  groupPackagesSold: 120,
 };
 
 export const mockClients: Client[] = [

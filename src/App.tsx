@@ -7,22 +7,151 @@ import React from 'react';
 import { AppProvider, useAppContext } from './context';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { BrowserRouter } from 'react-router-dom';
 import Dashboard from './Dashboard';
 import Leads from './Leads';
 import Clients from './Clients';
 import Payments from './Payments';
-import PrivateSessions from './PrivateSessions';
+import PTPackages from './PTPackages';
 import Attendance from './Attendance';
 import AuditLogs from './AuditLogs';
 import Tasks from './Tasks';
 import Settings from './Settings';
 import Login from './Login';
-import { Activity, Users, UserPlus, CreditCard, LogOut, Calendar as CalendarIcon, ShieldAlert, Settings as SettingsIcon, Eye, EyeOff, CheckSquare, Package, Search, Scan, History } from 'lucide-react';
+import Reports from './Reports';
+import MemberCheckin from './MemberCheckin';
+import { Activity, Users, UserPlus, CreditCard, LogOut, Calendar as CalendarIcon, ShieldAlert, Settings as SettingsIcon, Eye, EyeOff, CheckSquare, Package, Search, Scan, History, BarChart3 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { NotificationCenter } from './components/NotificationCenter';
 
 function AppContent() {
-  const { currentUser, logout, isAuthReady, previewRole, setPreviewRole, searchQuery, setSearchQuery, branding, canAccessSettings, canViewGlobalDashboard, canDeletePayments } = useAppContext();
+  const { currentUser, logout, isAuthReady, previewRole, setPreviewRole, searchQuery, setSearchQuery, branding, canAccessSettings, canViewGlobalDashboard, canDeletePayments, isManagerOrSama } = useAppContext();
+  const [isKioskMode, setIsKioskMode] = React.useState(window.location.pathname === '/kiosk');
+  const [isCheckinMode, setIsCheckinMode] = React.useState(window.location.pathname === '/checkin');
+  const [kioskAuthenticated, setKioskAuthenticated] = React.useState(false);
+  const [pinInput, setPinInput] = React.useState('');
+  const [pinError, setPinError] = React.useState(false);
+
+  // Monitor URL changes for kiosk mode
+  React.useEffect(() => {
+    const handlePopState = () => {
+      setIsKioskMode(window.location.pathname === '/kiosk');
+      setIsCheckinMode(window.location.pathname === '/checkin');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handlePinSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (branding.kioskPin && pinInput === branding.kioskPin) {
+      setKioskAuthenticated(true);
+      setPinError(false);
+    } else {
+      setPinError(true);
+      setPinInput('');
+      setTimeout(() => setPinError(false), 2000);
+    }
+  };
+
+  if (isKioskMode) {
+    if (!kioskAuthenticated) {
+      return (
+        <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+          <Card className="w-full max-w-md border-white/10 bg-zinc-950 shadow-2xl">
+            <CardHeader className="text-center space-y-4">
+              <div className="flex justify-center">
+                {branding.logoUrl ? (
+                  <img src={branding.logoUrl} alt="Logo" className="h-16 w-auto object-contain" />
+                ) : (
+                  <div className="h-16 w-16 bg-primary/20 rounded-full flex items-center justify-center">
+                    <Scan className="h-8 w-8 text-primary" />
+                  </div>
+                )}
+              </div>
+              <CardTitle className="text-2xl font-bold tracking-tight text-white">Kiosk Mode Access</CardTitle>
+              <CardDescription className="text-zinc-400">Please enter the security PIN to access the attendance scanner.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handlePinSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <div className="flex justify-center gap-4">
+                     <Input
+                        type="password"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoFocus
+                        placeholder="••••••"
+                        className={`text-center text-3xl h-16 tracking-[1em] font-mono bg-zinc-900 border-zinc-800 text-white ${pinError ? 'border-destructive animate-pulse' : 'focus:border-primary'}`}
+                        value={pinInput}
+                        onChange={(e) => setPinInput(e.target.value)}
+                        maxLength={6}
+                      />
+                  </div>
+                  {pinError && (
+                    <p className="text-center text-sm font-medium text-destructive animate-in fade-in slide-in-from-top-1">
+                      Incorrect PIN. Please try again.
+                    </p>
+                  )}
+                </div>
+                <Button type="submit" className="w-full h-12 text-lg font-bold bg-white text-black hover:bg-zinc-200">
+                  Unlock Kiosk
+                </Button>
+                <div className="text-center">
+                   <Button 
+                    variant="link" 
+                    className="text-zinc-500 hover:text-white text-xs"
+                    onClick={() => {
+                        window.history.pushState({}, '', '/');
+                        window.dispatchEvent(new PopStateEvent('popstate'));
+                    }}
+                   >
+                    Return to CRM Login
+                   </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-background flex flex-col font-sans">
+        <header className="border-b bg-card shadow-sm h-16 flex items-center justify-between px-6">
+          <div className="flex items-center space-x-3">
+             {branding.logoUrl ? (
+                <img src={branding.logoUrl} alt="Logo" className="h-8 w-auto" />
+              ) : (
+                <h1 className="text-lg font-bold tracking-tighter uppercase text-primary">
+                  {branding.companyName}
+                </h1>
+              )}
+              <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">KIOSK MODE</Badge>
+          </div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="text-muted-foreground hover:text-destructive"
+            onClick={() => setKioskAuthenticated(false)}
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Lock
+          </Button>
+        </header>
+        <main className="flex-1 overflow-auto p-4 md:p-8">
+           <Attendance isKiosk={true} />
+        </main>
+      </div>
+    );
+  }
+
+  if (isCheckinMode) {
+    return <MemberCheckin />;
+  }
 
   if (!isAuthReady) {
     return (
@@ -98,6 +227,7 @@ function AppContent() {
                 <Search className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
             </div>
+            <NotificationCenter />
             <div className="text-xs sm:text-sm font-medium text-muted-foreground flex flex-col items-end">
               <span className="font-bold text-foreground truncate max-w-[120px] sm:max-w-none">{currentUser.name}</span>
               <span className={`text-[10px] sm:text-xs uppercase tracking-wider ${previewRole ? 'text-amber-500 font-bold' : ''}`}>
@@ -160,6 +290,13 @@ function AppContent() {
                 Attendance
               </TabsTrigger>
 
+              {isManagerOrSama && (
+                <TabsTrigger value="reports" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
+                  <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                  Reports
+                </TabsTrigger>
+              )}
+
               {canAccessSettings && (
                 <>
                   <TabsTrigger value="audit" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
@@ -205,6 +342,12 @@ function AppContent() {
             <Attendance />
           </TabsContent>
 
+          {isManagerOrSama && (
+            <TabsContent value="reports" className="m-0 animate-in fade-in-50 duration-500">
+              <Reports />
+            </TabsContent>
+          )}
+
           {canAccessSettings && (
             <>
               <TabsContent value="audit" className="m-0 animate-in fade-in-50 duration-500">
@@ -223,8 +366,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
+    <BrowserRouter>
+      <AppProvider>
+        <AppContent />
+      </AppProvider>
+    </BrowserRouter>
   );
 }

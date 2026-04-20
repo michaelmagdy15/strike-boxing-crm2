@@ -28,7 +28,6 @@ service cloud.firestore {
       let data = getUserData();
       return request.auth != null && (
         data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
-        (data.role == 'admin' && data.name.lower().matches('.*sama.*')) ||
         data.can_delete_payments == true
       );
     }
@@ -37,7 +36,6 @@ service cloud.firestore {
       let data = getUserData();
       return request.auth != null && (
         data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
-        data.name.lower().matches('.*atef.*') ||
         data.can_access_settings_and_history == true
       );
     }
@@ -46,7 +44,6 @@ service cloud.firestore {
       let data = getUserData();
       return request.auth != null && (
         data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
-        (data.role == 'admin' && data.name.lower().matches('.*sama.*')) ||
         data.can_view_global_dashboard == true
       );
     }
@@ -124,16 +121,25 @@ service cloud.firestore {
       allow delete: if canAccessSettings();
     }
 
+    // ===============================================================
+    // Collection Group Rules
+    // ===============================================================
+    match /{path=**}/comments/{commentId} {
+      allow read, create: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    match /{path=**}/interactions/{interactionId} {
+      allow read, create: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+
     match /clients/{clientId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidClient(request.resource.data);
       allow update: if isAuthenticated();
       allow delete: if isAdmin();
-
-      match /comments/{commentId} {
-        allow read, create: if isAuthenticated();
-        allow delete: if isAdmin();
-      }
     }
 
     match /packages/{packageId} {
