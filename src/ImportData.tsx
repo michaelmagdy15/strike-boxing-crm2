@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Client, Package, Payment } from './types';
 import { Input } from '@/components/ui/input';
 import { addDays, isBefore, parseISO, parse, isValid, isAfter, format } from 'date-fns';
-import { PACKAGES } from './constants';
+import { PACKAGES, SALES_NAME_MAPPING } from './constants';
 
 interface ImportDataProps {
   type: 'Lead' | 'Active';
@@ -378,15 +378,23 @@ export default function ImportData({ type }: ImportDataProps) {
         }
 
         const clientId = Math.random().toString(36).substr(2, 9);
-        const systemUser = users.find(u => u.name?.toLowerCase().trim() === salesName.toLowerCase());
-        const finalAssignedTo = systemUser ? systemUser.id : (salesName || (currentUser?.role === 'rep' ? currentUser.id : undefined));
+        const trimmedSalesName = (salesName || '').trim();
+        const mappedName = SALES_NAME_MAPPING[trimmedSalesName] || trimmedSalesName;
+        
+        const systemUser = users.find(u => 
+          u.name?.toLowerCase().trim() === mappedName.toLowerCase().trim() ||
+          u.name?.toLowerCase().trim() === trimmedSalesName.toLowerCase().trim()
+        );
+        
+        const finalAssignedTo = systemUser ? systemUser.id : (mappedName || (currentUser?.role === 'rep' ? currentUser.id : undefined));
+        const finalSalesName = systemUser?.name || mappedName;
 
         clientsToImport.push({
           id: clientId,
           name, phone, status: status as any, source, branch,
           packageType: packageType || 'Unknown',
           sessionsRemaining, membershipExpiry, startDate,
-          typeOfClient, salesName,
+          typeOfClient, salesName: finalSalesName,
           comments: [], lastContactDate: now.toISOString(),
           assignedTo: finalAssignedTo,
           importBatchId: batchId,
@@ -407,7 +415,8 @@ export default function ImportData({ type }: ImportDataProps) {
               ? 'Private Training' 
               : 'Group Training',
             recordedBy: currentUser?.id || 'system-import',
-            sales_rep_id: currentUser?.id || 'system-import',
+            sales_rep_id: systemUser?.id || (typeof finalAssignedTo === 'string' && finalAssignedTo.length > 15 ? finalAssignedTo : 'system-import'),
+            salesName: finalSalesName,
             created_at: now.toISOString(),
             deleted_at: null
           } as Payment);

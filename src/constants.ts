@@ -10,10 +10,19 @@ export const PACKAGES = [
 ];
 
 export const SALES_MEMBERS = [
-  'Atef',
-  'EL GOO',
+  'Atef Tarek',
+  'Youssef Emad',
   'Hassan Tarek',
-  'Maisoon',
-  'Mustafa',
+  'Maison Mohamed',
+  'Mustafa Mohamed',
   'Omar Ehab'
 ];
+
+export const SALES_NAME_MAPPING: Record<string, string> = {
+  'Atef': 'Atef Tarek',
+  'EL GOO': 'Youssef Emad',
+  'Maisoon': 'Maison Mohamed',
+  'Mustafa': 'Mustafa Mohamed',
+  'Hassan Tarek': 'Hassan Tarek',
+  'Omar Ehab': 'Omar Ehab'
+};

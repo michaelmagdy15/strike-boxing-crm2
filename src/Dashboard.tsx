@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAppContext } from './context';
+import { SALES_NAME_MAPPING } from './constants';
 import { differenceInDays, isSameDay, parseISO, isAfter, isBefore, addDays, subDays, subMonths, startOfMonth, endOfMonth, isWithinInterval, format } from 'date-fns';
 import { Target, Users, CalendarDays, AlertTriangle, Gift, Settings, ChevronLeft, ChevronRight, Trophy, Download, ArrowUpDown } from 'lucide-react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -149,9 +150,17 @@ export default function Dashboard() {
       const repVisibleClients = clients.filter(c => c.assignedTo === selectedRepId);
       const repClientIds = new Set(repVisibleClients.map(c => c.id));
       
-      relevantPayments = relevantPayments.filter(p => 
-        repClientIds.has(p.clientId) || p.recordedBy === selectedRepId || p.sales_rep_id === selectedRepId
-      );
+      const selectedUser = users.find(u => u.id === selectedRepId);
+      
+      relevantPayments = relevantPayments.filter(p => {
+        if (repClientIds.has(p.clientId) || p.recordedBy === selectedRepId || p.sales_rep_id === selectedRepId) return true;
+        if (selectedUser && (p.sales_rep_id === 'system-import' || !p.sales_rep_id)) {
+          const salesName = ((p as any).salesName || '').trim();
+          const mappedName = SALES_NAME_MAPPING[salesName] || salesName;
+          if (mappedName.toLowerCase() === (selectedUser.name || '').toLowerCase().trim()) return true;
+        }
+        return false;
+      });
     }
 
     const currentAmount = relevantPayments.reduce((acc, p) => acc + p.amount, 0);
@@ -223,8 +232,14 @@ export default function Dashboard() {
         if (!isWithinInterval(pDate, { start, end })) return false;
 
         if (currentUser?.role === 'rep') {
-          if (p.recordedBy === currentUser.id) return true;
-          if (!p.recordedBy) {
+          if (p.sales_rep_id === currentUser.id || p.recordedBy === currentUser.id) return true;
+          
+          // Fallback for imported data
+          const salesName = ((p as any).salesName || '').trim();
+          const mappedName = SALES_NAME_MAPPING[salesName] || salesName;
+          if (mappedName.toLowerCase() === (currentUser.name || '').toLowerCase().trim()) return true;
+
+          if (!p.recordedBy && !p.sales_rep_id) {
             const assignedTo = clientIdToRepMap.get(p.clientId);
             if (assignedTo === currentUser.id) return true;
           }
@@ -266,10 +281,17 @@ export default function Dashboard() {
     if (!canViewGlobalDashboard) return [];
     return reps.map(rep => {
       const repTarget = userTargets.find(t => t.userId === rep.id && t.month === currentMonthStr);
-      const repPayments = payments.filter(p =>
-        format(parseISO(p.date), 'yyyy-MM') === currentMonthStr &&
-        (p.sales_rep_id === rep.id || p.recordedBy === rep.id)
-      );
+      const repPayments = payments.filter(p => {
+        if (format(parseISO(p.date), 'yyyy-MM') !== currentMonthStr) return false;
+        if (p.sales_rep_id === rep.id || p.recordedBy === rep.id) return true;
+        
+        if (p.sales_rep_id === 'system-import' || !p.sales_rep_id) {
+          const salesName = ((p as any).salesName || '').trim();
+          const mappedName = SALES_NAME_MAPPING[salesName] || salesName;
+          if (mappedName.toLowerCase() === (rep.name || '').toLowerCase().trim()) return true;
+        }
+        return false;
+      });
       return {
         name: (rep.name || rep.email || 'Unknown').split(' ')[0],
         Revenue: repPayments.reduce((s, p) => s + p.amount, 0),
@@ -317,10 +339,17 @@ export default function Dashboard() {
       const repTarget = userTargets.find(t => t.userId === rep.id && t.month === currentMonthStr);
       const targetAmount = repTarget?.targetAmount || 0;
 
-      const repPayments = payments.filter(p =>
-        format(parseISO(p.date), 'yyyy-MM') === currentMonthStr &&
-        (p.sales_rep_id === rep.id || p.recordedBy === rep.id)
-      );
+      const repPayments = payments.filter(p => {
+        if (format(parseISO(p.date), 'yyyy-MM') !== currentMonthStr) return false;
+        if (p.sales_rep_id === rep.id || p.recordedBy === rep.id) return true;
+        
+        if (p.sales_rep_id === 'system-import' || !p.sales_rep_id) {
+          const salesName = ((p as any).salesName || '').trim();
+          const mappedName = SALES_NAME_MAPPING[salesName] || salesName;
+          if (mappedName.toLowerCase() === (rep.name || '').toLowerCase().trim()) return true;
+        }
+        return false;
+      });
       const revenue = repPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
 
       const convertedThisMonth = clients.filter(c => 
