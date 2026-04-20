@@ -45,6 +45,8 @@ export interface User {
   can_delete_payments?: boolean;
   can_view_global_dashboard?: boolean;
   can_access_settings_and_history?: boolean;
+  can_delete_records?: boolean;
+  can_assign_leads?: boolean;
 }
 
 export interface PTPackageRecord {

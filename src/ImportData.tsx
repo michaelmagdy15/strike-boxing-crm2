@@ -367,8 +367,13 @@ export default function ImportData({ type }: ImportDataProps) {
           }
         }
 
-        const clientId = Math.random().toString(36).substr(2, 9);
+        if (!name || !phone) {
+          failedCount++;
+          errors.push({ row: i + 1, reason: 'Name and Phone are required' });
+          continue;
+        }
 
+        const clientId = Math.random().toString(36).substr(2, 9);
         const systemUser = users.find(u => u.name?.toLowerCase().trim() === salesName.toLowerCase());
         const finalAssignedTo = systemUser ? systemUser.id : (salesName || (currentUser?.role === 'rep' ? currentUser.id : undefined));
 
@@ -411,20 +416,32 @@ export default function ImportData({ type }: ImportDataProps) {
     
     setProgress(50); // Parsing done, now uploading
 
-    const result = await bulkAddClients(clientsToImport);
-    
-    if (result.success > 0 && paymentsToImport.length > 0) {
-      // Only import payments for successfully imported clients (approximate check since we use pre-gen IDs)
-      await bulkAddPayments(paymentsToImport);
+    try {
+      const result = await bulkAddClients(clientsToImport);
+      
+      if (result.success > 0 && paymentsToImport.length > 0) {
+        // Only import payments for successfully imported clients (approximate check since we use pre-gen IDs)
+        try {
+          await bulkAddPayments(paymentsToImport);
+        } catch (paymentErr) {
+          console.error("Payment import failed:", paymentErr);
+          errors.push({ row: 0, reason: `Payments failed to import: ${paymentErr instanceof Error ? paymentErr.message : String(paymentErr)}` });
+        }
+      }
+      
+      setProgress(100);
+      setImportStats({ 
+        success: result.success, 
+        failed: failedCount + result.failed, 
+        errors: [...errors, ...result.errors] 
+      });
+      setStep('confirm');
+    } catch (uploadErr) {
+      console.error("Upload failed:", uploadErr);
+      setError(uploadErr instanceof Error ? uploadErr.message : "Failed to upload data to Firestore");
+      setProgress(0); // Reset progress on failure
+      setStep('upload'); // Back to upload step so user can see error
     }
-    
-    setProgress(100);
-    setImportStats({ 
-      success: result.success, 
-      failed: failedCount + result.failed, 
-      errors: [...errors, ...result.errors] 
-    });
-    setStep('confirm');
   };
 
   const handleImport = () => performImport(data, mapping);

@@ -577,6 +577,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         const docRef = id ? doc(db, 'clients', id) : doc(collection(db, 'clients'));
+        console.log(`Setting client doc ${docRef.id}... `);
         batch.set(docRef, { 
           ...cleanData(clientData), 
           id: docRef.id,
@@ -599,6 +600,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (operationCount > 0) {
+      console.log(`Committing final batch of ${operationCount} operations...`);
       await batch.commit();
     }
 
@@ -695,17 +697,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addInteraction = async (clientId: string, interaction: Omit<InteractionLog, 'id' | 'author'>) => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      console.warn("addInteraction called without currentUser");
+      return;
+    }
     try {
+      console.log(`Adding interaction for client ${clientId}...`);
       await addDoc(collection(db, 'clients', clientId, 'interactions'), {
         ...interaction,
         author: currentUser.name,
         date: interaction.date || new Date().toISOString()
       });
+      console.log(`Updating lastContactDate for client ${clientId}...`);
       await updateDoc(doc(db, 'clients', clientId), {
         lastContactDate: interaction.date || new Date().toISOString()
       });
+      console.log(`Interaction saved successfully.`);
     } catch (error) {
+      console.error("addInteraction failed:", error);
       handleFirestoreError(error, OperationType.CREATE, `clients/${clientId}/interactions`);
     }
   };
