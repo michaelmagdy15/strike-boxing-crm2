@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, parseISO, addDays } from 'date-fns';
 import { Payment } from './types';
-import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search, Trash2 } from 'lucide-react';
+import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AlertDialog } from './components/AlertDialog';
 
 export default function Payments() {
@@ -34,10 +34,13 @@ export default function Payments() {
   const [filterMethod, setFilterMethod] = useState('All');
   const [filterBranch, setFilterBranch] = useState('All');
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
+
   const canDeletePayment = canDeletePayments;
 
   const adminUsers = users.filter(u =>
-    ['admin', 'super_admin', 'crm_admin', 'sales_manager', 'manager'].includes(u.role)
+    ['admin', 'super_admin', 'crm_admin', 'manager'].includes(u.role)
   );
 
   useEffect(() => {
@@ -224,37 +227,55 @@ export default function Payments() {
     }
   };
 
-  const isRep = currentUser?.role === 'rep' || currentUser?.role === 'sales_rep';
+  const isRep = currentUser?.role === 'rep';
 
-  const filteredPayments = payments.filter(payment => {
-    const client = clients.find(c => c.id === payment.clientId);
+  const deferredSearchTerm = React.useDeferredValue(searchTerm);
+  const deferredFilterMethod = React.useDeferredValue(filterMethod);
+  const deferredFilterBranch = React.useDeferredValue(filterBranch);
 
-    // Sales reps only see their own payments
-    if (isRep && currentUser) {
-      const ownPayment = payment.sales_rep_id === currentUser.id || payment.recordedBy === currentUser.id;
-      if (!ownPayment) return false;
+  const filteredPayments = React.useMemo(() => {
+    const clientMap = new Map();
+    for (const client of clients) {
+      clientMap.set(client.id, client);
     }
 
-    // Search filter
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      const matchesName = client?.name.toLowerCase().includes(term);
-      const matchesId = client?.memberId?.toString().includes(term);
-      const matchesPhone = client?.phone.includes(term);
-      const matchesAmount = payment.amount.toString().includes(term);
-      const matchesRef = payment.instapayRef?.toLowerCase().includes(term);
+    return payments.filter(payment => {
+      const client = clientMap.get(payment.clientId);
 
-      if (!matchesName && !matchesId && !matchesPhone && !matchesAmount && !matchesRef) return false;
-    }
+      // Sales reps only see their own payments
+      if (isRep && currentUser) {
+        const ownPayment = payment.sales_rep_id === currentUser.id || payment.recordedBy === currentUser.id;
+        if (!ownPayment) return false;
+      }
 
-    // Method filter
-    if (filterMethod !== 'All' && payment.method !== filterMethod) return false;
+      // Search filter
+      if (deferredSearchTerm) {
+        const term = deferredSearchTerm.toLowerCase();
+        const matchesName = client?.name?.toLowerCase().includes(term);
+        const matchesId = client?.memberId?.toString().includes(term);
+        const matchesPhone = client?.phone?.includes(term);
+        const matchesAmount = payment.amount.toString().includes(term);
+        const matchesRef = payment.instapayRef?.toLowerCase().includes(term);
 
-    // Branch filter (via client)
-    if (filterBranch !== 'All' && client?.branch !== filterBranch) return false;
+        if (!matchesName && !matchesId && !matchesPhone && !matchesAmount && !matchesRef) return false;
+      }
 
-    return true;
-  });
+      // Method filter
+      if (deferredFilterMethod !== 'All' && payment.method !== deferredFilterMethod) return false;
+
+      // Branch filter (via client)
+      if (deferredFilterBranch !== 'All' && client?.branch !== deferredFilterBranch) return false;
+
+      return true;
+    });
+  }, [payments, clients, deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, isRep, currentUser]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [deferredSearchTerm, deferredFilterMethod, deferredFilterBranch]);
+
+  const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
+  const paginatedPayments = filteredPayments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="space-y-4">
@@ -449,8 +470,8 @@ export default function Payments() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPayments.length > 0 ? (
-                  filteredPayments.map(payment => {
+                {paginatedPayments.length > 0 ? (
+                  paginatedPayments.map(payment => {
                     const client = clients.find(c => c.id === payment.clientId);
                     const recordedByUser = users.find(u => u.id === payment.recordedBy);
                     return (
@@ -523,6 +544,33 @@ export default function Payments() {
           </div>
         </CardContent>
       </Card>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4">
+          <p className="text-sm text-muted-foreground">
+            Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredPayments.length)} of {filteredPayments.length} entries
+          </p>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm">Page {currentPage} of {totalPages}</span>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-8">
         <h3 className="text-lg font-semibold mb-4">Available Packages</h3>

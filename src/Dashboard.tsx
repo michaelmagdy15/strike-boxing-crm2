@@ -174,6 +174,14 @@ export default function Dashboard() {
   const chartData = React.useMemo(() => {
     const months = Array.from({ length: 6 }).map((_, i) => subMonths(now, 5 - i));
 
+    // Pre-map clients to reps for O(1) lookup inside payment iteration
+    const clientIdToRepMap = new Map<string, string | undefined>();
+    if (currentUser?.role === 'rep') {
+      for (const client of clients) {
+        clientIdToRepMap.set(client.id, client.assignedTo);
+      }
+    }
+
     return months.map(date => {
       const monthStr = format(date, 'yyyy-MM');
       const start = startOfMonth(date);
@@ -192,8 +200,8 @@ export default function Dashboard() {
         if (currentUser?.role === 'rep') {
           if (p.recordedBy === currentUser.id) return true;
           if (!p.recordedBy) {
-            const client = clients.find(c => c.id === p.clientId);
-            if (client && client.assignedTo === currentUser.id) return true;
+            const assignedTo = clientIdToRepMap.get(p.clientId);
+            if (assignedTo === currentUser.id) return true;
           }
           return false;
         }
@@ -309,7 +317,7 @@ export default function Dashboard() {
               <SelectValue placeholder="Select representative">
                 {selectedRepId === 'all'
                   ? 'All Representatives'
-                  : reps.find(r => r.id === selectedRepId)?.name ?? selectedRepId}
+                  : reps.find(r => r.id === selectedRepId)?.name ?? 'Unknown User'}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>

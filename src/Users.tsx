@@ -29,7 +29,7 @@ export default function Users() {
 
   const [performanceUser, setPerformanceUser] = useState<User | null>(null);
 
-  if (currentUser?.role !== 'manager' && currentUser?.role !== 'admin' && currentUser?.role !== 'super_admin' && currentUser?.role !== 'crm_admin' && currentUser?.role !== 'sales_manager') {
+  if (currentUser?.role !== 'manager' && currentUser?.role !== 'admin' && currentUser?.role !== 'super_admin' && currentUser?.role !== 'crm_admin') {
     return (
       <div className="flex items-center justify-center h-[400px]">
         <p className="text-muted-foreground">You do not have permission to view this page.</p>
@@ -38,7 +38,7 @@ export default function Users() {
   }
 
   const canChangeRoles = currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin' || currentUser?.role === 'admin';
-  const canInviteUsers = canChangeRoles || currentUser?.role === 'manager' || currentUser?.role === 'sales_manager';
+  const canInviteUsers = canChangeRoles || currentUser?.role === 'manager';
 
   const handleRoleChange = (userId: string, newRole: UserRole) => {
     updateUser(userId, { role: newRole });
@@ -76,13 +76,11 @@ export default function Users() {
 
   const getRoleBadge = (role: UserRole) => {
     switch (role) {
-      case 'manager':
-      case 'sales_manager': return <Badge className="bg-purple-500"><Shield className="w-3 h-3 mr-1" /> Sales Manager</Badge>;
+      case 'manager': return <Badge className="bg-purple-500"><Shield className="w-3 h-3 mr-1" /> Manager</Badge>;
       case 'admin': return <Badge className="bg-blue-500">Admin</Badge>;
       case 'super_admin': return <Badge className="bg-red-500"><Shield className="w-3 h-3 mr-1" /> Super Admin</Badge>;
       case 'crm_admin': return <Badge className="bg-emerald-500"><Shield className="w-3 h-3 mr-1" /> CRM Admin</Badge>;
-      case 'rep':
-      case 'sales_rep': return <Badge variant="secondary">Sales Rep</Badge>;
+      case 'rep': return <Badge variant="secondary">Rep</Badge>;
       default: return <Badge variant="outline">{role}</Badge>;
     }
   };
@@ -126,14 +124,13 @@ export default function Users() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="sales_rep">Sales Rep</SelectItem>
-                      <SelectItem value="sales_manager">Sales Manager</SelectItem>
+                      <SelectItem value="rep">Rep</SelectItem>
+                      <SelectItem value="manager">Manager</SelectItem>
                       {canInviteUsers && (
                         <SelectItem value="admin">Admin</SelectItem>
                       )}
                       {canChangeRoles && (
                         <>
-                          <SelectItem value="manager">Old Manager</SelectItem>
                           <SelectItem value="crm_admin">CRM Admin</SelectItem>
                           <SelectItem value="super_admin">Super Admin</SelectItem>
                         </>
@@ -186,13 +183,11 @@ export default function Users() {
                           <SelectValue placeholder="Select role" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="sales_rep">Sales Rep</SelectItem>
-                          <SelectItem value="sales_manager">Sales Manager</SelectItem>
+                          <SelectItem value="rep">Rep</SelectItem>
+                          <SelectItem value="manager">Manager</SelectItem>
                           <SelectItem value="admin">Admin</SelectItem>
                           <SelectItem value="crm_admin">CRM Admin</SelectItem>
                           <SelectItem value="super_admin">Super Admin</SelectItem>
-                          <SelectItem value="manager">Old Manager</SelectItem>
-                          <SelectItem value="rep">Old Rep</SelectItem>
                         </SelectContent>
                       </Select>
                     ) : (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useDeferredValue } from 'react';
 import { useAppContext } from './context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -33,6 +33,11 @@ export default function Clients() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBranch, setFilterBranch] = useState('All');
   const [sortBy, setSortBy] = useState('newest');
+
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const deferredFilterBranch = useDeferredValue(filterBranch);
+  const deferredActiveTab = useDeferredValue(activeTab);
+  const deferredSortBy = useDeferredValue(sortBy);
 
   const handleAddMember = () => {
     if (newMemberName && newMemberPhone) {
@@ -75,7 +80,7 @@ export default function Clients() {
 
   const getFilteredMembers = () => {
     let base = [];
-    switch (activeTab) {
+    switch (deferredActiveTab) {
       case 'active': base = [...activeMembers, ...nearlyExpired]; break;
       case 'hold': base = onHold; break;
       case 'expired': base = expired; break;
@@ -85,8 +90,8 @@ export default function Clients() {
     let filtered = base;
 
     // Search
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
+    if (deferredSearchTerm) {
+      const term = deferredSearchTerm.toLowerCase();
       filtered = filtered.filter(m => 
         m.name.toLowerCase().includes(term) || 
         m.phone.includes(term) ||
@@ -95,15 +100,15 @@ export default function Clients() {
     }
 
     // Branch
-    if (filterBranch !== 'All') {
-      filtered = filtered.filter(m => m.branch === filterBranch);
+    if (deferredFilterBranch !== 'All') {
+      filtered = filtered.filter(m => m.branch === deferredFilterBranch);
     }
 
     // Sort
     filtered = [...filtered].sort((a, b) => {
-      if (sortBy === 'id-asc') return (Number(a.memberId) || 0) - (Number(b.memberId) || 0);
-      if (sortBy === 'id-desc') return (Number(b.memberId) || 0) - (Number(a.memberId) || 0);
-      if (sortBy === 'newest') {
+      if (deferredSortBy === 'id-asc') return (Number(a.memberId) || 0) - (Number(b.memberId) || 0);
+      if (deferredSortBy === 'id-desc') return (Number(b.memberId) || 0) - (Number(a.memberId) || 0);
+      if (deferredSortBy === 'newest') {
         const dateA = a.startDate ? new Date(a.startDate).getTime() : 0;
         const dateB = b.startDate ? new Date(b.startDate).getTime() : 0;
         return dateB - dateA;
@@ -163,12 +168,24 @@ export default function Clients() {
 
   const exportToCSV = () => {
     const headers = ['Member ID', 'Name', 'Phone', 'Branch', 'Package', 'Sessions', 'Status', 'Expiry Date', 'Total Paid', 'Assigned To'];
+    
+    // Pre-calculate payments to O(N) map to avoid O(N*M) performance crash on large datasets
+    const paymentTotals = new Map<string, number>();
+    for (const p of payments) {
+      paymentTotals.set(p.clientId, (paymentTotals.get(p.clientId) || 0) + p.amount);
+    }
+    
+    // Using a map for users for O(N) lookup
+    const userMap = new Map<string, string>();
+    for (const u of users) {
+      userMap.set(u.id, u.name || 'Unassigned');
+    }
+
     const csvRows = [
       headers.join(','),
       ...members.map(c => {
-        const clientPayments = payments.filter(p => p.clientId === c.id);
-        const totalPaid = clientPayments.reduce((sum, p) => sum + p.amount, 0);
-        const assignedUser = users.find(u => u.id === c.assignedTo)?.name || 'Unassigned';
+        const totalPaid = paymentTotals.get(c.id) || 0;
+        const assignedUser = c.assignedTo ? userMap.get(c.assignedTo) || 'Unassigned' : 'Unassigned';
         return [
           `"${c.memberId || ''}"`,
           `"${c.name}"`,

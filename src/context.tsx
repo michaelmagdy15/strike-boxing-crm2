@@ -182,21 +182,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!currentUser) return false;
     const role = effectiveRole;
     if (role === 'admin' && currentUser.name.toLowerCase().includes('sama')) return true;
-    return role === 'manager' || role === 'sales_manager' || role === 'admin' || role === 'super_admin' || role === 'crm_admin';
+    return role === 'manager' || role === 'admin' || role === 'super_admin' || role === 'crm_admin';
   }, [currentUser, effectiveRole]);
 
   const isAtefStrict = useMemo(() => {
     if (!currentUser) return false;
     const role = effectiveRole;
     const nameMatch = currentUser.name.toLowerCase().includes('atef');
-    const roleMatch = role === 'manager' || role === 'sales_manager';
+    const roleMatch = role === 'manager';
     return nameMatch && roleMatch;
   }, [currentUser, effectiveRole]);
 
   const canDeletePayments = useMemo(() => {
     if (!currentUser) return false;
     const role = effectiveRole;
-    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager' || role === 'admin') return true;
+    if (role === 'super_admin' || role === 'crm_admin' || role === 'manager' || role === 'admin') return true;
     if (role === 'admin' && currentUser.name.toLowerCase().includes('sama')) return true;
     return !!currentUser.can_delete_payments;
   }, [currentUser, effectiveRole]);
@@ -204,7 +204,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const canAccessSettings = useMemo(() => {
     if (!currentUser) return false;
     const role = effectiveRole;
-    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager' || role === 'admin') return true;
+    if (role === 'super_admin' || role === 'crm_admin' || role === 'manager' || role === 'admin') return true;
     if (currentUser.name.toLowerCase().includes('atef')) return true;
     return !!currentUser.can_access_settings_and_history;
   }, [currentUser, effectiveRole]);
@@ -212,21 +212,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const canViewGlobalDashboard = useMemo(() => {
     if (!currentUser) return false;
     const role = effectiveRole;
-    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager' || role === 'admin') return true;
+    if (role === 'super_admin' || role === 'crm_admin' || role === 'manager' || role === 'admin') return true;
     return !!currentUser.can_view_global_dashboard;
   }, [currentUser, effectiveRole]);
 
   const canDeleteRecords = useMemo(() => {
     if (!currentUser) return false;
     const role = effectiveRole;
-    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager' || role === 'admin') return true;
+    if (role === 'super_admin' || role === 'crm_admin' || role === 'manager' || role === 'admin') return true;
     return !!currentUser.can_delete_records || !!currentUser.can_delete_payments;
   }, [currentUser, effectiveRole]);
 
   const canAssignLeads = useMemo(() => {
     if (!currentUser) return false;
     const role = effectiveRole;
-    if (role === 'super_admin' || role === 'crm_admin' || role === 'sales_manager' || role === 'manager' || role === 'admin') return true;
+    if (role === 'super_admin' || role === 'crm_admin' || role === 'manager' || role === 'admin') return true;
     return !!currentUser.can_assign_leads || !!currentUser.can_access_settings_and_history;
   }, [currentUser, effectiveRole]);
 
@@ -346,7 +346,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'coaches'));
 
     let unsubTargets: (() => void) | undefined;
-    if (currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin' || currentUser.role === 'sales_manager') {
+    if (currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') {
       unsubTargets = onSnapshot(collection(db, 'targets'), (snapshot) => {
         setUserTargets(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as UserSalesTarget)));
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'targets'));
@@ -386,7 +386,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Seed initial coaches if none exist
   useEffect(() => {
     const seedInitialCoaches = async () => {
-      if (currentUser && (currentUser.role === 'manager' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin' || currentUser.role === 'sales_manager')) {
+      if (currentUser && (currentUser.role === 'manager' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin')) {
         try {
           const snapshot = await getDocs(collection(db, 'coaches'));
           if (snapshot.empty) {

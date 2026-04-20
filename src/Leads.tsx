@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useDeferredValue } from 'react';
 import { useAppContext } from './context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -31,6 +31,13 @@ export default function Leads() {
   const [filterStage, setFilterStage] = useState<LeadStage | 'All'>('All');
   const [filterInterest, setFilterInterest] = useState<LeadInterest | 'All'>('All');
   const [filterAssignedTo, setFilterAssignedTo] = useState<string | 'All'>('All');
+
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const deferredFilterBranch = useDeferredValue(filterBranch);
+  const deferredFilterStage = useDeferredValue(filterStage);
+  const deferredFilterInterest = useDeferredValue(filterInterest);
+  const deferredFilterAssignedTo = useDeferredValue(filterAssignedTo);
+  const deferredActiveTab = useDeferredValue(activeTab);
   
   const [newLeadName, setNewLeadName] = useState('');
   const [newLeadPhone, setNewLeadPhone] = useState('');
@@ -55,7 +62,7 @@ export default function Leads() {
     let filtered = allLeads;
     
     // Tab filtering
-    switch (activeTab) {
+    switch (deferredActiveTab) {
       case 'unassigned': filtered = filtered.filter(l => !l.assignedTo); break;
       case 'instagram': filtered = filtered.filter(l => l.source === 'Instagram'); break;
       case 'whatsapp': filtered = filtered.filter(l => l.source === 'WhatsApp'); break;
@@ -65,8 +72,8 @@ export default function Leads() {
     }
 
     // Search filtering
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
+    if (deferredSearchTerm) {
+      const term = deferredSearchTerm.toLowerCase();
       filtered = filtered.filter(l => 
         l.name.toLowerCase().includes(term) || 
         l.phone.includes(term)
@@ -74,17 +81,17 @@ export default function Leads() {
     }
 
     // Quick filters
-    if (filterBranch !== 'All') {
-      filtered = filtered.filter(l => l.branch === filterBranch);
+    if (deferredFilterBranch !== 'All') {
+      filtered = filtered.filter(l => l.branch === deferredFilterBranch);
     }
-    if (filterStage !== 'All') {
-      filtered = filtered.filter(l => l.stage === filterStage);
+    if (deferredFilterStage !== 'All') {
+      filtered = filtered.filter(l => l.stage === deferredFilterStage);
     }
-    if (filterInterest !== 'All') {
-      filtered = filtered.filter(l => l.interest === filterInterest);
+    if (deferredFilterInterest !== 'All') {
+      filtered = filtered.filter(l => l.interest === deferredFilterInterest);
     }
-    if (filterAssignedTo !== 'All') {
-      filtered = filtered.filter(l => filterAssignedTo === 'unassigned' ? !l.assignedTo : l.assignedTo === filterAssignedTo);
+    if (deferredFilterAssignedTo !== 'All') {
+      filtered = filtered.filter(l => deferredFilterAssignedTo === 'unassigned' ? !l.assignedTo : l.assignedTo === deferredFilterAssignedTo);
     }
 
     return filtered;
@@ -379,7 +386,7 @@ export default function Leads() {
                     <SelectTrigger className="w-[130px] h-8 text-xs">
                       <SelectValue placeholder="Assign rep">
                         {lead.assignedTo && lead.assignedTo !== 'unassigned'
-                          ? users.find(u => u.id === lead.assignedTo)?.name || lead.assignedTo
+                          ? users.find(u => u.id === lead.assignedTo)?.name || 'Unknown User'
                           : undefined}
                       </SelectValue>
                     </SelectTrigger>
@@ -714,7 +721,7 @@ export default function Leads() {
                     ? undefined
                     : filterAssignedTo === 'unassigned'
                       ? 'Unassigned'
-                      : users.find(u => u.id === filterAssignedTo)?.name || filterAssignedTo}
+                      : users.find(u => u.id === filterAssignedTo)?.name || 'Unknown User'}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>

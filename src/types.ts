@@ -4,7 +4,7 @@ export type LeadCategory = 'Out of area zone' | 'Social class' | 'Price' | 'No a
 export type LeadSource = 'Instagram' | 'WhatsApp' | 'Walk-in' | 'TikTok' | 'Other';
 export type LeadStage = 'New' | 'Trial' | 'Follow Up' | 'Converted' | 'Lost';
 export type SessionType = 'Private' | 'Group';
-export type UserRole = 'manager' | 'rep' | 'admin' | 'super_admin' | 'crm_admin' | 'sales_manager' | 'sales_rep';
+export type UserRole = 'manager' | 'rep' | 'admin' | 'super_admin' | 'crm_admin';
 export type Branch = 'COMPLEX' | 'MIVIDA' | 'Strike IMPACT';
 
 export interface Package {
