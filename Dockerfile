@@ -31,8 +31,8 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/dist-server ./dist-server
 COPY --from=builder /app/package*.json ./
 
-# Install only production dependencies
-RUN npm install --omit=dev
+# Install only production dependencies cleanly and ignore postinstall scripts that fail
+RUN npm ci --omit=dev --ignore-scripts
 
 # The server listens on the port defined by the Cloud Run environment
 ENV NODE_ENV=production
