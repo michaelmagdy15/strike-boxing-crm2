@@ -173,7 +173,7 @@ service cloud.firestore {
     }
 
     match /settings/{settingId} {
-      allow read: if isAuthenticated();
+      allow read: if settingId == "branding" || isAuthenticated();
       allow write: if isAdmin();
     }
 

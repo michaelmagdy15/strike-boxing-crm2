@@ -15,8 +15,8 @@ import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, L
 
 function PaginatedList({ items, renderItem, itemsPerPage = 5 }: { items: any[], renderItem: (item: any) => React.ReactNode, itemsPerPage?: number }) {
   const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = Math.ceil(items.length / itemsPerPage);
-  const paginatedItems = items.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPages = Math.ceil((items || []).length / itemsPerPage);
+  const paginatedItems = (items || []).slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   if (items.length === 0) return null;
 
@@ -958,7 +958,7 @@ export default function Dashboard() {
                           <td className="px-6 py-4">
                             <div>
                               <div className="text-sm font-semibold text-gray-900">{rep.name}</div>
-                              <div className="text-[10px] text-muted-foreground uppercase font-medium">{rep.id.slice(-6)}</div>
+                              <div className="text-[10px] text-muted-foreground uppercase font-medium">{rep.id?.slice(-6) || 'N/A'}</div>
                             </div>
                           </td>
                           <td className="px-6 py-4">

@@ -109,7 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!currentUser) return;
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      setUsers(snapshot.docs.map(doc => doc.data() as User));
+      setUsers(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User)));
     }, (error) => console.error('Firestore Error (users):', error));
     return () => unsubUsers();
   }, [currentUser]);
