@@ -432,543 +432,289 @@ export default function Clients() {
                     <DialogTrigger render={<Button variant="outline" size="sm" />}>
                       Manage
                     </DialogTrigger>
-                    <DialogContent className="!w-full !max-w-[1400px] h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl rounded-3xl bg-background/95 backdrop-blur-xl">
-                      <DialogHeader className="p-10 pb-6 bg-muted/30 border-b">
-                        <DialogTitle className="text-3xl font-extrabold tracking-tight">Manage Member: <span className="text-primary">{client.name}</span></DialogTitle>
+                    <DialogContent className="!w-full !max-w-4xl max-h-[92vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl rounded-2xl bg-background">
+                      {/* Compact header */}
+                      <DialogHeader className="px-6 pt-5 pb-4 border-b bg-muted/20 flex-shrink-0">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                            <User className="h-5 w-5 text-primary" />
+                          </div>
+                          <div>
+                            <DialogTitle className="text-lg font-bold leading-tight">{client.name}</DialogTitle>
+                            <p className="text-xs text-muted-foreground">{client.phone} · {client.branch || 'No branch'} · <span className={client.status === 'Active' ? 'text-green-600 font-semibold' : client.status === 'Nearly Expired' ? 'text-amber-600 font-semibold' : 'text-red-500 font-semibold'}>{client.status}</span></p>
+                          </div>
+                        </div>
                       </DialogHeader>
-                      
-                      <Tabs defaultValue="details" className="flex-1 flex flex-col overflow-hidden">
-                        <div className="px-10 py-6 border-b bg-muted/10">
-                          <TabsList className="bg-muted/80 p-2 rounded-3xl h-auto inline-flex w-full md:w-auto gap-4 border-2 border-white/10 shadow-inner">
-                            <TabsTrigger 
-                              value="details" 
-                              className="rounded-2xl px-12 py-5 data-[state=active]:bg-background data-[state=active]:shadow-2xl data-[state=active]:text-primary data-[state=active]:border-primary/20 transition-all font-black uppercase tracking-widest text-sm border-2 border-transparent h-auto"
-                            >
-                              Personal Details
-                            </TabsTrigger>
-                            <TabsTrigger 
-                              value="payments" 
-                              className="rounded-2xl px-12 py-5 data-[state=active]:bg-background data-[state=active]:shadow-2xl data-[state=active]:text-primary data-[state=active]:border-primary/20 transition-all font-black uppercase tracking-widest text-sm border-2 border-transparent h-auto"
-                            >
-                              Payment History
-                            </TabsTrigger>
-                            <TabsTrigger 
-                              value="qr" 
-                              className="rounded-2xl px-12 py-5 data-[state=active]:bg-background data-[state=active]:shadow-2xl data-[state=active]:text-primary data-[state=active]:border-primary/20 transition-all font-black uppercase tracking-widest text-sm border-2 border-transparent h-auto"
-                            >
-                              Check-in QR
-                            </TabsTrigger>
-                            <TabsTrigger 
-                              value="interactions" 
-                              className="rounded-2xl px-12 py-5 data-[state=active]:bg-background data-[state=active]:shadow-2xl data-[state=active]:text-primary data-[state=active]:border-primary/20 transition-all font-black uppercase tracking-widest text-sm border-2 border-transparent h-auto"
-                            >
-                              Interactions
-                            </TabsTrigger>
-                            <TabsTrigger 
-                              value="comments" 
-                              className="rounded-2xl px-12 py-5 data-[state=active]:bg-background data-[state=active]:shadow-2xl data-[state=active]:text-primary data-[state=active]:border-primary/20 transition-all font-black uppercase tracking-widest text-sm border-2 border-transparent h-auto"
-                            >
-                              Comments
-                            </TabsTrigger>
-                            <TabsTrigger 
-                              value="packages" 
-                              className="rounded-2xl px-12 py-5 data-[state=active]:bg-background data-[state=active]:shadow-2xl data-[state=active]:text-primary data-[state=active]:border-primary/20 transition-all font-black uppercase tracking-widest text-sm border-2 border-transparent h-auto"
-                            >
-                              Packages
-                            </TabsTrigger>
+
+                      <Tabs defaultValue="overview" className="flex-1 flex flex-col overflow-hidden min-h-0">
+                        {/* Sleek tab bar */}
+                        <div className="px-6 pt-3 pb-0 border-b flex-shrink-0">
+                          <TabsList className="bg-transparent p-0 h-auto gap-0 w-full rounded-none border-none shadow-none flex">
+                            {[
+                              { value: 'overview', label: 'Overview' },
+                              { value: 'activity', label: 'Activity' },
+                              { value: 'history', label: 'History' },
+                            ].map(tab => (
+                              <TabsTrigger
+                                key={tab.value}
+                                value={tab.value}
+                                className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none bg-transparent px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-muted-foreground transition-all"
+                              >
+                                {tab.label}
+                              </TabsTrigger>
+                            ))}
                           </TabsList>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-8 pt-6 custom-scrollbar">
-                          <TabsContent value="details" className="mt-0 outline-none">
-                            <div className="space-y-6">
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
-                                <div className="space-y-2">
-                                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Status</Label>
-                                  <select 
-                                    className="flex h-11 w-full items-center justify-between rounded-xl border border-input bg-background/50 px-4 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all"
-                                    defaultValue={client.status}
-                                    onChange={(e) => updateClient(client.id, { status: e.target.value as any })}
-                                  >
-                                    <option value="Active">Active</option>
-                                    <option value="Nearly Expired">Nearly Expired</option>
-                                    <option value="Expired">Expired</option>
-                                    <option value="Hold">Hold</option>
-                                  </select>
+                        <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
+
+                          {/* ── OVERVIEW TAB ── */}
+                          <TabsContent value="overview" className="mt-0 outline-none p-5 space-y-5">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                              {/* Left: Editable fields */}
+                              <div className="space-y-4 p-4 rounded-xl border bg-muted/20">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Member Details</p>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Status</Label>
+                                    <select
+                                      className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                      defaultValue={client.status}
+                                      onChange={(e) => updateClient(client.id, { status: e.target.value as any })}
+                                    >
+                                      <option value="Active">Active</option>
+                                      <option value="Nearly Expired">Nearly Expired</option>
+                                      <option value="Expired">Expired</option>
+                                      <option value="Hold">Hold</option>
+                                    </select>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Branch</Label>
+                                    <select
+                                      className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                      defaultValue={client.branch || ''}
+                                      onChange={(e) => updateClient(client.id, { branch: e.target.value as any })}
+                                    >
+                                      <option value="" disabled>Select Branch</option>
+                                      {branches.map(b => <option key={b} value={b}>{b}</option>)}
+                                    </select>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Points</Label>
+                                    <Input type="number" className="h-9 rounded-lg bg-background text-sm px-3" defaultValue={client.points} placeholder="0" onChange={(e) => updateClient(client.id, { points: parseInt(e.target.value) || 0 })} />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Date of Birth</Label>
+                                    <Input type="date" className="h-9 rounded-lg bg-background text-sm px-3" defaultValue={client.dateOfBirth ? format(parseISO(client.dateOfBirth), 'yyyy-MM-dd') : ''} onChange={(e) => updateClient(client.id, { dateOfBirth: new Date(e.target.value).toISOString() })} />
+                                  </div>
+                                  <div className="space-y-1 col-span-2">
+                                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Assigned Sales Rep</Label>
+                                    <select
+                                      className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                      value={client.assignedTo || 'unassigned'}
+                                      onChange={(e) => updateClient(client.id, { assignedTo: e.target.value === 'unassigned' ? '' : e.target.value })}
+                                    >
+                                      <option value="unassigned">Unassigned</option>
+                                      <optgroup label="System Users">
+                                        {users.filter(u => u.role === 'rep').map(rep => (
+                                          <option key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown'}</option>
+                                        ))}
+                                      </optgroup>
+                                      <optgroup label="Sales Members">
+                                        {SALES_MEMBERS.map(name => (
+                                          <option key={name} value={name}>{name}</option>
+                                        ))}
+                                      </optgroup>
+                                    </select>
+                                  </div>
                                 </div>
-                                <div className="space-y-2">
-                                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Branch</Label>
-                                  <select 
-                                    className="flex h-11 w-full items-center justify-between rounded-xl border border-input bg-background/50 px-4 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all"
-                                    defaultValue={client.branch || ''}
-                                    onChange={(e) => updateClient(client.id, { branch: e.target.value as any })}
-                                  >
-                                    <option value="" disabled>Select Branch</option>
-                                    {branches.map(b => (
-                                      <option key={b} value={b}>{b}</option>
+                              </div>
+
+                              {/* Right: Package card */}
+                              <div className="p-4 rounded-xl border bg-muted/20 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Current Package</p>
+                                  <Button variant="outline" size="sm" className="h-7 text-[10px] bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-200" onClick={() => { const newPkg = { id: Math.random().toString(36).substring(7), packageName: '', status: 'Active' as const }; updateClient(client.id, { packages: [...(client.packages || []), newPkg] }); }}>
+                                    <Plus className="h-3 w-3 mr-1" /> Add
+                                  </Button>
+                                </div>
+                                {(client.packages || []).length > 0 ? (
+                                  <div className="space-y-2">
+                                    {(client.packages || []).map((pkg, idx) => (
+                                      <div key={pkg.id} className="p-3 bg-background rounded-lg border text-xs space-y-2">
+                                        <Select value={pkg.packageName} onValueChange={(val) => { if (!val) return; const sysPkg = packages.find(p => p.name === val); const updated = [...(client.packages || [])]; const cur = updated[idx]; if (!cur) return; updated[idx] = { ...cur, packageName: val, sessionsTotal: sysPkg?.sessions, sessionsRemaining: sysPkg?.sessions, endDate: sysPkg && cur.startDate ? addDays(parseISO(cur.startDate), sysPkg.expiryDays).toISOString() : cur.endDate }; updateClient(client.id, { packages: updated }); }}>
+                                          <SelectTrigger className="h-7 text-xs bg-muted/30"><SelectValue placeholder="Select package" /></SelectTrigger>
+                                          <SelectContent>{packages.map(p => <SelectItem key={p.id} value={p.name} className="text-xs">{p.name}</SelectItem>)}<SelectItem value="Custom" className="text-xs">Custom</SelectItem></SelectContent>
+                                        </Select>
+                                        <div className="grid grid-cols-3 gap-2">
+                                          <div><p className="text-[9px] text-muted-foreground uppercase mb-0.5">Start</p><Input type="date" className="h-7 text-xs bg-background" value={pkg.startDate ? format(parseISO(pkg.startDate), 'yyyy-MM-dd') : ''} onChange={e => { const updated = [...(client.packages || [])]; const cur = updated[idx]; if (!cur) return; const sysPkg = packages.find(p => p.name === cur.packageName); const ns = new Date(e.target.value).toISOString(); updated[idx] = { ...cur, startDate: ns, endDate: sysPkg ? addDays(parseISO(ns), sysPkg.expiryDays).toISOString() : cur.endDate }; updateClient(client.id, { packages: updated }); }} /></div>
+                                          <div><p className="text-[9px] text-muted-foreground uppercase mb-0.5">Expiry</p><Input type="date" className="h-7 text-xs bg-background" value={pkg.endDate ? format(parseISO(pkg.endDate), 'yyyy-MM-dd') : ''} onChange={e => { const updated = [...(client.packages || [])]; const cur = updated[idx]; if (!cur) return; updated[idx] = { ...cur, endDate: new Date(e.target.value).toISOString() }; updateClient(client.id, { packages: updated }); }} /></div>
+                                          <div><p className="text-[9px] text-muted-foreground uppercase mb-0.5">Remaining</p><Input type="number" className="h-7 text-xs bg-background" value={pkg.sessionsRemaining ?? ''} onChange={e => { const updated = [...(client.packages || [])]; const cur = updated[idx]; if (!cur) return; updated[idx] = { ...cur, sessionsRemaining: parseInt(e.target.value) || 0 }; updateClient(client.id, { packages: updated }); }} /></div>
+                                        </div>
+                                        <div className="flex gap-1">
+                                          <Select value={pkg.status} onValueChange={(val: any) => { if (!val) return; const updated = [...(client.packages || [])]; const cur = updated[idx]; if (!cur) return; updated[idx] = { ...cur, status: val }; updateClient(client.id, { packages: updated }); }}>
+                                            <SelectTrigger className="h-7 text-xs flex-1 bg-background"><SelectValue /></SelectTrigger>
+                                            <SelectContent><SelectItem value="Active" className="text-xs">Active</SelectItem><SelectItem value="Expired" className="text-xs">Expired</SelectItem><SelectItem value="Cancelled" className="text-xs">Cancelled</SelectItem></SelectContent>
+                                          </Select>
+                                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => updateClient(client.id, { packages: (client.packages || []).filter((_, i) => i !== idx) })}><Trash2 className="h-3 w-3" /></Button>
+                                        </div>
+                                      </div>
                                     ))}
-                                  </select>
-                                </div>
-                                <div className="space-y-2">
-                                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Points</Label>
-                                  <Input 
-                                    type="number" 
-                                    className="h-11 rounded-xl bg-background/50 focus-visible:ring-primary transition-all px-4"
-                                    defaultValue={client.points} 
-                                    placeholder="0"
-                                    onChange={(e) => updateClient(client.id, { points: parseInt(e.target.value) || 0 })}
-                                  />
-                                </div>
-
-                                <div className="space-y-2">
-                                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Date of Birth</Label>
-                                  <Input 
-                                    type="date" 
-                                    className="h-11 rounded-xl bg-background/50 focus-visible:ring-primary transition-all px-4"
-                                    defaultValue={client.dateOfBirth ? format(parseISO(client.dateOfBirth), 'yyyy-MM-dd') : ''}
-                                    onChange={(e) => updateClient(client.id, { dateOfBirth: new Date(e.target.value).toISOString() })}
-                                  />
-                                </div>
+                                  </div>
+                                ) : (
+                                  client.packageType && client.packageType !== 'Unknown' ? (
+                                    <div className="p-3 bg-primary/5 rounded-lg border text-xs space-y-2">
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div><span className="text-[9px] uppercase text-muted-foreground block">Package</span><span className="font-semibold">{client.packageType}</span></div>
+                                        {typeof client.sessionsRemaining !== 'undefined' && <div><span className="text-[9px] uppercase text-muted-foreground block">Sessions Left</span><span className="font-semibold">{client.sessionsRemaining}</span></div>}
+                                        {client.startDate && <div><span className="text-[9px] uppercase text-muted-foreground block">Start</span><span className="font-semibold">{format(parseISO(client.startDate), 'dd MMM yyyy')}</span></div>}
+                                        {client.membershipExpiry && <div><span className="text-[9px] uppercase text-muted-foreground block">Expires</span><span className="font-semibold">{format(parseISO(client.membershipExpiry), 'dd MMM yyyy')}</span></div>}
+                                      </div>
+                                      <p className="text-[10px] text-muted-foreground">Click "+ Add" to create a formal entry.</p>
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-muted-foreground text-center py-4">No package found. Click "+ Add" to assign one.</p>
+                                  )
+                                )}
                               </div>
                             </div>
                           </TabsContent>
 
-                          <TabsContent value="payments" className="mt-0 outline-none">
-                            <div className="space-y-6">
-                              <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                                  <Calendar className="h-4 w-4" />
-                                  Transaction History
-                                </h3>
-                                <Badge variant="secondary" className="rounded-full px-4 py-1 font-semibold bg-primary/10 text-primary border-none">
-                                  {payments.filter(p => p.clientId === client.id).length} Entries
-                                </Badge>
-                              </div>
-                              <div className="rounded-2xl border bg-background/50 overflow-hidden shadow-sm">
-                                <Table>
-                                  <TableHeader className="bg-muted/40">
-                                    <TableRow className="border-b">
-                                      <TableHead className="py-4 px-6 text-xs font-bold uppercase">Date</TableHead>
-                                      <TableHead className="py-4 px-6 text-xs font-bold uppercase text-right">Amount</TableHead>
-                                      <TableHead className="py-4 px-6 text-xs font-bold uppercase">Package</TableHead>
-                                      <TableHead className="py-4 px-6 text-xs font-bold uppercase text-center">Method</TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {payments.filter(p => p.clientId === client.id)
-                                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                                      .map(payment => (
-                                        <TableRow key={payment.id} className="hover:bg-muted/20 border-b transition-colors group">
-                                          <TableCell className="py-4 px-6">
-                                            <div className="text-sm font-medium">{format(parseISO(payment.date), 'MMM d, yyyy')}</div>
-                                            <div className="text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                                              {format(parseISO(payment.date), 'h:mm a')}
-                                            </div>
-                                          </TableCell>
-                                          <TableCell className="py-4 px-6 text-right">
-                                            <span className="text-sm font-bold text-green-600">
-                                              {payment.amount.toLocaleString()} <span className="text-[10px]">LE</span>
-                                            </span>
-                                          </TableCell>
-                                          <TableCell className="py-4 px-6 text-sm">
-                                            <div className="font-medium text-foreground max-w-[150px] truncate" title={payment.packageType}>
-                                              {payment.packageType}
-                                            </div>
-                                          </TableCell>
-                                          <TableCell className="py-4 px-6 text-center">
-                                            <Badge variant="outline" className="font-bold text-[10px] px-2 py-0.5 rounded-md bg-muted/30 border-muted-foreground/20">
-                                              {payment.method}
-                                            </Badge>
-                                          </TableCell>
-                                        </TableRow>
-                                      ))}
-                                    {payments.filter(p => p.clientId === client.id).length === 0 && (
-                                      <TableRow>
-                                        <TableCell colSpan={4} className="text-center py-16 text-muted-foreground italic text-sm">
-                                          <div className="flex flex-col items-center gap-2 opacity-40">
-                                            <Calendar className="h-10 w-10 mb-2" />
-                                            <span>No payments recorded for this member.</span>
-                                          </div>
-                                        </TableCell>
-                                      </TableRow>
-                                    )}
-                                  </TableBody>
-                                </Table>
-                              </div>
-                            </div>
-                          </TabsContent>
-
-                          <TabsContent value="interactions" className="mt-0 outline-none">
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-                              <div className="lg:col-span-7 space-y-6">
-                                <div className="h-[400px] overflow-y-auto space-y-4 pr-4 custom-scrollbar bg-muted/10 p-6 rounded-[24px] border border-white/5">
+                          {/* ── ACTIVITY TAB ── */}
+                          <TabsContent value="activity" className="mt-0 outline-none p-5">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                              {/* Interactions column */}
+                              <div className="space-y-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Interactions</p>
+                                <div className="h-48 overflow-y-auto space-y-2 custom-scrollbar">
                                   {client.interactions && client.interactions.length > 0 ? (
                                     [...client.interactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(interaction => (
-                                      <div key={interaction.id} className="bg-background/40 p-5 rounded-2xl border border-white/5 shadow-sm space-y-3">
-                                        <div className="flex justify-between items-start">
-                                          <div className="flex items-center gap-2">
-                                            <Badge className={
-                                              interaction.type === 'Call' ? 'bg-blue-500' :
-                                              interaction.type === 'WhatsApp' ? 'bg-green-500' :
-                                              interaction.type === 'Email' ? 'bg-amber-500' :
-                                              'bg-purple-500'
-                                            }>
-                                              {interaction.type}
-                                            </Badge>
-                                            <Badge variant="outline" className="border-primary/20 text-primary">
-                                              {interaction.outcome}
-                                            </Badge>
+                                      <div key={interaction.id} className="bg-muted/20 p-3 rounded-lg border text-xs space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex gap-1.5">
+                                            <Badge className={`text-[9px] px-1.5 py-0 h-5 ${interaction.type === 'Call' ? 'bg-blue-500' : interaction.type === 'WhatsApp' ? 'bg-green-500' : interaction.type === 'Email' ? 'bg-amber-500' : 'bg-purple-500'}`}>{interaction.type}</Badge>
+                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-5">{interaction.outcome}</Badge>
                                           </div>
-                                          <span className="text-[10px] uppercase font-black text-muted-foreground/60 tracking-tighter">
-                                            {format(parseISO(interaction.date), 'MMM d, h:mm a')}
-                                          </span>
+                                          <span className="text-[9px] text-muted-foreground">{format(parseISO(interaction.date), 'MMM d, h:mm a')}</span>
                                         </div>
-                                        <p className="text-sm leading-relaxed text-foreground/90 italic">"{interaction.notes}"</p>
-                                        <div className="flex justify-between items-center text-[10px] font-bold text-muted-foreground/50 border-t border-white/5 pt-2">
-                                          <span className="flex items-center gap-1"><User className="h-3 w-3" /> {interaction.author}</span>
-                                          {interaction.nextFollowUp && (
-                                            <span className="flex items-center gap-1 text-amber-500/80">
-                                              <Calendar className="h-3 w-3" /> Follow-up: {format(parseISO(interaction.nextFollowUp), 'MMM d')}
-                                            </span>
-                                          )}
-                                        </div>
+                                        <p className="text-muted-foreground leading-relaxed italic">"{interaction.notes}"</p>
+                                        {interaction.nextFollowUp && <p className="text-amber-600 text-[9px] flex items-center gap-1"><Calendar className="h-3 w-3" />Follow-up: {format(parseISO(interaction.nextFollowUp), 'MMM d')}</p>}
                                       </div>
                                     ))
                                   ) : (
-                                    <div className="h-full flex flex-col items-center justify-center text-muted-foreground italic gap-4">
-                                      <div className="p-4 bg-muted/20 rounded-full">
-                                        <Activity className="h-8 w-8 opacity-20" />
-                                      </div>
-                                      No interactions logged yet.
-                                    </div>
+                                    <div className="h-full flex items-center justify-center text-xs text-muted-foreground italic">No interactions yet.</div>
                                   )}
                                 </div>
-                                
-                                <div className="bg-background/80 backdrop-blur-sm p-8 rounded-[32px] border border-white/10 shadow-2xl space-y-6">
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                      <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Type</Label>
+                                <div className="p-3 rounded-xl border bg-muted/10 space-y-2.5">
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div className="space-y-1">
+                                      <Label className="text-[9px] uppercase font-bold text-muted-foreground">Type</Label>
                                       <Select value={interactionType} onValueChange={(v) => setInteractionType(v as InteractionType)}>
-                                        <SelectTrigger className="bg-muted/20 border-white/5 rounded-xl h-10">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="Call">Call</SelectItem>
-                                          <SelectItem value="WhatsApp">WhatsApp</SelectItem>
-                                          <SelectItem value="Email">Email</SelectItem>
-                                          <SelectItem value="Visit">Visit</SelectItem>
-                                        </SelectContent>
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent><SelectItem value="Call">Call</SelectItem><SelectItem value="WhatsApp">WhatsApp</SelectItem><SelectItem value="Email">Email</SelectItem><SelectItem value="Visit">Visit</SelectItem></SelectContent>
                                       </Select>
                                     </div>
-                                    <div className="space-y-2">
-                                      <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Outcome</Label>
+                                    <div className="space-y-1">
+                                      <Label className="text-[9px] uppercase font-bold text-muted-foreground">Outcome</Label>
                                       <Select value={interactionOutcome} onValueChange={(v) => setInteractionOutcome(v as InteractionOutcome)}>
-                                        <SelectTrigger className="bg-muted/20 border-white/5 rounded-xl h-10">
-                                          <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="Interested">Interested</SelectItem>
-                                          <SelectItem value="Not Answered">Not Answered</SelectItem>
-                                          <SelectItem value="Scheduled Trial">Scheduled Trial</SelectItem>
-                                          <SelectItem value="Rejected">Rejected</SelectItem>
-                                          <SelectItem value="Other">Other</SelectItem>
-                                        </SelectContent>
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent><SelectItem value="Interested">Interested</SelectItem><SelectItem value="Not Answered">Not Answered</SelectItem><SelectItem value="Scheduled Trial">Scheduled Trial</SelectItem><SelectItem value="Rejected">Rejected</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent>
                                       </Select>
                                     </div>
                                   </div>
-                                  <div className="space-y-2">
-                                    <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Follow-up Reminder (Optional)</Label>
-                                    <Input 
-                                      type="date" 
-                                      className="bg-muted/20 border-white/5 rounded-xl h-10" 
-                                      value={nextFollowUpDate}
-                                      onChange={(e) => setNextFollowUpDate(e.target.value)}
-                                    />
+                                  <div className="space-y-1">
+                                    <Label className="text-[9px] uppercase font-bold text-muted-foreground">Follow-up Date (optional)</Label>
+                                    <Input type="date" className="h-8 text-xs" value={nextFollowUpDate} onChange={(e) => setNextFollowUpDate(e.target.value)} />
                                   </div>
-                                  <div className="space-y-2">
-                                    <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Interaction Notes</Label>
-                                    <Textarea 
-                                      placeholder="Summary of the conversation..." 
-                                      className="min-h-[100px] rounded-2xl bg-muted/20 border-white/5 focus:border-primary/30 transition-all resize-none p-4"
-                                      value={interactionNotes}
-                                      onChange={(e) => setInteractionNotes(e.target.value)}
-                                    />
-                                  </div>
-                                  <Button className="w-full rounded-2xl py-6 font-black uppercase tracking-widest shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-[0.99] transition-transform" onClick={() => handleAddInteraction(client.id)}>
-                                    Log Interaction
-                                  </Button>
+                                  <Textarea placeholder="Notes..." className="min-h-[70px] text-xs resize-none rounded-lg" value={interactionNotes} onChange={(e) => setInteractionNotes(e.target.value)} />
+                                  <Button className="w-full h-9 text-xs font-bold" onClick={() => handleAddInteraction(client.id)}>Log Interaction</Button>
                                 </div>
                               </div>
 
-                              <div className="lg:col-span-5 h-full">
-                                <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-[32px] p-8 border border-primary/10 h-full flex flex-col items-center text-center space-y-6">
-                                  <div className="p-5 bg-background shadow-xl rounded-2xl rotate-3">
-                                    <Phone className="h-8 w-8 text-primary" />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <h4 className="font-black text-xl tracking-tight">Structured Logging</h4>
-                                    <p className="text-sm text-muted-foreground leading-relaxed">
-                                      Log each call, message or visit with specific outcomes to build a detailed history of engagement.
-                                    </p>
-                                  </div>
-                                  <div className="w-full h-px bg-primary/10" />
-                                  <div className="grid grid-cols-2 gap-4 w-full">
-                                    <div className="p-4 bg-background/50 rounded-2xl border border-white/5">
-                                      <div className="text-2xl font-black text-primary">{client.interactions?.length || 0}</div>
-                                      <div className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Total Logs</div>
-                                    </div>
-                                    <div className="p-4 bg-background/50 rounded-2xl border border-white/5">
-                                      <div className="text-2xl font-black text-primary">
-                                        {client.lastContactDate ? differenceInDays(new Date(), parseISO(client.lastContactDate)) : '∞'}
-                                      </div>
-                                      <div className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Days Since</div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </TabsContent>
-
-                          <TabsContent value="comments" className="mt-0 outline-none">
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-                              <div className="lg:col-span-7 space-y-6">
-                                  <div className="h-[400px] overflow-y-auto space-y-4 pr-4 custom-scrollbar bg-muted/10 p-6 rounded-[24px] border border-white/5">
-                                    {(client.comments || []).length > 0 ? (
-                                      [...(client.comments || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(comment => (
-                                        <div key={comment.id} className="bg-background/40 p-4 rounded-2xl text-sm border border-white/5 shadow-sm">
-                                          <p className="leading-relaxed text-foreground/90">{comment.text}</p>
-                                        <div className="flex justify-between mt-3 text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground/60">
-                                          <span className="flex items-center gap-1.5"><User className="h-3 w-3" /> {comment.author}</span>
+                              {/* Comments column */}
+                              <div className="space-y-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Internal Notes</p>
+                                <div className="h-48 overflow-y-auto space-y-2 custom-scrollbar">
+                                  {(client.comments || []).length > 0 ? (
+                                    [...(client.comments || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(comment => (
+                                      <div key={comment.id} className="bg-muted/20 p-3 rounded-lg border text-xs space-y-1">
+                                        <p className="leading-relaxed text-foreground/90">{comment.text}</p>
+                                        <div className="flex justify-between text-[9px] text-muted-foreground">
+                                          <span className="flex items-center gap-1"><User className="h-3 w-3" />{comment.author}</span>
                                           <span>{format(parseISO(comment.date), 'MMM d, h:mm a')}</span>
                                         </div>
                                       </div>
                                     ))
                                   ) : (
-                                    <div className="h-full flex items-center justify-center text-muted-foreground italic text-sm">
-                                      No comments logged yet.
-                                    </div>
+                                    <div className="h-full flex items-center justify-center text-xs text-muted-foreground italic">No notes yet.</div>
                                   )}
                                 </div>
-                                
-                                <div className="bg-background/80 backdrop-blur-sm p-6 rounded-[32px] border border-white/10 shadow-2xl space-y-4">
-                                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">General Note</Label>
-                                  <Textarea 
-                                    placeholder="Type any additional internal notes here..." 
-                                    className="min-h-[120px] rounded-2xl bg-muted/20 border-white/5 focus:border-primary/30 transition-all resize-none p-4"
-                                    value={newComment}
-                                    onChange={(e) => setNewComment(e.target.value)}
-                                  />
-                                  <Button className="w-full rounded-2xl py-6 font-black uppercase tracking-widest shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform" onClick={() => handleAddComment(client.id)}>
-                                    Save Note
-                                  </Button>
-                                </div>
-                              </div>
-
-                              <div className="lg:col-span-5">
-                                <div className="bg-primary/5 rounded-[32px] p-8 border border-primary/10 h-full flex flex-col justify-center items-center text-center space-y-4">
-                                  <div className="p-4 bg-primary/10 rounded-full">
-                                    <MessageSquare className="h-8 w-8 text-primary" />
-                                  </div>
-                                  <h4 className="font-bold text-lg">Internal Comments</h4>
-                                  <p className="text-sm text-muted-foreground px-4">Internal notes for team collaboration and background information.</p>
+                                <div className="p-3 rounded-xl border bg-muted/10 space-y-2.5">
+                                  <Label className="text-[9px] uppercase font-bold text-muted-foreground">Add Note</Label>
+                                  <Textarea placeholder="Type internal notes here..." className="min-h-[100px] text-xs resize-none rounded-lg" value={newComment} onChange={(e) => setNewComment(e.target.value)} />
+                                  <Button className="w-full h-9 text-xs font-bold" onClick={() => handleAddComment(client.id)}>Save Note</Button>
                                 </div>
                               </div>
                             </div>
                           </TabsContent>
 
-                          <TabsContent value="qr" className="mt-0 outline-none">
-                            <div className="flex flex-col items-center justify-center space-y-8 py-12">
-                              <div className="flex flex-col items-center gap-3">
-                                <div className="p-3 rounded-2xl bg-primary/10 text-primary">
-                                  <QrCode className="h-8 w-8" />
+                          {/* ── HISTORY TAB ── */}
+                          <TabsContent value="history" className="mt-0 outline-none p-5">
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                              {/* Payments (2/3 width) */}
+                              <div className="lg:col-span-2 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Payment History</p>
+                                  <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary border-none">{payments.filter(p => p.clientId === client.id).length} entries</Badge>
                                 </div>
-                                <h3 className="text-lg font-bold tracking-tight">Member Identity</h3>
-                                <p className="text-xs text-muted-foreground max-w-[200px] text-center">
-                                  Scan this QR code at the reception for instant check-in and attendance recording.
-                                </p>
+                                <div className="rounded-xl border bg-background overflow-hidden">
+                                  <Table>
+                                    <TableHeader className="bg-muted/30">
+                                      <TableRow>
+                                        <TableHead className="text-[10px] uppercase py-2.5 px-3">Date</TableHead>
+                                        <TableHead className="text-[10px] uppercase py-2.5 px-3 text-right">Amount</TableHead>
+                                        <TableHead className="text-[10px] uppercase py-2.5 px-3">Package</TableHead>
+                                        <TableHead className="text-[10px] uppercase py-2.5 px-3 text-center">Method</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {payments.filter(p => p.clientId === client.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(payment => (
+                                        <TableRow key={payment.id} className="hover:bg-muted/20 border-b transition-colors">
+                                          <TableCell className="py-2.5 px-3 text-xs">{format(parseISO(payment.date), 'MMM d, yyyy')}</TableCell>
+                                          <TableCell className="py-2.5 px-3 text-right"><span className="text-xs font-bold text-green-600">{payment.amount.toLocaleString()} LE</span></TableCell>
+                                          <TableCell className="py-2.5 px-3 text-xs max-w-[120px] truncate">{payment.packageType}</TableCell>
+                                          <TableCell className="py-2.5 px-3 text-center"><Badge variant="outline" className="text-[9px] px-1.5 py-0">{payment.method}</Badge></TableCell>
+                                        </TableRow>
+                                      ))}
+                                      {payments.filter(p => p.clientId === client.id).length === 0 && (
+                                        <TableRow><TableCell colSpan={4} className="text-center py-10 text-xs text-muted-foreground italic">No payments recorded.</TableCell></TableRow>
+                                      )}
+                                    </TableBody>
+                                  </Table>
+                                </div>
                               </div>
-                              <div id="qr-container" className="bg-white p-8 rounded-[32px] shadow-2xl border-4 border-muted/20 relative group">
-                                <div className="absolute inset-0 bg-primary/5 rounded-[28px] opacity-0 group-hover:opacity-100 transition-opacity" />
-                                <QRCodeSVG 
-                                  id={`qr-svg-${client.id}`}
-                                  value={client.memberId || client.id} 
-                                  size={220} 
-                                  level="H"
-                                  includeMargin={true}
-                                  data-qr-id={client.memberId || client.id}
-                                />
-                              </div>
-                              <div className="flex flex-wrap justify-center gap-4">
-                                <Button 
-                                  variant="outline" 
-                                  className="rounded-2xl border-primary/20 hover:bg-primary/5 text-primary font-bold gap-3 px-8 py-6 h-auto shadow-sm transition-all hover:scale-105"
-                                  onClick={() => downloadQRCode(client.memberId || client.id, client.name)}
-                                >
-                                  <Download className="h-5 w-5" />
-                                  Save to Device
-                                </Button>
-                                <Button 
-                                  variant="outline" 
-                                  className="rounded-2xl border-primary/20 hover:bg-primary/5 text-primary font-bold gap-3 px-8 py-6 h-auto shadow-sm transition-all hover:scale-105"
-                                  onClick={() => copyQRCodeToClipboard(client.memberId || client.id)}
-                                >
-                                  <Copy className="h-5 w-5" />
-                                  Copy for Sharing
-                                </Button>
-                              </div>
-                              <div className="text-center space-y-1 bg-muted/30 px-6 py-3 rounded-full border border-muted-foreground/10">
-                                <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Digital Pass ID</p>
-                                <p className="text-xl font-mono font-bold text-foreground tracking-tight">
-                                  #{client.memberId || client.id.slice(0, 8).toUpperCase()}
-                                </p>
+
+                              {/* QR Code (1/3 width) */}
+                              <div className="flex flex-col items-center gap-4 p-4 rounded-xl border bg-muted/10">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground self-start">Member QR</p>
+                                <div className="bg-white p-4 rounded-xl shadow-md">
+                                  <QRCodeSVG id={`qr-svg-${client.id}`} value={client.memberId || client.id} size={140} level="H" includeMargin={true} data-qr-id={client.memberId || client.id} />
+                                </div>
+                                <p className="text-xs font-mono font-bold text-center">#{client.memberId || client.id.slice(0, 8).toUpperCase()}</p>
+                                <div className="flex gap-2 w-full">
+                                  <Button variant="outline" size="sm" className="flex-1 text-[10px] gap-1" onClick={() => downloadQRCode(client.memberId || client.id, client.name)}><Download className="h-3 w-3" />Save</Button>
+                                  <Button variant="outline" size="sm" className="flex-1 text-[10px] gap-1" onClick={() => copyQRCodeToClipboard(client.memberId || client.id)}><Copy className="h-3 w-3" />Copy</Button>
+                                </div>
                               </div>
                             </div>
                           </TabsContent>
 
-                          <TabsContent value="packages" className="mt-0 outline-none">
-                            <div className="space-y-6 p-2">
-                              <div className="flex items-center justify-between">
-                                <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground ml-1">Client Packages</Label>
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  className="h-8 text-xs bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 hover:text-emerald-700 border-emerald-200"
-                                  onClick={() => {
-                                    const newPkg = {
-                                      id: Math.random().toString(36).substring(7),
-                                      packageName: '',
-                                      status: 'Active' as const
-                                    };
-                                    const updatedPackages = [...(client.packages || []), newPkg];
-                                    updateClient(client.id, { packages: updatedPackages });
-                                  }}
-                                >
-                                  <Plus className="h-3 w-3 mr-1" /> Add Package
-                                </Button>
-                              </div>
-                              
-                              <div className="space-y-3">
-                                {(client.packages || []).map((pkg, idx) => (
-                                  <div key={pkg.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 p-3 bg-muted/30 rounded-xl border relative">
-                                    <div className="md:col-span-3 space-y-1">
-                                      <Label className="text-[10px] uppercase text-muted-foreground">Package</Label>
-                                      <Select 
-                                        value={pkg.packageName} 
-                                        onValueChange={(val) => {
-                                           if (!val) return;
-                                           const sysPkg = packages.find(p => p.name === val);
-                                           const updated = [...(client.packages || [])];
-                                           const currentPkg = updated[idx];
-                                           if (!currentPkg) return;
-                                           
-                                           updated[idx] = {
-                                             ...currentPkg, 
-                                             packageName: val,
-                                             sessionsTotal: sysPkg ? sysPkg.sessions : undefined,
-                                             sessionsRemaining: sysPkg ? sysPkg.sessions : undefined,
-                                             endDate: sysPkg && currentPkg.startDate ? addDays(parseISO(currentPkg.startDate), sysPkg.expiryDays).toISOString() : currentPkg.endDate
-                                           };
-                                           updateClient(client.id, { packages: updated });
-                                        }}
-                                      >
-                                        <SelectTrigger className="h-8 text-xs bg-background"><SelectValue placeholder="Select" /></SelectTrigger>
-                                        <SelectContent>
-                                          {packages.map(p => <SelectItem key={p.id} value={p.name} className="text-xs">{p.name}</SelectItem>)}
-                                          <SelectItem value="Custom" className="text-xs">Custom</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                    <div className="md:col-span-2 space-y-1">
-                                      <Label className="text-[10px] uppercase text-muted-foreground">Start</Label>
-                                      <Input 
-                                        type="date" className="h-8 text-xs bg-background" 
-                                        value={pkg.startDate ? format(parseISO(pkg.startDate), 'yyyy-MM-dd') : ''}
-                                        onChange={e => {
-                                          const updated = [...(client.packages || [])];
-                                          const currentPkg = updated[idx];
-                                          if (!currentPkg) return;
-                                          const sysPkg = packages.find(p => p.name === currentPkg.packageName);
-                                          const newStart = new Date(e.target.value).toISOString();
-                                          updated[idx] = { 
-                                            ...currentPkg, 
-                                            startDate: newStart,
-                                            endDate: sysPkg ? addDays(parseISO(newStart), sysPkg.expiryDays).toISOString() : currentPkg.endDate
-                                          };
-                                          updateClient(client.id, { packages: updated });
-                                        }}
-                                      />
-                                    </div>
-                                    <div className="md:col-span-2 space-y-1">
-                                      <Label className="text-[10px] uppercase text-muted-foreground">Expiry</Label>
-                                      <Input 
-                                        type="date" className="h-8 text-xs bg-background" 
-                                        value={pkg.endDate ? format(parseISO(pkg.endDate), 'yyyy-MM-dd') : ''}
-                                        onChange={e => {
-                                          const updated = [...(client.packages || [])];
-                                          const currentPkg = updated[idx];
-                                          if (!currentPkg) return;
-                                          updated[idx] = { ...currentPkg, endDate: new Date(e.target.value).toISOString() };
-                                          updateClient(client.id, { packages: updated });
-                                        }}
-                                      />
-                                    </div>
-                                    <div className="md:col-span-2 space-y-1">
-                                      <Label className="text-[10px] uppercase text-muted-foreground">Remaining</Label>
-                                      <Input 
-                                        type="number" className="h-8 text-xs bg-background" 
-                                        value={pkg.sessionsRemaining || ''}
-                                        onChange={e => {
-                                          const updated = [...(client.packages || [])];
-                                          const currentPkg = updated[idx];
-                                          if (!currentPkg) return;
-                                          updated[idx] = { ...currentPkg, sessionsRemaining: parseInt(e.target.value) || 0 };
-                                          updateClient(client.id, { packages: updated });
-                                        }}
-                                      />
-                                    </div>
-                                    <div className="md:col-span-3 space-y-1">
-                                      <Label className="text-[10px] uppercase text-muted-foreground">Status</Label>
-                                      <div className="flex gap-1 items-center">
-                                        <Select 
-                                          value={pkg.status} 
-                                          onValueChange={(val: any) => {
-                                            if (!val) return;
-                                            const updated = [...(client.packages || [])];
-                                            const currentPkg = updated[idx];
-                                            if (!currentPkg) return;
-                                            updated[idx] = { ...currentPkg, status: val };
-                                            updateClient(client.id, { packages: updated });
-                                          }}
-                                        >
-                                          <SelectTrigger className="h-8 text-xs flex-1 bg-background"><SelectValue /></SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="Active" className="text-xs">Active</SelectItem>
-                                            <SelectItem value="Expired" className="text-xs">Expired</SelectItem>
-                                            <SelectItem value="Cancelled" className="text-xs">Cancelled</SelectItem>
-                                            <SelectItem value="Pending" className="text-xs">Pending</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                        <Button 
-                                          variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0"
-                                          onClick={() => {
-                                            const updated = (client.packages || []).filter((_, i) => i !== idx);
-                                            updateClient(client.id, { packages: updated });
-                                          }}
-                                        ><Trash2 className="h-4 w-4" /></Button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                                {(client.packages || []).length === 0 && (
-                                  <p className="text-xs text-muted-foreground text-center py-6 bg-muted/20 rounded-xl border border-dashed">No packages found for this client. Click "Add Package" to assign one.</p>
-                                )}
-                              </div>
-                            </div>
-                          </TabsContent>
                         </div>
                       </Tabs>
                     </DialogContent>
                   </Dialog>
+
+
                 {canDeleteRecords && (
                   <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteClient(client.id)}>
                     <Trash2 className="h-4 w-4" />

@@ -142,17 +142,29 @@ export default function Dashboard() {
   }, [allClients]);
 
   const isPaymentAttributedToRep = React.useCallback((payment: any, repId: string, repName: string) => {
-    // 1. Direct ID match
+    const normalizedRepName = (repName || '').toLowerCase().trim();
+
+    // 1. Direct ID match on sales_rep_id or recordedBy
     if (payment.sales_rep_id === repId || payment.recordedBy === repId) return true;
     
     // 2. Client Assignment match
-    if (clientIdToAssignedRepMap.get(payment.clientId) === repId) return true;
+    // The assignedTo field may be a real userId OR a raw name string imported from sheets
+    const assignedValue = clientIdToAssignedRepMap.get(payment.clientId);
+    if (assignedValue) {
+      // 2a. Direct UUID match
+      if (assignedValue === repId) return true;
+      // 2b. Name-string match — resolve through mapping then compare to rep name
+      const resolvedName = (SALES_NAME_MAPPING[assignedValue] || assignedValue).toLowerCase().trim();
+      if (resolvedName === normalizedRepName) return true;
+      // 2c. Raw name direct match (in case the stored name already equals the rep name)
+      if (assignedValue.toLowerCase().trim() === normalizedRepName) return true;
+    }
     
-    // 3. Name mapping match (for imported data or manual entry fallback)
-    if (payment.sales_rep_id === 'system-import' || !payment.sales_rep_id) {
-      const salesName = (payment.salesName || '').trim();
-      const mappedName = SALES_NAME_MAPPING[salesName] || salesName;
-      if (mappedName.toLowerCase() === (repName || '').toLowerCase().trim()) return true;
+    // 3. salesName field match (for payments that do have this field set)
+    const salesName = (payment.salesName || '').trim();
+    if (salesName) {
+      const mappedName = (SALES_NAME_MAPPING[salesName] || salesName).toLowerCase();
+      if (mappedName === normalizedRepName || salesName.toLowerCase() === normalizedRepName) return true;
     }
     
     return false;

@@ -92,8 +92,21 @@ const CommissionReport: React.FC = () => {
       }
 
       // If still no ID, use the client assignment
-      if (!winnerId && p.clientId) {
-        winnerId = clientIdToAssignedRepMap.get(p.clientId);
+      if (p.clientId) {
+        const assigned = clientIdToAssignedRepMap.get(p.clientId);
+        if (assigned) {
+          if (!winnerId) {
+            // Try as direct user ID first
+            if (repIdToName[assigned]) {
+              winnerId = assigned;
+            } else {
+              // It's a name string — resolve through mapping then look up ID
+              const resolvedName = (SALES_NAME_MAPPING[assigned] || assigned).toLowerCase().trim();
+              const resolvedId = nameToRepId[resolvedName] || nameToRepId[assigned.toLowerCase().trim()];
+              if (resolvedId) winnerId = resolvedId;
+            }
+          }
+        }
       }
 
       const repId = winnerId || 'unassigned';

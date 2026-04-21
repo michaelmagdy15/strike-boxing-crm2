@@ -22,7 +22,10 @@ export const SALES_NAME_MAPPING: Record<string, string> = {
   'Atef': 'Atef Tarek',
   'EL GOO': 'Youssef Emad',
   'Maisoon': 'Maison Mohamed',
-  'Mustafa': 'Mustafa Mohamed',
+  'Maison': 'Maison Mohamed',
+  'Mustafa': 'Mustafa Mahmoud',
+  'Mustafa Mohamed': 'Mustafa Mahmoud',
   'Hassan Tarek': 'Hassan Tarek',
-  'Omar Ehab': 'Omar Ehab'
+  'Omar Ehab': 'Omar Ehab',
+  'Youssef': 'Youssef Emad',
 };

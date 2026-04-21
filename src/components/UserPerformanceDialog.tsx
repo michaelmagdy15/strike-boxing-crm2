@@ -73,14 +73,20 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
         }
 
         // Robust Attribution Logic (Matching Dashboard.tsx)
+        const normalizedRepName = (user.name || '').toLowerCase().trim();
         const isDirectMatch = p.sales_rep_id === user.id || p.recordedBy === user.id;
-        const isAssignedClient = client?.assignedTo === user.id;
         
-        // Check for aliases (Like "Maisoon" -> "Maison Mohamed")
-        const normalizedRepName = user.name.toLowerCase().trim();
-        const paymentSalesName = p.salesName?.toLowerCase().trim();
-        const mappedName = paymentSalesName ? (SALES_NAME_MAPPING[paymentSalesName]?.toLowerCase() || paymentSalesName) : '';
-        const isNameMatch = paymentSalesName && (paymentSalesName === normalizedRepName || mappedName === normalizedRepName);
+        // Client assignedTo may be a UUID or a raw name string from imports
+        const assignedTo = client?.assignedTo || '';
+        const resolvedAssignedName = (SALES_NAME_MAPPING[assignedTo] || assignedTo).toLowerCase().trim();
+        const isAssignedClient = assignedTo === user.id ||
+          resolvedAssignedName === normalizedRepName ||
+          assignedTo.toLowerCase().trim() === normalizedRepName;
+        
+        // salesName field match
+        const paymentSalesName = (p.salesName || '').trim();
+        const mappedName = paymentSalesName ? (SALES_NAME_MAPPING[paymentSalesName]?.toLowerCase() || paymentSalesName.toLowerCase()) : '';
+        const isNameMatch = paymentSalesName.length > 0 && (paymentSalesName.toLowerCase() === normalizedRepName || mappedName === normalizedRepName);
 
         return isDirectMatch || isAssignedClient || isNameMatch;
       });
