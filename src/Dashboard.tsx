@@ -99,20 +99,24 @@ export default function Dashboard() {
   const isPaymentAttributedToRep = React.useCallback((payment: any, repId: string, repName: string) => {
     // 1. Direct ID match on sales_rep_id or recordedBy
     if (payment.sales_rep_id === repId || payment.recordedBy === repId) return true;
-    
+
     // 2. Client Assignment match
-    // Find the client associated with this payment to check their assignment
     const client = allClients.find(c => c.id === payment.clientId);
     if (client && isClientAssignedToRep(client, repId, repName)) return true;
-    
-    // 3. salesName field match on the payment itself
-    const salesName = (payment.salesName || payment.assigned_sales_name || '').trim();
+
+    // 3. Name-based match: check salesName, assigned_sales_name, AND sales_rep_id (may be a name string from Excel imports)
+    const salesName = (
+      payment.salesName ||
+      payment.assigned_sales_name ||
+      // Only use sales_rep_id as a name fallback if it doesn't look like a Firebase UID (UIDs are 28 chars, alphanumeric)
+      (payment.sales_rep_id && payment.sales_rep_id.length < 25 ? payment.sales_rep_id : '')
+    ).trim();
     if (salesName) {
       const canonicalSalesName = getCanonicalName(salesName);
       const canonicalRep = getCanonicalName(repName);
       if (canonicalSalesName === canonicalRep && canonicalSalesName !== '') return true;
     }
-    
+
     return false;
   }, [allClients, isClientAssignedToRep, getCanonicalName]);
 
@@ -204,25 +208,35 @@ export default function Dashboard() {
 
   
   const filteredSalesData = React.useMemo(() => {
-    let targetAmount = salesTarget.targetAmount;
-    
+    let targetAmount = 0;
+
     let relevantPayments = payments.filter(p => format(parseISO(p.date), 'yyyy-MM') === currentMonthStr);
-    
+
     if (canViewGlobalDashboard && selectedRepId !== 'all') {
-      // Filter for specific rep (Manager view)
-      const repTarget = userTargets.find(t => t.userId === selectedRepId && t.month === currentMonthStr);
-      if (repTarget) {
-        targetAmount = repTarget.targetAmount;
-      } else {
-        targetAmount = 0; 
-      }
-      
+      // Manager viewing a specific rep
+      const repTarget = userTargets.find(t =>
+        (t.userId === selectedRepId || t.sales_rep_id === selectedRepId) &&
+        (t.month === currentMonthStr || t.month_year === currentMonthStr)
+      );
+      targetAmount = repTarget?.targetAmount ?? 0;
+
       const selectedUser = users.find(u => u.id === selectedRepId);
       const repName = selectedUser?.name || '';
       relevantPayments = relevantPayments.filter(p => isPaymentAttributedToRep(p, selectedRepId, repName));
+    } else if (canViewGlobalDashboard && selectedRepId === 'all') {
+      // Manager viewing all reps — sum every active rep's target for the selected month
+      const monthTargets = userTargets.filter(t =>
+        t.month === currentMonthStr || t.month_year === currentMonthStr
+      );
+      targetAmount = monthTargets.length > 0
+        ? monthTargets.reduce((sum, t) => sum + (t.targetAmount || 0), 0)
+        : salesTarget.targetAmount;
     } else if (!canViewGlobalDashboard && currentUser) {
-      // Data is already filtered for the rep at the top-level 'payments' memo
-      const repTarget = userTargets.find(t => t.userId === currentUser.id && t.month === currentMonthStr);
+      // Rep viewing their own data
+      const repTarget = userTargets.find(t =>
+        (t.userId === currentUser.id || t.sales_rep_id === currentUser.id) &&
+        (t.month === currentMonthStr || t.month_year === currentMonthStr)
+      );
       if (repTarget) {
         targetAmount = repTarget.targetAmount;
       } else if (currentUser.salesTarget) {
@@ -457,7 +471,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {canViewGlobalDashboard && (
+      {canViewGlobalDashboard ? (
         <div className="flex flex-wrap items-center gap-4 bg-muted/30 p-4 rounded-lg border border-border/50">
           <Users className="h-5 w-5 text-muted-foreground shrink-0" />
           <div className="flex-1 min-w-0">
@@ -512,6 +526,33 @@ export default function Dashboard() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 bg-muted/30 px-4 py-3 rounded-lg border border-border/50">
+          <CalendarDays className="h-4 w-4 text-muted-foreground shrink-0" />
+          <span className="text-sm text-muted-foreground flex-1">Viewing history for</span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setSelectedMonthOffset(o => o + 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-semibold w-28 text-center">
+              {format(selectedMonth, 'MMM yyyy')}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setSelectedMonthOffset(o => Math.max(0, o - 1))}
+              disabled={selectedMonthOffset === 0}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
 

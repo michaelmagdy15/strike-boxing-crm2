@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAppContext } from './context';
+import { useAuth } from './contexts/AuthContext';
 import { useTasks } from './hooks/useTasks';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,8 @@ import { Task, TaskStatus, TaskPriority } from './types';
 import { Badge } from '@/components/ui/badge';
 
 export default function Tasks() {
-  const { users, clients, currentUser } = useAppContext();
+  const { users, clients } = useAppContext();
+  const { currentUser } = useAuth();
   const { tasks, addTask, updateTask, deleteTask } = useTasks();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -86,6 +88,15 @@ export default function Tasks() {
       case 'In Progress': return <Clock className="h-5 w-5 text-amber-500" />;
       default: return <Circle className="h-5 w-5 text-muted-foreground" />;
     }
+  };
+
+  // Returns true when the current user is only an assignee (not the creator and not a manager+)
+  const isAssigneeOnly = (task: Task): boolean => {
+    if (!currentUser) return true;
+    const role = currentUser.role;
+    if (role === 'manager' || role === 'admin' || role === 'super_admin' || role === 'crm_admin') return false;
+    if (task.createdBy === currentUser.id) return false;
+    return task.assignedTo === currentUser.id;
   };
 
   const sortedTasks = [...tasks].sort((a, b) => {
@@ -227,9 +238,11 @@ export default function Tasks() {
                           }}>
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => deleteTask(task.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {!isAssigneeOnly(task) && (
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => deleteTask(task.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -264,81 +277,105 @@ export default function Tasks() {
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Task</DialogTitle>
+            <DialogTitle>{editingTask && isAssigneeOnly(editingTask) ? 'Update Task Status' : 'Edit Task'}</DialogTitle>
           </DialogHeader>
           {editingTask && (
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Title</Label>
-                <Input 
-                  value={editingTask.title} 
-                  onChange={e => setEditingTask({...editingTask, title: e.target.value})} 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Input 
-                  value={editingTask.description || ''} 
-                  onChange={e => setEditingTask({...editingTask, description: e.target.value})} 
-                />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Due Date</Label>
-                  <Input 
-                    type="date" 
-                    value={editingTask.dueDate} 
-                    onChange={e => setEditingTask({...editingTask, dueDate: e.target.value})} 
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select value={editingTask.status} onValueChange={(v) => v && setEditingTask({...editingTask, status: v as TaskStatus})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Pending">Pending</SelectItem>
-                      <SelectItem value="In Progress">In Progress</SelectItem>
-                      <SelectItem value="Completed">Completed</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Priority</Label>
-                  <Select value={editingTask.priority} onValueChange={(v) => v && setEditingTask({...editingTask, priority: v as TaskPriority})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Low">Low</SelectItem>
-                      <SelectItem value="Medium">Medium</SelectItem>
-                      <SelectItem value="High">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Assign To</Label>
-                  <Select value={editingTask.assignedTo} onValueChange={v => v && setEditingTask({...editingTask, assignedTo: v})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {users.map(u => (
-                        <SelectItem key={u.id} value={u.id}>{u.name || u.email || 'Unknown User'}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Related Client (Optional)</Label>
-                <Select value={editingTask.clientId || 'none'} onValueChange={v => v && setEditingTask({...editingTask, clientId: v})}>
-                  <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {clients.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {isAssigneeOnly(editingTask) ? (
+                /* Assignees can only change status */
+                <>
+                  <p className="text-sm text-muted-foreground border rounded-md p-3 bg-muted/30">
+                    <strong>{editingTask.title}</strong>
+                    {editingTask.description && <span className="block mt-1">{editingTask.description}</span>}
+                  </p>
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select value={editingTask.status} onValueChange={(v) => v && setEditingTask({...editingTask, status: v as TaskStatus})}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Pending">Pending</SelectItem>
+                        <SelectItem value="In Progress">In Progress</SelectItem>
+                        <SelectItem value="Completed">Completed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              ) : (
+                /* Creators / managers get full edit */
+                <>
+                  <div className="space-y-2">
+                    <Label>Title</Label>
+                    <Input
+                      value={editingTask.title}
+                      onChange={e => setEditingTask({...editingTask, title: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Description</Label>
+                    <Input
+                      value={editingTask.description || ''}
+                      onChange={e => setEditingTask({...editingTask, description: e.target.value})}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Due Date</Label>
+                      <Input
+                        type="date"
+                        value={editingTask.dueDate}
+                        onChange={e => setEditingTask({...editingTask, dueDate: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <Select value={editingTask.status} onValueChange={(v) => v && setEditingTask({...editingTask, status: v as TaskStatus})}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Pending">Pending</SelectItem>
+                          <SelectItem value="In Progress">In Progress</SelectItem>
+                          <SelectItem value="Completed">Completed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Priority</Label>
+                      <Select value={editingTask.priority} onValueChange={(v) => v && setEditingTask({...editingTask, priority: v as TaskPriority})}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Low">Low</SelectItem>
+                          <SelectItem value="Medium">Medium</SelectItem>
+                          <SelectItem value="High">High</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Assign To</Label>
+                      <Select value={editingTask.assignedTo} onValueChange={v => v && setEditingTask({...editingTask, assignedTo: v})}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {users.filter(u => u.role === 'rep' || u.role === 'manager' || u.role === 'admin').map(u => (
+                            <SelectItem key={u.id} value={u.id}>{u.name || u.email || 'Unknown User'}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Related Client (Optional)</Label>
+                    <Select value={editingTask.clientId || 'none'} onValueChange={v => v && setEditingTask({...editingTask, clientId: v})}>
+                      <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {clients.map(c => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
               <Button className="w-full" onClick={handleEditTask} disabled={!editingTask.title || !editingTask.dueDate}>
                 Save Changes
               </Button>

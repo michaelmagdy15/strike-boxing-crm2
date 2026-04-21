@@ -9,12 +9,11 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, parseISO, isBefore, addDays, differenceInDays } from 'date-fns';
 import { Client, LeadCategory, LeadInterest, LeadSource, LeadStage, Branch, InteractionType, InteractionOutcome } from './types';
-import { SALES_MEMBERS } from './constants';
 import { Phone, Calendar, MessageSquare, Plus, FileSpreadsheet, Download, UserCheck, ArrowRight } from 'lucide-react';
 import ImportData from './ImportData';
 import ImportHistory from './ImportHistory';
@@ -36,6 +35,8 @@ export default function Leads() {
   const [interactionType, setInteractionType] = useState<InteractionType>('Call');
   const [interactionOutcome, setInteractionOutcome] = useState<InteractionOutcome>('Interested');
   const [interactionNotes, setInteractionNotes] = useState('');
+  const [interactionDate, setInteractionDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [interactionDateError, setInteractionDateError] = useState('');
   const [nextFollowUpDate, setNextFollowUpDate] = useState('');
   const [isNewLeadOpen, setIsNewLeadOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
@@ -66,7 +67,9 @@ export default function Leads() {
   const [newLeadPhone, setNewLeadPhone] = useState('');
   const [newLeadSource, setNewLeadSource] = useState<LeadSource>('Instagram');
   const [newLeadBranch, setNewLeadBranch] = useState<Branch | ''>('');
-  const [newLeadAssignedTo, setNewLeadAssignedTo] = useState<string>('');
+  const [newLeadAssignedTo, setNewLeadAssignedTo] = useState<string>(
+    currentUser?.role === 'rep' ? currentUser.id : ''
+  );
   
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
   const [leadToConvert, setLeadToConvert] = useState<Client | null>(null);
@@ -329,15 +332,21 @@ export default function Leads() {
   };
 
   const handleAddInteraction = () => {
+    if (!interactionDate) {
+      setInteractionDateError('Interaction date is required.');
+      return;
+    }
+    setInteractionDateError('');
     if (selectedLead && currentUser) {
       addInteraction(selectedLead.id, {
         type: interactionType,
         outcome: interactionOutcome,
         notes: interactionNotes,
-        date: new Date().toISOString(),
+        date: new Date(interactionDate).toISOString(),
         nextFollowUp: nextFollowUpDate || undefined
       });
       setInteractionNotes('');
+      setInteractionDate(format(new Date(), 'yyyy-MM-dd'));
       setNextFollowUpDate('');
     }
   };
@@ -542,18 +551,9 @@ export default function Leads() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="unassigned">Unassigned</SelectItem>
-                      <SelectGroup>
-                        <SelectLabel className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase">System Users</SelectLabel>
-                        {users.filter(u => u.role === 'rep').map(rep => (
-                          <SelectItem key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</SelectItem>
-                        ))}
-                      </SelectGroup>
-                      <SelectGroup>
-                        <SelectLabel className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase">Sales Members</SelectLabel>
-                        {SALES_MEMBERS.map(name => (
-                          <SelectItem key={name} value={name}>{name}</SelectItem>
-                        ))}
-                      </SelectGroup>
+                      {users.filter(u => u.role === 'rep').map(rep => (
+                        <SelectItem key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </TableCell>
@@ -832,10 +832,28 @@ export default function Leads() {
                                   </div>
                                 </div>
                                 <div className="space-y-2">
+                                  <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">
+                                    Interaction Date <span className="text-destructive">*</span>
+                                  </Label>
+                                  <Input
+                                    type="date"
+                                    className={`bg-muted/20 border-white/5 rounded-xl h-10 ${interactionDateError ? 'border-destructive ring-1 ring-destructive' : ''}`}
+                                    value={interactionDate}
+                                    onChange={(e) => {
+                                      setInteractionDate(e.target.value);
+                                      if (e.target.value) setInteractionDateError('');
+                                    }}
+                                    required
+                                  />
+                                  {interactionDateError && (
+                                    <p className="text-xs text-destructive mt-1">{interactionDateError}</p>
+                                  )}
+                                </div>
+                                <div className="space-y-2">
                                   <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Follow-up Reminder (Optional)</Label>
-                                  <Input 
-                                    type="date" 
-                                    className="bg-muted/20 border-white/5 rounded-xl h-10" 
+                                  <Input
+                                    type="date"
+                                    className="bg-muted/20 border-white/5 rounded-xl h-10"
                                     value={nextFollowUpDate}
                                     onChange={(e) => setNextFollowUpDate(e.target.value)}
                                   />
@@ -1041,29 +1059,29 @@ export default function Leads() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Assigned To</Label>
-                  <Select value={newLeadAssignedTo} onValueChange={(v) => setNewLeadAssignedTo(v || '')}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select assignment" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unassigned">Unassigned</SelectItem>
-                      <SelectGroup>
-                        <SelectLabel className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase">System Users</SelectLabel>
+                {currentUser?.role === 'rep' ? (
+                  <div className="space-y-2">
+                    <Label>Assigned To</Label>
+                    <div className="h-10 px-3 flex items-center rounded-md border bg-muted/50 text-sm text-muted-foreground">
+                      {currentUser.name || currentUser.email} (you)
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Assigned To</Label>
+                    <Select value={newLeadAssignedTo} onValueChange={(v) => setNewLeadAssignedTo(v || '')}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select assignment" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
                         {users.filter(u => u.role === 'rep').map(rep => (
                           <SelectItem key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown'}</SelectItem>
                         ))}
-                      </SelectGroup>
-                      <SelectGroup>
-                        <SelectLabel className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase">Sales Members</SelectLabel>
-                        {SALES_MEMBERS.map(name => (
-                          <SelectItem key={name} value={name}>{name}</SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </div>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <Button className="w-full" onClick={handleAddLead}>Save Lead</Button>
               </div>
             </DialogContent>
@@ -1153,18 +1171,9 @@ export default function Leads() {
               <SelectContent>
                 <SelectItem value="All">All Reps</SelectItem>
                 <SelectItem value="unassigned">Unassigned</SelectItem>
-                <SelectGroup>
-                  <SelectLabel className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase">System Users</SelectLabel>
-                  {users.filter(u => u.role === 'rep').map(rep => (
-                    <SelectItem key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</SelectItem>
-                  ))}
-                </SelectGroup>
-                <SelectGroup>
-                  <SelectLabel className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase">Sales Members</SelectLabel>
-                  {SALES_MEMBERS.map(name => (
-                    <SelectItem key={name} value={name}>{name}</SelectItem>
-                  ))}
-                </SelectGroup>
+                {users.filter(u => u.role === 'rep').map(rep => (
+                  <SelectItem key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -1206,18 +1215,9 @@ export default function Leads() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="unassigned">Unassigned</SelectItem>
-                    <SelectGroup>
-                      <SelectLabel className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase">System Users</SelectLabel>
-                      {users.filter(u => u.role === 'rep').map(rep => (
-                        <SelectItem key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                    <SelectGroup>
-                      <SelectLabel className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase">Sales Members</SelectLabel>
-                      {SALES_MEMBERS.map(name => (
-                        <SelectItem key={name} value={name}>{name}</SelectItem>
-                      ))}
-                    </SelectGroup>
+                    {users.filter(u => u.role === 'rep').map(rep => (
+                      <SelectItem key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

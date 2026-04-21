@@ -22,6 +22,7 @@ import { ConfirmDialog } from './components/ConfirmDialog';
 import ImportData from './ImportData';
 import ImportHistory from './ImportHistory';
 import RenewalPipeline from './components/RenewalPipeline';
+import ResyncAssignments from './components/ResyncAssignments';
 
 export default function Clients() {
   const { currentUser, users, payments, canViewGlobalDashboard, canDeleteRecords, recalculateAllPackages, mergeDuplicates, isManagerOrSama, branches } = useAppContext();
@@ -765,6 +766,9 @@ export default function Clients() {
           )}
           <ImportData type="Active" />
           <ImportHistory />
+          {isManagerOrSama && (
+            <ResyncAssignments clients={clients} users={users} currentUser={currentUser} />
+          )}
           <Dialog open={isNewMemberOpen} onOpenChange={setIsNewMemberOpen}>
             <DialogTrigger render={<Button size="sm" />}>
               <Plus className="mr-2 h-4 w-4" /> Add Member
