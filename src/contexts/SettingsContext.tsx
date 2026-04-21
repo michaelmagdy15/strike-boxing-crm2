@@ -51,7 +51,14 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (snapshot.exists()) setCommissionRates(snapshot.data() as { ptRate: number; groupRate: number });
     }, (error) => console.error('Firestore Error (commission):', error));
 
-    return () => { unsubBranding(); unsubBranches(); unsubCommission(); };
+    const unsubTarget = onSnapshot(doc(db, 'settings', 'sales-target'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setSalesTarget(prev => ({ ...prev, targetAmount: data.targetAmount || 50000 }));
+      }
+    }, (error) => console.error('Firestore Error (sales-target):', error));
+
+    return () => { unsubBranding(); unsubBranches(); unsubCommission(); unsubTarget(); };
   }, []);
 
   const updateBranding = async (updates: Partial<BrandingSettings>) => {
@@ -60,8 +67,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updateSalesTarget = async (target: number) => {
-    setSalesTarget(prev => ({ ...prev, targetAmount: target }));
-    await addAuditLog('UPDATE', 'TARGET', 'sales-target', `Updated sales target to ${target}`);
+    await setDoc(doc(db, 'settings', 'sales-target'), { targetAmount: target }, { merge: true });
+    await addAuditLog('UPDATE', 'TARGET', 'sales-target', `Updated overall sales target to ${target}`);
   };
 
   const updateBranches = async (newBranches: Branch[]) => {

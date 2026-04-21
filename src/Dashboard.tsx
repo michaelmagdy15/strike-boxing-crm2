@@ -66,6 +66,51 @@ export default function Dashboard() {
   const [selectedMonthOffset, setSelectedMonthOffset] = useState(0);
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
 
+  const clientIdToAssignedRepMap = React.useMemo(() => {
+    const map = new Map<string, string>();
+    allClients.forEach(c => {
+      if (c.assignedTo) map.set(c.id, c.assignedTo);
+    });
+    return map;
+  }, [allClients]);
+
+  const isPaymentAttributedToRep = React.useCallback((payment: any, repId: string, repName: string) => {
+    const normalizedRepName = (repName || '').toLowerCase().trim();
+    const resolvedRepName = (SALES_NAME_MAPPING[repName] || repName).toLowerCase().trim();
+
+    // 1. Direct ID match on sales_rep_id or recordedBy
+    if (payment.sales_rep_id === repId || payment.recordedBy === repId) return true;
+    
+    // 2. Client Assignment match
+    // The assignedTo field may be a real userId OR a raw name string imported from sheets
+    const assignedValue = clientIdToAssignedRepMap.get(payment.clientId);
+    if (assignedValue) {
+      // 2a. Direct UUID match
+      if (assignedValue === repId) return true;
+      
+      // 2b. Name-string match — resolve both and compare
+      const normalizedAssigned = assignedValue.toLowerCase().trim();
+      const resolvedAssigned = (SALES_NAME_MAPPING[assignedValue] || assignedValue).toLowerCase().trim();
+      
+      if (resolvedAssigned === normalizedRepName || 
+          resolvedAssigned === resolvedRepName || 
+          normalizedAssigned === normalizedRepName) return true;
+    }
+    
+    // 3. salesName field match
+    const salesName = (payment.salesName || '').trim();
+    if (salesName) {
+      const normalizedSalesName = salesName.toLowerCase();
+      const resolvedSalesName = (SALES_NAME_MAPPING[salesName] || salesName).toLowerCase().trim();
+      
+      if (resolvedSalesName === normalizedRepName || 
+          resolvedSalesName === resolvedRepName || 
+          normalizedSalesName === normalizedRepName) return true;
+    }
+    
+    return false;
+  }, [clientIdToAssignedRepMap]);
+
   const clients = React.useMemo(() => {
     let filtered = selectedBranch === 'all' ? allClients : allClients.filter(c => c.branch === selectedBranch);
     
@@ -91,54 +136,10 @@ export default function Dashboard() {
     }
 
     if (!canViewGlobalDashboard && currentUser) {
-      const userIdentities = new Set([currentUser.id, currentUser.name].filter(Boolean));
-      const normalizedCurrentName = (currentUser.name || '').toLowerCase().trim();
-      
-      Object.entries(SALES_NAME_MAPPING).forEach(([alias, fullName]) => {
-        if (fullName === currentUser.name || fullName === currentUser.id) {
-          userIdentities.add(alias);
-          userIdentities.add(fullName);
-        }
-      });
-
       const repId = currentUser.id;
-      const clientIdsToAssignedRepMap = new Map<string, string>();
-      allClients.forEach(c => {
-        if (c.assignedTo) clientIdsToAssignedRepMap.set(c.id, c.assignedTo);
-      });
-
-      filtered = filtered.filter(p => {
-        // Direct ID match
-        if (p.sales_rep_id === repId || p.recordedBy === repId) return true;
-        
-        // Match name in sales_rep_id or recordedBy (legacy data fallback)
-        if (p.sales_rep_id) {
-          const resolvedIdName = (SALES_NAME_MAPPING[p.sales_rep_id] || p.sales_rep_id).toLowerCase().trim();
-          if (resolvedIdName === normalizedCurrentName) return true;
-        }
-        if (p.recordedBy) {
-          const resolvedRecName = (SALES_NAME_MAPPING[p.recordedBy] || p.recordedBy).toLowerCase().trim();
-          if (resolvedRecName === normalizedCurrentName) return true;
-        }
-
-        // Client Assignment match
-        const assignedValue = clientIdsToAssignedRepMap.get(p.clientId);
-        if (assignedValue) {
-          if (assignedValue === repId) return true;
-          const resolvedName = (SALES_NAME_MAPPING[assignedValue] || assignedValue).toLowerCase().trim();
-          if (resolvedName === normalizedCurrentName) return true;
-          if (assignedValue.toLowerCase().trim() === normalizedCurrentName) return true;
-        }
-        
-        // salesName match
-        const salesName = (p.salesName || '').trim();
-        if (salesName) {
-          const mappedName = (SALES_NAME_MAPPING[salesName] || salesName).toLowerCase();
-          if (mappedName === normalizedCurrentName || salesName.toLowerCase() === normalizedCurrentName) return true;
-        }
-
-        return false;
-      });
+      const repName = currentUser.name || '';
+      
+      filtered = filtered.filter(p => isPaymentAttributedToRep(p, repId, repName));
     }
 
     return filtered;
@@ -206,42 +207,6 @@ export default function Dashboard() {
   const currentMonthStr = format(selectedMonth, 'yyyy-MM');
   const reps = users.filter(u => u.role === 'rep');
 
-  const clientIdToAssignedRepMap = React.useMemo(() => {
-    const map = new Map<string, string>();
-    allClients.forEach(c => {
-      if (c.assignedTo) map.set(c.id, c.assignedTo);
-    });
-    return map;
-  }, [allClients]);
-
-  const isPaymentAttributedToRep = React.useCallback((payment: any, repId: string, repName: string) => {
-    const normalizedRepName = (repName || '').toLowerCase().trim();
-
-    // 1. Direct ID match on sales_rep_id or recordedBy
-    if (payment.sales_rep_id === repId || payment.recordedBy === repId) return true;
-    
-    // 2. Client Assignment match
-    // The assignedTo field may be a real userId OR a raw name string imported from sheets
-    const assignedValue = clientIdToAssignedRepMap.get(payment.clientId);
-    if (assignedValue) {
-      // 2a. Direct UUID match
-      if (assignedValue === repId) return true;
-      // 2b. Name-string match — resolve through mapping then compare to rep name
-      const resolvedName = (SALES_NAME_MAPPING[assignedValue] || assignedValue).toLowerCase().trim();
-      if (resolvedName === normalizedRepName) return true;
-      // 2c. Raw name direct match (in case the stored name already equals the rep name)
-      if (assignedValue.toLowerCase().trim() === normalizedRepName) return true;
-    }
-    
-    // 3. salesName field match (for payments that do have this field set)
-    const salesName = (payment.salesName || '').trim();
-    if (salesName) {
-      const mappedName = (SALES_NAME_MAPPING[salesName] || salesName).toLowerCase();
-      if (mappedName === normalizedRepName || salesName.toLowerCase() === normalizedRepName) return true;
-    }
-    
-    return false;
-  }, [clientIdToAssignedRepMap]);
   
   const filteredSalesData = React.useMemo(() => {
     let targetAmount = salesTarget.targetAmount;
