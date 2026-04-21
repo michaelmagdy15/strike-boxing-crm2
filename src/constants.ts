@@ -10,22 +10,27 @@ export const PACKAGES = [
 ];
 
 export const SALES_MEMBERS = [
-  'Atef Tarek',
+  'Atef Strike',
   'Youssef Emad',
   'Hassan Tarek',
   'Maison Mohamed',
-  'Mustafa Mohamed',
+  'Mustafa Mahmoud',
   'Omar Ehab'
 ];
 
 export const SALES_NAME_MAPPING: Record<string, string> = {
-  'Atef': 'Atef Tarek',
+  'Atef': 'Atef Strike',
+  'Atef Strike': 'Atef Strike',
   'EL GOO': 'Youssef Emad',
   'Maisoon': 'Maison Mohamed',
   'Maison': 'Maison Mohamed',
   'Mustafa': 'Mustafa Mahmoud',
-  'Mustafa Mohamed': 'Mustafa Mahmoud',
+  'Mustafa Mahmoud': 'Mustafa Mahmoud',
   'Hassan Tarek': 'Hassan Tarek',
   'Omar Ehab': 'Omar Ehab',
   'Youssef': 'Youssef Emad',
+  'Youssef Emad': 'Youssef Emad',
+  'Abdallah Atef': 'Abdallah Atef',
+  'Omar Sherif': 'Omar Sherif',
+  'Salma Ahmed': 'Salma Ahmed',
 };

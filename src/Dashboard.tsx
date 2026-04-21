@@ -8,10 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAppContext } from './context';
+import { useClients } from './hooks/useClients';
+import { usePayments } from './hooks/usePayments';
 import { SALES_NAME_MAPPING } from './constants';
 import { differenceInDays, isSameDay, parseISO, isAfter, isBefore, addDays, subDays, subMonths, startOfMonth, endOfMonth, isWithinInterval, format } from 'date-fns';
-import { Target, Users, CalendarDays, AlertTriangle, Gift, Settings, ChevronLeft, ChevronRight, Trophy, Download, ArrowUpDown } from 'lucide-react';
+import { Target, Users, CalendarDays, AlertTriangle, Gift, Settings, ChevronLeft, ChevronRight, Trophy, Download, ArrowUpDown, UserCheck } from 'lucide-react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import OnlineUsers from './components/OnlineUsers';
 
 function PaginatedList({ items, renderItem, itemsPerPage = 5 }: { items: any[], renderItem: (item: any) => React.ReactNode, itemsPerPage?: number }) {
   const [currentPage, setCurrentPage] = useState(1);
@@ -53,7 +56,9 @@ function PaginatedList({ items, renderItem, itemsPerPage = 5 }: { items: any[], 
 }
 
 export default function Dashboard() {
-  const { clients: allClients, salesTarget, updateSalesTarget, updateUserTarget, currentUser, payments: allPayments, userTargets, users, canViewGlobalDashboard, canAccessSettings, branches } = useAppContext();
+  const { salesTarget, updateSalesTarget, updateUserTarget, currentUser, userTargets, users, canViewGlobalDashboard, canAccessSettings, branches } = useAppContext();
+  const { clients: allClients } = useClients(currentUser);
+  const { payments: allPayments } = usePayments({ currentUser, clients: allClients, canDeletePayments: false });
   const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false);
   const [newTarget, setNewTarget] = useState(salesTarget.targetAmount.toString());
   const [selectedRepId, setSelectedRepId] = useState<string>('all');
@@ -62,14 +67,82 @@ export default function Dashboard() {
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
 
   const clients = React.useMemo(() => {
-    return selectedBranch === 'all' ? allClients : allClients.filter(c => c.branch === selectedBranch);
-  }, [allClients, selectedBranch]);
+    let filtered = selectedBranch === 'all' ? allClients : allClients.filter(c => c.branch === selectedBranch);
+    
+    if (!canViewGlobalDashboard && currentUser) {
+      const userIdentities = new Set([currentUser.id, currentUser.name].filter(Boolean));
+      Object.entries(SALES_NAME_MAPPING).forEach(([alias, fullName]) => {
+        if (fullName === currentUser.name || fullName === currentUser.id) {
+          userIdentities.add(alias);
+          userIdentities.add(fullName);
+        }
+      });
+      filtered = filtered.filter(c => c.assignedTo && userIdentities.has(c.assignedTo));
+    }
+    
+    return filtered;
+  }, [allClients, selectedBranch, canViewGlobalDashboard, currentUser]);
 
   const payments = React.useMemo(() => {
-    if (selectedBranch === 'all') return allPayments;
-    const branchClientIds = new Set(clients.map(c => c.id));
-    return allPayments.filter(p => branchClientIds.has(p.clientId));
-  }, [allPayments, clients, selectedBranch]);
+    let filtered = allPayments;
+    if (selectedBranch !== 'all') {
+      const branchClientIds = new Set(allClients.filter(c => c.branch === selectedBranch).map(c => c.id));
+      filtered = filtered.filter(p => branchClientIds.has(p.clientId));
+    }
+
+    if (!canViewGlobalDashboard && currentUser) {
+      const userIdentities = new Set([currentUser.id, currentUser.name].filter(Boolean));
+      const normalizedCurrentName = (currentUser.name || '').toLowerCase().trim();
+      
+      Object.entries(SALES_NAME_MAPPING).forEach(([alias, fullName]) => {
+        if (fullName === currentUser.name || fullName === currentUser.id) {
+          userIdentities.add(alias);
+          userIdentities.add(fullName);
+        }
+      });
+
+      const repId = currentUser.id;
+      const clientIdsToAssignedRepMap = new Map<string, string>();
+      allClients.forEach(c => {
+        if (c.assignedTo) clientIdsToAssignedRepMap.set(c.id, c.assignedTo);
+      });
+
+      filtered = filtered.filter(p => {
+        // Direct ID match
+        if (p.sales_rep_id === repId || p.recordedBy === repId) return true;
+        
+        // Match name in sales_rep_id or recordedBy (legacy data fallback)
+        if (p.sales_rep_id) {
+          const resolvedIdName = (SALES_NAME_MAPPING[p.sales_rep_id] || p.sales_rep_id).toLowerCase().trim();
+          if (resolvedIdName === normalizedCurrentName) return true;
+        }
+        if (p.recordedBy) {
+          const resolvedRecName = (SALES_NAME_MAPPING[p.recordedBy] || p.recordedBy).toLowerCase().trim();
+          if (resolvedRecName === normalizedCurrentName) return true;
+        }
+
+        // Client Assignment match
+        const assignedValue = clientIdsToAssignedRepMap.get(p.clientId);
+        if (assignedValue) {
+          if (assignedValue === repId) return true;
+          const resolvedName = (SALES_NAME_MAPPING[assignedValue] || assignedValue).toLowerCase().trim();
+          if (resolvedName === normalizedCurrentName) return true;
+          if (assignedValue.toLowerCase().trim() === normalizedCurrentName) return true;
+        }
+        
+        // salesName match
+        const salesName = (p.salesName || '').trim();
+        if (salesName) {
+          const mappedName = (SALES_NAME_MAPPING[salesName] || salesName).toLowerCase();
+          if (mappedName === normalizedCurrentName || salesName.toLowerCase() === normalizedCurrentName) return true;
+        }
+
+        return false;
+      });
+    }
+
+    return filtered;
+  }, [allPayments, allClients, selectedBranch, canViewGlobalDashboard, currentUser]);
 
   const now = new Date();
   
@@ -176,18 +249,25 @@ export default function Dashboard() {
     let relevantPayments = payments.filter(p => format(parseISO(p.date), 'yyyy-MM') === currentMonthStr);
     
     if (canViewGlobalDashboard && selectedRepId !== 'all') {
-      // Filter for specific rep
+      // Filter for specific rep (Manager view)
       const repTarget = userTargets.find(t => t.userId === selectedRepId && t.month === currentMonthStr);
       if (repTarget) {
         targetAmount = repTarget.targetAmount;
       } else {
-        targetAmount = 0; // Or some default
+        targetAmount = 0; 
       }
       
       const selectedUser = users.find(u => u.id === selectedRepId);
       const repName = selectedUser?.name || '';
-      
       relevantPayments = relevantPayments.filter(p => isPaymentAttributedToRep(p, selectedRepId, repName));
+    } else if (!canViewGlobalDashboard && currentUser) {
+      // Data is already filtered for the rep at the top-level 'payments' memo
+      const repTarget = userTargets.find(t => t.userId === currentUser.id && t.month === currentMonthStr);
+      if (repTarget) {
+        targetAmount = repTarget.targetAmount;
+      } else if (currentUser.salesTarget) {
+        targetAmount = currentUser.salesTarget;
+      }
     }
 
     const currentAmount = relevantPayments.reduce((acc, p) => acc + p.amount, 0);
@@ -638,7 +718,9 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="md:col-span-2">
+          <div className="grid gap-4 md:grid-cols-2">
 
         <Card>
           <CardHeader>
@@ -783,6 +865,11 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+    </div>
+    <div className="md:col-span-1">
+      <OnlineUsers />
+    </div>
+  </div>
 
       {/* ── Team Charts (managers see global, reps see personal) ── */}
       {canViewGlobalDashboard ? (

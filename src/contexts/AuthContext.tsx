@@ -12,7 +12,8 @@ import {
   query, 
   where, 
   getDocs, 
-  deleteDoc 
+  deleteDoc,
+  writeBatch
 } from 'firebase/firestore';
 import * as userService from '../services/userService';
 
@@ -80,9 +81,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const q = query(collection(db, 'users'), where('email', '==', firebaseUser.email));
               const querySnapshot = await getDocs(q);
               if (!querySnapshot.empty) {
-                const invitedUserDoc = querySnapshot.docs[0]!;
-                role = invitedUserDoc.data()['role'] as UserRole;
-                await deleteDoc(doc(db, 'users', invitedUserDoc.id));
+                // Take role from the first valid invite, then delete all existing docs with this email
+                // to prevent "Duplicate User" issues before creating the final UUID-keyed document.
+                role = querySnapshot.docs[0]!.data()['role'] as UserRole;
+                const batch = writeBatch(db);
+                querySnapshot.docs.forEach(d => batch.delete(d.ref));
+                await batch.commit();
               }
             }
             
@@ -105,6 +109,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     return () => unsubscribe();
   }, []);
+
+  // Presence Heartbeat
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const updatePresence = async () => {
+      try {
+        const userDocRef = doc(db, 'users', currentUser.id);
+        await updateDoc(userDocRef, {
+          lastSeen: new Date().toISOString()
+        });
+      } catch (error) {
+        console.error("Error updating presence:", error);
+      }
+    };
+
+    // Update immediately on mount/auth
+    updatePresence();
+
+    // Set up heartbeat every 2 minutes
+    const interval = setInterval(updatePresence, 2 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [currentUser?.id]);
 
   useEffect(() => {
     if (!currentUser) return;

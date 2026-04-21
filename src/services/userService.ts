@@ -3,7 +3,10 @@ import {
   doc, 
   updateDoc, 
   addDoc, 
-  deleteDoc 
+  deleteDoc,
+  query,
+  where,
+  getDocs
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { User, UserRole, UserId } from '../types';
@@ -21,6 +24,14 @@ export const deleteUser = async (id: UserId, userName?: string) => {
 };
 
 export const inviteUser = async (email: string, role: UserRole) => {
+  // Check for existing user or invite
+  const q = query(collection(db, 'users'), where('email', '==', email));
+  const querySnapshot = await getDocs(q);
+  
+  if (!querySnapshot.empty) {
+    throw new Error('A user with this email already exists or is already invited.');
+  }
+
   const docRef = await addDoc(collection(db, 'users'), {
     email,
     role,

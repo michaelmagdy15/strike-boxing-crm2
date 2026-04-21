@@ -35,13 +35,13 @@ import { useSettings } from './contexts/SettingsContext';
 import { 
   Client, 
   User, 
+  UserId,
   UserRole, 
   Payment, 
   SalesTarget, 
   PTPackageRecord, 
   AuditLog, 
   Task, 
-  Package, 
   Coach, 
   ImportBatch,
   UserSalesTarget,
@@ -52,110 +52,20 @@ import {
   InteractionLog,
   CommissionRates
 } from './types';
-import { PACKAGES } from './constants';
+import { PACKAGES, SALES_NAME_MAPPING } from './constants';
 
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
+import { handleFirestoreError, OperationType } from './utils/errorHandler';
 
 interface AppContextType {
   currentUser: User | null;
   users: User[];
-  login: () => Promise<void>;
-  logout: () => Promise<void>;
-  clients: Client[];
   salesTarget: SalesTarget;
-  payments: Payment[];
-  ptPackageRecords: PTPackageRecord[];
-  auditLogs: AuditLog[];
-  tasks: Task[];
-  packages: Package[];
-  coaches: Coach[];
-  importBatches: ImportBatch[];
   userTargets: UserSalesTarget[];
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
-  addClient: (client: Client) => Promise<void>;
-  bulkAddClients: (clients: Client[]) => Promise<{success: number, failed: number, errors: {row: number, reason: string}[]}>;
-  updateClient: (id: string, updates: Partial<Client>) => Promise<void>;
-  deleteClient: (id: string) => Promise<void>;
-  deleteMultipleClients: (ids: string[]) => Promise<void>;
-  updateUser: (id: string, updates: Partial<User>) => Promise<void>;
-  deleteUser: (id: string) => Promise<void>;
-  inviteUser: (email: string, role: UserRole) => Promise<void>;
-  addComment: (clientId: string, text: string, author?: string) => Promise<void>;
-  addInteraction: (clientId: string, interaction: Omit<InteractionLog, 'id' | 'author'>) => Promise<void>;
-  addPayment: (payment: Omit<Payment, 'id' | 'client_name' | 'amount_paid' | 'sales_rep_id' | 'created_at' | 'package_category_type' | 'deleted_at'>) => Promise<void>;
-  updateSalesTarget: (target: number) => Promise<void>;
   updateUserTarget: (userId: string, month: string, total: number) => Promise<void>;
-  addPTPackageRecord: (session: Omit<PTPackageRecord, 'id'>) => Promise<void>;
-  updatePTPackageRecord: (id: string, updates: Partial<PTPackageRecord>) => Promise<void>;
-  addTask: (task: Omit<Task, 'id' | 'createdAt' | 'createdBy'>) => Promise<void>;
-  updateTask: (id: string, updates: Partial<Task>) => Promise<void>;
-  deleteTask: (id: string) => Promise<void>;
-  addPackage: (pkg: Omit<Package, 'id'>) => Promise<void>;
-  updatePackage: (id: string, updates: Partial<Package>) => Promise<void>;
-  deletePackage: (id: string) => Promise<void>;
-  addCoach: (coach: Omit<Coach, 'id'>) => Promise<void>;
-  updateCoach: (id: string, updates: Partial<Coach>) => Promise<void>;
-  deleteCoach: (id: string) => Promise<void>;
-  addImportBatch: (batch: Omit<ImportBatch, 'id'>) => Promise<string>;
-  rollbackImport: (batchId: string) => Promise<void>;
+  updateSalesTarget: (target: number) => Promise<void>;
   isAuthReady: boolean;
-  branding: BrandingSettings;
-  updateBranding: (branding: Partial<BrandingSettings>) => Promise<void>;
   previewRole: UserRole | null;
   setPreviewRole: (role: UserRole | null) => void;
-  attendances: Attendance[];
-  recordAttendance: (clientId: string, branch: Branch) => Promise<void>;
-  deletePayment: (id: string) => Promise<void>;
   wipeSystem: () => Promise<void>;
   bulkAddPayments: (payments: Payment[]) => Promise<void>;
   canDeletePayments: boolean;
@@ -167,11 +77,14 @@ interface AppContextType {
   selfCheckIn: (identifier: string, pin: string, branch: Branch) => Promise<{ success: boolean; message: string }>;
   mergeDuplicates: () => Promise<void>;
   backfillMemberIds: () => Promise<void>;
-  commissionRates: CommissionRates;
-  updateCommissionRates: (rates: CommissionRates) => Promise<void>;
   isManagerOrSama: boolean;
   branches: Branch[];
   updateBranches: (branches: Branch[]) => Promise<void>;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  updateUser: (id: UserId, updates: Partial<User>) => Promise<void>;
+  deleteUser: (id: UserId) => Promise<void>;
+  inviteUser: (email: string, role: UserRole) => Promise<void>;
 }
 
 const AppContext = React.createContext<AppContextType | undefined>(undefined);
@@ -204,9 +117,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [payments, setPayments] = useState<Payment[]>([]);
   const [ptPackageRecords, setPTPackageRecords] = useState<PTPackageRecord[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [packages, setPackages] = useState<Package[]>([]);
-  const [coaches, setCoaches] = useState<Coach[]>([]);
   const [importBatches, setImportBatches] = useState<ImportBatch[]>([]);
   const [userTargets, setUserTargets] = useState<UserSalesTarget[]>([]);
   const [attendances, setAttendances] = useState<Attendance[]>([]);
@@ -308,18 +218,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }, (error) => handleFirestoreError(error, OperationType.LIST, 'auditLogs'));
     }
 
-    const unsubTasks = onSnapshot(collection(db, 'tasks'), (snapshot) => {
-      setTasks(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Task)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'tasks'));
-
-    const unsubPackages = onSnapshot(collection(db, 'packages'), (snapshot) => {
-      setPackages(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Package)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'packages'));
-
-    const unsubCoaches = onSnapshot(collection(db, 'coaches'), (snapshot) => {
-      setCoaches(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Coach)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'coaches'));
-
     let unsubTargets: (() => void) | undefined;
     if (currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') {
       unsubTargets = onSnapshot(collection(db, 'targets'), (snapshot) => {
@@ -357,9 +255,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubPayments();
       unsubSessions();
       if (unsubAudit) unsubAudit();
-      unsubTasks();
-      unsubPackages();
-      unsubCoaches();
+
       if (unsubTargets) unsubTargets();
       unsubBatches();
       unsubAttendances();
@@ -367,27 +263,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [currentUser]);
 
-  // Seed initial coaches if none exist
-  useEffect(() => {
-    const seedInitialCoaches = async () => {
-      if (currentUser && (currentUser.role === 'manager' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin')) {
-        try {
-          const snapshot = await getDocs(collection(db, 'coaches'));
-          if (snapshot.empty) {
-            const initialCoaches = ['SHADY YOUSSEF', 'OMAR KHALED', 'ALI YASSER', 'SEIF', 'MOHAMED ABD EL SATTAR'];
-            for (const name of initialCoaches) {
-              await addDoc(collection(db, 'coaches'), { name, active: true });
-            }
-          }
-        } catch (e) {
-          console.warn("Failed to seed coaches:", e);
-        }
-      }
-    };
-    if (isAuthReady) {
-      seedInitialCoaches();
-    }
-  }, [isAuthReady, currentUser]);
+
 
   const addAuditLog = useCallback(async (action: AuditLog['action'], entityType: AuditLog['entityType'], entityId: string, details: string, branch?: Branch) => {
     if (!currentUser) return;
@@ -405,237 +281,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       handleFirestoreError(error, OperationType.CREATE, 'auditLogs');
     }
   }, [currentUser]);
-
-  const generateMemberId = async (): Promise<string> => {
-    const counterRef = doc(db, 'counters', 'clients');
-    try {
-      const newId = await runTransaction(db, async (transaction) => {
-        const counterDoc = await transaction.get(counterRef);
-        let nextId = 112; 
-        if (counterDoc.exists()) {
-          nextId = (counterDoc.data().lastId || 111) + 1;
-        }
-        transaction.set(counterRef, { lastId: nextId }, { merge: true });
-        return nextId;
-      });
-      return newId.toString();
-    } catch (error) {
-      console.error("Error generating member ID:", error);
-      return Math.floor(Math.random() * 10000).toString();
-    }
-  };
-
-  const addClient = async (client: Client) => {
-    try {
-      const { id, comments, ...clientData } = client;
-      if (clientData.paid === undefined) clientData.paid = false;
-      
-      if (!clientData.memberId) {
-        clientData.memberId = await generateMemberId();
-      }
-
-      const docRef = doc(collection(db, 'clients'));
-      const finalData = { 
-        ...cleanData(clientData), 
-        id: docRef.id,
-        createdAt: new Date().toISOString()
-      };
-      await setDoc(docRef, finalData);
-      await addAuditLog('CREATE', client.status === 'Lead' ? 'LEAD' : 'CLIENT', docRef.id, `Added new ${client.status === 'Lead' ? 'lead' : 'client'}: ${client.name}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'clients');
-    }
-  };
-
-  const bulkAddClients = async (newClients: Client[]) => {
-    let successCount = 0;
-    let failedCount = 0;
-    const errors: {row: number, reason: string}[] = [];
-
-    const clientsNeedingId = newClients.filter(c => !c.memberId).length;
-    let nextMemberId = 112;
-    
-    if (clientsNeedingId > 0) {
-      const counterRef = doc(db, 'counters', 'clients');
-      try {
-        nextMemberId = await runTransaction(db, async (transaction) => {
-          const counterDoc = await transaction.get(counterRef);
-          let currentId = 112;
-          if (counterDoc.exists()) {
-            currentId = (counterDoc.data().lastId || 111) + 1;
-          }
-          transaction.set(counterRef, { lastId: currentId + clientsNeedingId }, { merge: true });
-          return currentId;
-        });
-      } catch (error) {
-        console.error("Error generating bulk member IDs:", error);
-        nextMemberId = Math.floor(Math.random() * 10000);
-      }
-    }
-
-    let batch = writeBatch(db);
-    let operationCount = 0;
-
-    for (let i = 0; i < newClients.length; i++) {
-      try {
-        const client = newClients[i];
-        if (!client) continue;
-        const { id, comments, ...clientData } = client;
-        
-        if (!clientData.memberId) {
-          clientData.memberId = (nextMemberId++).toString();
-        }
-
-        const docRef = id ? doc(db, 'clients', id) : doc(collection(db, 'clients'));
-        console.log(`Setting client doc ${docRef.id}... `);
-        batch.set(docRef, { 
-          ...cleanData(clientData), 
-          id: docRef.id,
-          createdAt: new Date().toISOString()
-        });
-        operationCount++;
-
-        if (operationCount === 500) {
-          await batch.commit();
-          batch = writeBatch(db);
-          operationCount = 0;
-        }
-        if (clientData.paid === undefined) clientData.paid = false;
-        
-        successCount++;
-      } catch (err) {
-        failedCount++;
-        errors.push({ row: i + 1, reason: err instanceof Error ? err.message : 'Unknown error' });
-      }
-    }
-
-    if (operationCount > 0) {
-      console.log(`Committing final batch of ${operationCount} operations...`);
-      await batch.commit();
-    }
-
-    await addAuditLog('CREATE', 'CLIENT', 'bulk', `Bulk imported ${successCount} clients/leads`);
-    return { success: successCount, failed: failedCount, errors };
-  };
-
-  const updateClient = async (id: string, updates: Partial<Client>) => {
-    try {
-      const updateData = { ...updates };
-      if (!updateData.memberId) {
-        const existingClient = baseClients.find(c => c.id === id);
-        if (existingClient && !existingClient.memberId) {
-          updateData.memberId = await generateMemberId();
-        }
-      }
-
-      await updateDoc(doc(db, 'clients', id), cleanData(updateData));
-      const clientName = baseClients.find(c => c.id === id)?.name || id;
-      addAuditLog('UPDATE', 'CLIENT', id, `Updated client/lead: ${clientName}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `clients/${id}`);
-    }
-  };
-
-  const deleteClient = async (id: string) => {
-    try {
-      const clientName = clients.find(c => c.id === id)?.name || id;
-      await deleteDoc(doc(db, 'clients', id));
-      await addAuditLog('DELETE', 'CLIENT', id, `Deleted client/lead: ${clientName}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `clients/${id}`);
-    }
-  };
-
-  const deleteMultipleClients = async (ids: string[]) => {
-    try {
-      for (const id of ids) {
-        await deleteDoc(doc(db, 'clients', id));
-      }
-      await addAuditLog('DELETE', 'CLIENT', 'bulk', `Deleted ${ids.length} clients/leads`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `clients/bulk`);
-    }
-  };
-
-  const addComment = async (clientId: string, text: string, author?: string) => {
-    try {
-      const commentAuthor = author || currentUser?.name || 'Admin';
-      await addDoc(collection(db, 'clients', clientId, 'comments'), {
-        text,
-        date: new Date().toISOString(),
-        author: commentAuthor
-      });
-      await updateDoc(doc(db, 'clients', clientId), {
-        lastContactDate: new Date().toISOString()
-      });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, `clients/${clientId}/comments`);
-    }
-  };
-
-  const addInteraction = async (clientId: string, interaction: Omit<InteractionLog, 'id' | 'author'>) => {
-    if (!currentUser) {
-      console.warn("addInteraction called without currentUser");
-      return;
-    }
-    try {
-      console.log(`Adding interaction for client ${clientId}...`);
-      await addDoc(collection(db, 'clients', clientId, 'interactions'), {
-        ...interaction,
-        author: currentUser.name,
-        date: interaction.date || new Date().toISOString()
-      });
-      console.log(`Updating lastContactDate for client ${clientId}...`);
-      await updateDoc(doc(db, 'clients', clientId), {
-        lastContactDate: interaction.date || new Date().toISOString()
-      });
-      console.log(`Interaction saved successfully.`);
-    } catch (error) {
-      console.error("addInteraction failed:", error);
-      handleFirestoreError(error, OperationType.CREATE, `clients/${clientId}/interactions`);
-    }
-  };
-
-  const addPayment = async (payment: Omit<Payment, 'id' | 'client_name' | 'amount_paid' | 'sales_rep_id' | 'created_at' | 'package_category_type' | 'deleted_at'>) => {
-    if (!currentUser) return;
-    try {
-      const client = clients.find(c => c.id === payment.clientId);
-      const clientName = client?.name || payment.clientId;
-      
-      const paymentData = {
-        ...payment,
-        client_name: clientName,
-        amount_paid: payment.amount,
-        sales_rep_id: payment.recordedBy || currentUser.id,
-        created_at: new Date().toISOString(),
-        package_category_type: payment.packageType.toLowerCase().includes('pt') || payment.packageType.toLowerCase().includes('private') 
-          ? 'Private Training' 
-          : 'Group Training',
-        deleted_at: null
-      };
-
-      const docRef = await addDoc(collection(db, 'payments'), cleanData(paymentData));
-      await addAuditLog('CREATE', 'PAYMENT', docRef.id, `Recorded payment of ${payment.amount} LE for ${clientName}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'payments');
-    }
-  };
-
-  const deletePayment = async (id: string) => {
-    if (!canDeletePayments) {
-      throw new Error("Unauthorized: You do not have permission to delete payments.");
-    }
-    try {
-      const payment = payments.find(p => p.id === id);
-      const clientName = payment ? (clients.find(c => c.id === payment.clientId)?.name || payment.clientId) : id;
-      const amount = payment?.amount || 'unknown';
-      
-      await deleteDoc(doc(db, 'payments', id));
-      await addAuditLog('DELETE', 'PAYMENT', id, `Deleted payment of ${amount} LE for ${clientName}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `payments/${id}`);
-    }
-  };
 
   const updateBranches = async (newBranches: Branch[]) => {
     try {
@@ -693,99 +338,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `sessions/${id}`);
-    }
-  };
-
-  const addTask = async (task: Omit<Task, 'id' | 'createdAt' | 'createdBy'>) => {
-    if (!currentUser) return;
-    try {
-      const newTask = {
-        ...task,
-        createdBy: currentUser.id,
-        createdAt: new Date().toISOString(),
-      };
-      const docRef = await addDoc(collection(db, 'tasks'), cleanData(newTask));
-      await addAuditLog('CREATE', 'CLIENT', docRef.id, `Created task: ${task.title}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'tasks');
-    }
-  };
-
-  const updateTask = async (id: string, updates: Partial<Task>) => {
-    try {
-      await updateDoc(doc(db, 'tasks', id), cleanData(updates));
-      const taskName = tasks.find(t => t.id === id)?.title || id;
-      await addAuditLog('UPDATE', 'CLIENT', id, `Updated task: ${taskName}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `tasks/${id}`);
-    }
-  };
-
-  const deleteTask = async (id: string) => {
-    try {
-      const taskName = tasks.find(t => t.id === id)?.title || id;
-      await deleteDoc(doc(db, 'tasks', id));
-      await addAuditLog('DELETE', 'CLIENT', id, `Deleted task: ${taskName}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `tasks/${id}`);
-    }
-  };
-
-  const addPackage = async (pkg: Omit<Package, 'id'>) => {
-    try {
-      const docRef = await addDoc(collection(db, 'packages'), cleanData(pkg));
-      await addAuditLog('CREATE', 'CLIENT', docRef.id, `Created package: ${pkg.name}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'packages');
-    }
-  };
-
-  const updatePackage = async (id: string, updates: Partial<Package>) => {
-    try {
-      await updateDoc(doc(db, 'packages', id), cleanData(updates));
-      const pkgName = packages.find(p => p.id === id)?.name || id;
-      await addAuditLog('UPDATE', 'CLIENT', id, `Updated package: ${pkgName}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `packages/${id}`);
-    }
-  };
-
-  const deletePackage = async (id: string) => {
-    try {
-      const pkgName = packages.find(p => p.id === id)?.name || id;
-      await deleteDoc(doc(db, 'packages', id));
-      await addAuditLog('DELETE', 'CLIENT', id, `Deleted package: ${pkgName}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `packages/${id}`);
-    }
-  };
-
-  const addCoach = async (coach: Omit<Coach, 'id'>) => {
-    try {
-      const docRef = await addDoc(collection(db, 'coaches'), cleanData(coach));
-      await addAuditLog('CREATE', 'COACH', docRef.id, `Created coach: ${coach.name}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'coaches');
-    }
-  };
-
-  const updateCoach = async (id: string, updates: Partial<Coach>) => {
-    try {
-      await updateDoc(doc(db, 'coaches', id), cleanData(updates));
-      const coachName = coaches.find(c => c.id === id)?.name || id;
-      await addAuditLog('UPDATE', 'COACH', id, `Updated coach: ${coachName}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `coaches/${id}`);
-    }
-  };
-
-  const deleteCoach = async (id: string) => {
-    try {
-      const coachName = coaches.find(c => c.id === id)?.name || id;
-      await deleteDoc(doc(db, 'coaches', id));
-      await addAuditLog('DELETE', 'COACH', id, `Deleted coach: ${coachName}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `coaches/${id}`);
     }
   };
 
@@ -886,9 +438,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const visibleClients = useMemo(() => {
     if (!currentUser) return [];
     let filtered = clients;
+    
     if (!canViewGlobalDashboard) {
-      filtered = clients.filter(c => c.assignedTo === currentUser.id);
+      // Create a set of all identifiers for the current user (ID and Name aliases)
+      const userIdentities = new Set([currentUser.id, currentUser.name].filter(Boolean));
+      
+      // Add known aliases from the sales name mapping
+      Object.entries(SALES_NAME_MAPPING).forEach(([alias, fullName]) => {
+        if (fullName === currentUser.name || fullName === currentUser.id) {
+          userIdentities.add(alias);
+          userIdentities.add(fullName);
+        }
+      });
+
+      filtered = clients.filter(c => c.assignedTo && userIdentities.has(c.assignedTo));
     }
+
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       filtered = filtered.filter(c => 
@@ -898,25 +463,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
     }
     return filtered;
-  }, [clients, currentUser, effectiveRole, searchQuery, canViewGlobalDashboard]);
+  }, [clients, currentUser, searchQuery, canViewGlobalDashboard]);
 
   const visiblePayments = useMemo(() => {
     if (!currentUser) return [];
     if (canViewGlobalDashboard) return payments;
     
     const visibleClientIds = new Set(visibleClients.map(c => c.id));
+    const userIdentities = new Set([currentUser.id, currentUser.name].filter(Boolean));
+    
+    // Add known aliases for payment attribution matching
+    Object.entries(SALES_NAME_MAPPING).forEach(([alias, fullName]) => {
+      if (fullName === currentUser.name || fullName === currentUser.id) {
+        userIdentities.add(alias);
+        userIdentities.add(fullName);
+      }
+    });
+
     return payments.filter(p => 
       visibleClientIds.has(p.clientId) || 
-      p.recordedBy === currentUser.id ||
-      p.sales_rep_id === currentUser.id
+      (p.recordedBy && userIdentities.has(p.recordedBy)) ||
+      (p.sales_rep_id && userIdentities.has(p.sales_rep_id))
     );
   }, [payments, visibleClients, currentUser, canViewGlobalDashboard]);
-
-  const visibleTasks = useMemo(() => {
-    if (!currentUser) return [];
-    if (effectiveRole === 'manager' || effectiveRole === 'admin') return tasks;
-    return tasks.filter(t => t.assignedTo === currentUser.id || t.createdBy === currentUser.id);
-  }, [tasks, currentUser, effectiveRole]);
 
   const salesStats = useMemo(() => {
     const total = visiblePayments.reduce((acc, p) => acc + p.amount, 0);
@@ -954,30 +523,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     users,
     login, 
     logout,
-    clients: visibleClients, 
-    salesTarget: salesStats, 
-    payments: visiblePayments, 
+    salesTarget: salesStats,
     ptPackageRecords,
     auditLogs,
-    tasks: visibleTasks,
-    packages,
-    coaches,
-    importBatches,
     userTargets,
     searchQuery,
     setSearchQuery,
-    addClient, 
-    bulkAddClients,
-    updateClient, 
-    deleteClient,
-    deleteMultipleClients,
     updateUser,
     deleteUser,
     inviteUser,
-    addComment, 
-    addInteraction,
-    addPayment, 
-    deletePayment,
     updateSalesTarget,
     updateBranches,
     updateUserTarget,
@@ -986,17 +540,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateCommissionRates,
     addPTPackageRecord,
     updatePTPackageRecord,
-    addTask,
-    updateTask,
-    deleteTask,
-    addPackage,
-    updatePackage,
-    deletePackage,
-    addCoach,
-    updateCoach,
-    deleteCoach,
     addImportBatch,
     rollbackImport,
+    importBatches,
     attendances,
     recordAttendance: async (clientId: string, branch: Branch) => {
       if (!currentUser) return;
@@ -1445,11 +991,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     salesStats, 
     visiblePayments, 
     ptPackageRecords, 
-    auditLogs, 
-    visibleTasks, 
-    packages, 
-    coaches, 
-    importBatches, 
+    auditLogs,
+    importBatches,
     userTargets, 
     branding, 
     searchQuery, 
