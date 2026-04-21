@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { UserSalesTarget, User } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandler';
@@ -20,6 +20,15 @@ export const useUserTargets = (currentUser: User | null) => {
 
     if (currentUser.role === 'manager' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') {
       unsub = onSnapshot(collection(db, 'targets'), (snapshot) => {
+        setUserTargets(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as UserSalesTarget)));
+        setLoading(false);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'targets');
+        setLoading(false);
+      });
+    } else if (currentUser.role === 'rep') {
+      const q = query(collection(db, 'targets'), where('userId', '==', currentUser.id));
+      unsub = onSnapshot(q, (snapshot) => {
         setUserTargets(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as UserSalesTarget)));
         setLoading(false);
       }, (error) => {
