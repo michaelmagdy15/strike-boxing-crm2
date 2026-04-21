@@ -2,7 +2,10 @@ import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useAppContext } from './context';
+import { useAuth } from './contexts/AuthContext';
+import { useClients } from './hooks/useClients';
+import { usePayments } from './hooks/usePayments';
+import { useAttendance } from './hooks/useAttendance';
 import { 
   format, 
   parseISO, 
@@ -17,7 +20,10 @@ import { Download, TrendingUp, UserMinus, Users, DollarSign, Calendar } from 'lu
 import { Badge } from '@/components/ui/badge';
 
 export default function Reports() {
-  const { clients, payments, attendances } = useAppContext();
+  const { currentUser } = useAuth();
+  const { clients } = useClients(currentUser);
+  const { payments } = usePayments({ currentUser, clients, canDeletePayments: false });
+  const { attendances } = useAttendance(currentUser, clients);
   const now = new Date();
 
   const exportToCSV = (data: any[], filename: string) => {

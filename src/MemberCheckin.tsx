@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from './context';
+import { useSettings } from './contexts/SettingsContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,8 @@ import { motion, AnimatePresence } from 'motion/react';
 
 export default function MemberCheckin() {
   const [searchParams] = useSearchParams();
-  const { selfCheckIn, branding } = useAppContext();
+  const { selfCheckIn } = useAppContext();
+  const { branding } = useSettings();
   const navigate = useNavigate();
 
   const [branch, setBranch] = useState<Branch | ''>((searchParams.get('branch') as Branch) || '');

@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from './context';
+import { useCoaches } from './hooks/useCoaches';
+import { usePackages } from './hooks/usePackages';
+import { usePayments } from './hooks/usePayments';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +18,10 @@ import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, 
 import { AlertDialog } from './components/AlertDialog';
 
 export default function Payments() {
-  const { payments, clients, users, packages, coaches, addPayment, deletePayment, updateClient, currentUser, branding, canViewGlobalDashboard, canDeletePayments } = useAppContext();
+  const { clients, users, updateClient, currentUser, branding, canDeletePayments } = useAppContext();
+  const { coaches } = useCoaches();
+  const { packages } = usePackages();
+  const { payments, addPayment, deletePayment } = usePayments({ currentUser, clients, canDeletePayments });
   const [isNewPaymentOpen, setIsNewPaymentOpen] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
@@ -37,6 +43,9 @@ export default function Payments() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMethod, setFilterMethod] = useState('All');
   const [filterBranch, setFilterBranch] = useState('All');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  const [sortConfig, setSortConfig] = useState<{key: keyof Payment | 'date', direction: 'asc' | 'desc'}>({key: 'date', direction: 'desc'});
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
@@ -274,6 +283,9 @@ export default function Payments() {
   const deferredSearchTerm = React.useDeferredValue(searchTerm);
   const deferredFilterMethod = React.useDeferredValue(filterMethod);
   const deferredFilterBranch = React.useDeferredValue(filterBranch);
+  const deferredFilterDateFrom = React.useDeferredValue(filterDateFrom);
+  const deferredFilterDateTo = React.useDeferredValue(filterDateTo);
+  const deferredSortConfig = React.useDeferredValue(sortConfig);
 
   const filteredPayments = React.useMemo(() => {
     const clientMap = new Map();
@@ -281,7 +293,7 @@ export default function Payments() {
       clientMap.set(client.id, client);
     }
 
-    return payments.filter(payment => {
+    let result = payments.filter(payment => {
       const client = clientMap.get(payment.clientId);
 
       // Sales reps only see their own payments
@@ -308,13 +320,36 @@ export default function Payments() {
       // Branch filter (via client)
       if (deferredFilterBranch !== 'All' && client?.branch !== deferredFilterBranch) return false;
 
+      // Date filter
+      if (deferredFilterDateFrom) {
+        if (payment.date.substring(0, 10) < deferredFilterDateFrom) return false;
+      }
+      if (deferredFilterDateTo) {
+        if (payment.date.substring(0, 10) > deferredFilterDateTo) return false;
+      }
+
       return true;
     });
-  }, [payments, clients, deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, isRep, currentUser]);
+
+    // Sorting
+    result.sort((a, b) => {
+      const { key, direction } = deferredSortConfig;
+      if (key === 'date') {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        return direction === 'asc' ? dateA - dateB : dateB - dateA;
+      } else if (key === 'amount') {
+        return direction === 'asc' ? a.amount - b.amount : b.amount - a.amount;
+      }
+      return 0;
+    });
+
+    return result;
+  }, [payments, clients, deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, deferredFilterDateFrom, deferredFilterDateTo, deferredSortConfig, isRep, currentUser]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [deferredSearchTerm, deferredFilterMethod, deferredFilterBranch]);
+  }, [deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, deferredFilterDateFrom, deferredFilterDateTo, deferredSortConfig]);
 
   const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
   const paginatedPayments = filteredPayments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -521,8 +556,8 @@ export default function Payments() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-card p-4 rounded-xl border shadow-sm">
-        <div className="space-y-1.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6 bg-card p-4 rounded-xl border shadow-sm">
+        <div className="space-y-1.5 xl:col-span-1">
           <Label className="text-xs font-semibold text-muted-foreground ml-1">Search Payments</Label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -562,6 +597,41 @@ export default function Payments() {
             <option value="COMPLEX">COMPLEX</option>
             <option value="MIVIDA">MIVIDA</option>
             <option value="Strike IMPACT">Strike IMPACT</option>
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold text-muted-foreground ml-1">From Date</Label>
+          <Input 
+            type="date"
+            className="flex h-11 w-full rounded-md bg-muted/30 px-3 py-2 text-sm border-none focus-visible:ring-1"
+            value={filterDateFrom}
+            onChange={(e) => setFilterDateFrom(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold text-muted-foreground ml-1">To Date</Label>
+          <Input 
+            type="date"
+            className="flex h-11 w-full rounded-md bg-muted/30 px-3 py-2 text-sm border-none focus-visible:ring-1"
+            value={filterDateTo}
+            onChange={(e) => setFilterDateTo(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold text-muted-foreground ml-1">Sort By</Label>
+          <select 
+            className="flex h-11 w-full items-center justify-between rounded-md bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 border-none"
+            value={`${sortConfig.key}-${sortConfig.direction}`}
+            onChange={(e) => {
+              const [key, direction] = e.target.value.split('-');
+              setSortConfig({ key: key as keyof Payment, direction: direction as 'asc' | 'desc' });
+            }}
+          >
+            <option value="date-desc">Newest First</option>
+            <option value="date-asc">Oldest First</option>
+            <option value="amount-desc">Amount (High to Low)</option>
+            <option value="amount-asc">Amount (Low to High)</option>
           </select>
         </div>
       </div>

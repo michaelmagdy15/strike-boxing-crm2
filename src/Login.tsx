@@ -1,11 +1,13 @@
 import React from 'react';
-import { useAppContext } from './context';
+import { useAuth } from './contexts/AuthContext';
+import { useSettings } from './contexts/SettingsContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Activity } from 'lucide-react';
 
 export default function Login() {
-  const { login, isAuthReady, branding } = useAppContext();
+  const { login, isAuthReady } = useAuth();
+  const { branding } = useSettings();
 
   if (!isAuthReady) {
     return (

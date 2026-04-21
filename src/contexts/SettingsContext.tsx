@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { BrandingSettings, SalesTarget } from '../types';
+import { BrandingSettings, SalesTarget, Branch } from '../types';
 import { db } from '../firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { addAuditLog } from '../services/auditService';
@@ -12,6 +12,10 @@ interface SettingsContextType {
   salesTarget: SalesTarget;
   updateSalesTarget: (target: number) => Promise<void>;
   setSalesTarget: React.Dispatch<React.SetStateAction<SalesTarget>>;
+  branches: Branch[];
+  updateBranches: (branches: Branch[]) => Promise<void>;
+  commissionRates: { ptRate: number; groupRate: number };
+  updateCommissionRates: (rates: { ptRate: number; groupRate: number }) => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -28,15 +32,26 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     privatePackagesSold: 0,
     groupPackagesSold: 0,
   });
+  const [branches, setBranches] = useState<Branch[]>(['COMPLEX', 'MIVIDA', 'Strike IMPACT']);
+  const [commissionRates, setCommissionRates] = useState({ ptRate: 8, groupRate: 5 });
 
   useEffect(() => {
     const unsubBranding = onSnapshot(doc(db, 'settings', 'branding'), (snapshot) => {
-      if (snapshot.exists()) {
-        setBranding(snapshot.data() as BrandingSettings);
-      }
+      if (snapshot.exists()) setBranding(snapshot.data() as BrandingSettings);
     }, (error) => console.error('Firestore Error (branding):', error));
 
-    return () => unsubBranding();
+    const unsubBranches = onSnapshot(doc(db, 'settings', 'branches'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data?.branches && Array.isArray(data.branches)) setBranches(data.branches);
+      }
+    }, (error) => console.error('Firestore Error (branches):', error));
+
+    const unsubCommission = onSnapshot(doc(db, 'settings', 'commission'), (snapshot) => {
+      if (snapshot.exists()) setCommissionRates(snapshot.data() as { ptRate: number; groupRate: number });
+    }, (error) => console.error('Firestore Error (commission):', error));
+
+    return () => { unsubBranding(); unsubBranches(); unsubCommission(); };
   }, []);
 
   const updateBranding = async (updates: Partial<BrandingSettings>) => {
@@ -49,6 +64,17 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     await addAuditLog('UPDATE', 'TARGET', 'sales-target', `Updated sales target to ${target}`);
   };
 
+  const updateBranches = async (newBranches: Branch[]) => {
+    await setDoc(doc(db, 'settings', 'branches'), { branches: newBranches }, { merge: true });
+    setBranches(newBranches);
+    await addAuditLog('UPDATE', 'SYSTEM', 'branches', `Updated system branches`);
+  };
+
+  const updateCommissionRates = async (rates: { ptRate: number; groupRate: number }) => {
+    await setDoc(doc(db, 'settings', 'commission'), rates, { merge: true });
+    await addAuditLog('UPDATE', 'TARGET', 'commission', `Updated commission rates: PT ${rates.ptRate}%, Group ${rates.groupRate}%`);
+  };
+
   const value = useMemo(() => ({
     branding,
     updateBranding,
@@ -56,8 +82,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setSearchQuery,
     salesTarget,
     setSalesTarget,
-    updateSalesTarget
-  }), [branding, searchQuery, salesTarget]);
+    updateSalesTarget,
+    branches,
+    updateBranches,
+    commissionRates,
+    updateCommissionRates,
+  }), [branding, searchQuery, salesTarget, branches, commissionRates]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 };

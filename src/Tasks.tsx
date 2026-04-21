@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAppContext } from './context';
+import { useTasks } from './hooks/useTasks';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +13,8 @@ import { Task, TaskStatus, TaskPriority } from './types';
 import { Badge } from '@/components/ui/badge';
 
 export default function Tasks() {
-  const { tasks, users, clients, currentUser, addTask, updateTask, deleteTask } = useAppContext();
+  const { users, clients, currentUser } = useAppContext();
+  const { tasks, addTask, updateTask, deleteTask } = useTasks();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);

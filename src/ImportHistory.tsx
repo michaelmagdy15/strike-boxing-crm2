@@ -1,5 +1,8 @@
 import React from 'react';
-import { useAppContext } from './context';
+import { useAuth } from './contexts/AuthContext';
+import { useClients } from './hooks/useClients';
+import { usePayments } from './hooks/usePayments';
+import { useImportBatches } from './hooks/useImportBatches';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -8,7 +11,10 @@ import { History, RotateCcw } from 'lucide-react';
 import { ConfirmDialog } from './components/ConfirmDialog';
 
 export default function ImportHistory() {
-  const { importBatches, rollbackImport, currentUser } = useAppContext();
+  const { currentUser } = useAuth();
+  const { clients } = useClients(currentUser);
+  const { payments } = usePayments({ currentUser, clients, canDeletePayments: false });
+  const { importBatches, rollbackImport } = useImportBatches(currentUser, clients, payments);
   const [isConfirmRollbackOpen, setIsConfirmRollbackOpen] = React.useState(false);
   const [batchToRollback, setBatchToRollback] = React.useState<string | null>(null);
 

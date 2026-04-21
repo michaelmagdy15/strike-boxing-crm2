@@ -11,12 +11,18 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { useAppContext } from '../context';
+import { useAuth } from '../contexts/AuthContext';
+import { useClients } from '../hooks/useClients';
+import { usePayments } from '../hooks/usePayments';
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { SALES_NAME_MAPPING, SALES_MEMBERS } from '../constants';
 
 
 const CommissionReport: React.FC = () => {
-  const { payments, commissionRates, updateCommissionRates, currentUser, users, clients } = useAppContext();
+  const { commissionRates, updateCommissionRates, users } = useAppContext();
+  const { currentUser } = useAuth();
+  const { clients } = useClients(currentUser);
+  const { payments } = usePayments({ currentUser, clients, canDeletePayments: false });
 
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [editingRates, setEditingRates] = useState(false);

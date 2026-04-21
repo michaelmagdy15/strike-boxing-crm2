@@ -1,6 +1,8 @@
 import { onRequest } from "firebase-functions/v2/https";
+import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
+import { sendNewLeadEmail, sendAssignmentEmail } from "./utils/mailer";
 
 // Initialize Firebase Admin for Firestore access
 admin.initializeApp();
@@ -9,8 +11,6 @@ const db = admin.firestore();
 // -------------------------------------------------------------
 // SECRETS & CONFIGURATION
 // -------------------------------------------------------------
-// Simple secret to ensure only your Zapier account can add leads.
-// You can set this in Zapier Headers as: X-Strike-Secret
 const STRIKE_WEBHOOK_SECRET = "strike_zapier_secret_2026";
 
 
@@ -90,3 +90,83 @@ async function createLeadInCRM(name: string, phone: string, source: string, emai
     logger.error("Error creating Lead in CRM:", error);
   }
 }
+
+/**
+ * Trigger: Notify on New Lead
+ * Sends an email to all active sales reps (or a specific manager)
+ */
+export const onLeadCreated = onDocumentCreated("clients/{clientId}", async (event) => {
+  const snapshot = event.data;
+  if (!snapshot) return;
+  const leadData = snapshot.data();
+
+  // Only trigger for Leads
+  if (leadData.status !== "Lead") return;
+
+  logger.info(`New Lead detected: ${leadData.name}. Sending notifications...`);
+
+  try {
+    // 1. Get all sales reps to notify (or a hardcoded list)
+    // For now, let's fetch users with role 'rep' or 'manager'
+    const usersSnapshot = await db.collection("users")
+      .where("role", "in", ["rep", "manager", "admin", "super_admin", "crm_admin"])
+      .get();
+    
+    const recipientEmails = usersSnapshot.docs
+      .map(doc => doc.data().email)
+      .filter(email => !!email);
+
+    if (recipientEmails.length === 0) {
+      logger.warn("No recipient emails found for lead notification.");
+      return;
+    }
+
+    // 2. Send emails
+    const emailPromises = recipientEmails.map(email => 
+      sendNewLeadEmail(email, {
+        name: leadData.name,
+        phone: leadData.phone,
+        source: leadData.source || "Unknown"
+      })
+    );
+
+    await Promise.all(emailPromises);
+    logger.info(`Lead notifications sent to ${recipientEmails.length} users.`);
+
+  } catch (error) {
+    logger.error("Error in onLeadCreated trigger:", error);
+  }
+});
+
+/**
+ * Trigger: Notify on Lead Assignment
+ * Sends an email to the specifically assigned sales rep
+ */
+export const onClientAssigned = onDocumentUpdated("clients/{clientId}", async (event) => {
+  const beforeData = event.data?.before.data();
+  const afterData = event.data?.after.data();
+
+  if (!beforeData || !afterData) return;
+
+  // Check if assignedTo has changed
+  if (afterData.assignedTo && afterData.assignedTo !== beforeData.assignedTo) {
+    logger.info(`Lead ${afterData.name} assigned to ${afterData.assignedTo}. Notifying...`);
+
+    try {
+      // 1. Get the assigned user's email
+      const userDoc = await db.collection("users").doc(afterData.assignedTo).get();
+      const userEmail = userDoc.data()?.email;
+
+      if (userEmail) {
+        await sendAssignmentEmail(userEmail, afterData.name);
+        logger.info(`Assignment notification sent to ${userEmail}`);
+      } else {
+        // Check if assignedTo is a name (for sales members without accounts)
+        // In that case, we can't send an email unless we have a mapping.
+        logger.warn(`Could not find email for assigned user: ${afterData.assignedTo}`);
+      }
+    } catch (error) {
+      logger.error("Error in onClientAssigned trigger:", error);
+    }
+  }
+});

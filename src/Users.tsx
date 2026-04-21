@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useAppContext } from './context';
+import { useAuth } from './contexts/AuthContext';
+import { useSettings } from './contexts/SettingsContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +15,8 @@ import { Shield, User as UserIcon, Plus, Trash2, Edit, BarChart } from 'lucide-r
 import { UserPerformanceDialog } from './components/UserPerformanceDialog';
 
 export default function Users() {
-  const { users, currentUser, updateUser, inviteUser, deleteUser, branches } = useAppContext();
+  const { users, currentUser, updateUser, inviteUser, deleteUser } = useAuth();
+  const { branches } = useSettings();
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('rep');

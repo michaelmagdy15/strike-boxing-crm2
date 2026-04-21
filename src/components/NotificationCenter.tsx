@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../context';
+import { useTasks } from '../hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { Bell, AlertTriangle, Gift, CheckSquare, Clock, User as UserIcon, X, Check } from 'lucide-react';
 import { differenceInDays, isSameDay, isSameMonth, parseISO, isToday, isBefore, isAfter, startOfDay } from 'date-fns';
@@ -17,7 +18,8 @@ export interface AppNotification {
 }
 
 export function NotificationCenter() {
-  const { clients, tasks, currentUser, setSearchQuery } = useAppContext();
+  const { clients, currentUser, setSearchQuery } = useAppContext();
+  const { tasks } = useTasks();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());

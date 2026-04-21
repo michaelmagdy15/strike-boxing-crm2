@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useAppContext } from './context';
+import { useClients } from './hooks/useClients';
+import { useAttendance } from './hooks/useAttendance';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +13,9 @@ import { format, parseISO } from 'date-fns';
 import { Branch } from './types';
 
 export default function Attendance({ isKiosk = false }: { isKiosk?: boolean }) {
-  const { clients, recordAttendance, attendances, currentUser, users } = useAppContext();
+  const { currentUser, users } = useAppContext();
+  const { clients } = useClients(currentUser);
+  const { attendances, recordAttendance } = useAttendance(currentUser, clients);
   const [scannedId, setScannedId] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useAppContext } from './context';
+import { useAuth } from './contexts/AuthContext';
+import { useAuditLogs } from './hooks/useAuditLogs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +10,9 @@ import { MapPin, Search, Filter, ShieldAlert, History } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
 export default function AuditLogs() {
-  const { auditLogs, users, canAccessSettings } = useAppContext();
+  const { currentUser, users } = useAuth();
+  const { auditLogs } = useAuditLogs(currentUser);
+  const canAccessSettings = currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin' || !!currentUser?.can_access_settings_and_history;
   const [entityFilter, setEntityFilter] = useState('ALL');
   const [branchFilter, setBranchFilter] = useState<Branch | 'ALL'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');

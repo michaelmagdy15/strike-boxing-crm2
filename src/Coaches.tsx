@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAppContext } from './context';
+import { useCoaches } from './hooks/useCoaches';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function Coaches() {
-  const { coaches, addCoach, updateCoach, deleteCoach, currentUser, canAccessSettings } = useAppContext();
+  const { currentUser, canAccessSettings } = useAppContext();
+  const { coaches, addCoach, updateCoach, deleteCoach } = useCoaches();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);

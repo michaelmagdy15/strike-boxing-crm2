@@ -48,6 +48,7 @@ export interface User {
   can_access_settings_and_history?: boolean;
   can_delete_records?: boolean;
   can_assign_leads?: boolean;
+  lastSeen?: string;
 }
 
 export interface PTPackageRecord {

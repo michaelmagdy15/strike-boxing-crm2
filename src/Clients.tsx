@@ -1,5 +1,7 @@
 import React, { useState, useDeferredValue } from 'react';
 import { useAppContext } from './context';
+import { usePackages } from './hooks/usePackages';
+import { useClients } from './hooks/useClients';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -22,7 +24,9 @@ import ImportHistory from './ImportHistory';
 import RenewalPipeline from './components/RenewalPipeline';
 
 export default function Clients() {
-  const { clients, addClient, updateClient, deleteMultipleClients, deleteClient, currentUser, users, payments, packages, canViewGlobalDashboard, canDeleteRecords, recalculateAllPackages, mergeDuplicates, isManagerOrSama, addInteraction, addComment, branches } = useAppContext();
+  const { currentUser, users, payments, canViewGlobalDashboard, canDeleteRecords, recalculateAllPackages, mergeDuplicates, isManagerOrSama, branches } = useAppContext();
+  const { clients, addClient, updateClient, deleteMultipleClients, deleteClient, addInteraction, addComment } = useClients(currentUser);
+  const { packages } = usePackages();
   const [activeTab, setActiveTab] = useState('active');
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);

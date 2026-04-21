@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAppContext } from './context';
+import { usePackages } from './hooks/usePackages';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,8 @@ import { Plus, Edit, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from './components/ConfirmDialog';
 
 export default function Packages() {
-  const { packages, addPackage, updatePackage, deletePackage, currentUser } = useAppContext();
+  const { currentUser } = useAppContext();
+  const { packages, addPackage, updatePackage, deletePackage } = usePackages();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
