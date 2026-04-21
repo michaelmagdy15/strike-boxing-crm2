@@ -251,18 +251,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return !!currentUser.can_assign_leads || !!currentUser.can_access_settings_and_history;
   }, [currentUser, effectiveRole]);
 
+  const getCanonicalName = useCallback((name: string) => {
+    if (!name) return '';
+    const trimmed = name.trim();
+    const mapped = SALES_NAME_MAPPING[trimmed];
+    if (mapped) return mapped.toLowerCase().trim();
+    return trimmed.toLowerCase();
+  }, []);
+
+  const isClientAssignedToRep = useCallback((client: any, repId: string, repName: string) => {
+    if (!client.assignedTo) return false;
+    if (client.assignedTo === repId) return true;
+    
+    const canonicalAssigned = getCanonicalName(client.assignedTo);
+    const canonicalRep = getCanonicalName(repName);
+    
+    return canonicalAssigned === canonicalRep && canonicalAssigned !== '';
+  }, [getCanonicalName]);
+
+  const isPaymentAttributedToRep = useCallback((payment: any, repId: string, repName: string, visibleClientIds: Set<string>) => {
+    // 1. Direct ID match
+    if (payment.sales_rep_id === repId || payment.recordedBy === repId) return true;
+    
+    // 2. Client-based match
+    if (visibleClientIds.has(payment.clientId)) return true;
+    
+    // 3. Name-based match on the payment itself
+    const salesName = (payment.salesName || payment.assigned_sales_name || '').trim();
+    if (salesName) {
+      const canonicalSalesName = getCanonicalName(salesName);
+      const canonicalRep = getCanonicalName(repName);
+      if (canonicalSalesName === canonicalRep && canonicalSalesName !== '') return true;
+    }
+    
+    return false;
+  }, [getCanonicalName]);
+
   const visibleClients = useMemo(() => {
     if (!currentUser) return [];
     let filtered = clients;
     if (!canViewGlobalDashboard) {
-      filtered = clients.filter(c => {
-        if (!c.assignedTo) return false;
-        if (c.assignedTo === currentUser.id) return true;
-        
-        // Robust reconciliation for names
-        const assignedName = SALES_NAME_MAPPING[c.assignedTo] || c.assignedTo;
-        return assignedName === currentUser.name || c.assignedTo === currentUser.name;
-      });
+      filtered = clients.filter(c => isClientAssignedToRep(c, currentUser.id, currentUser.name || ''));
     }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -273,30 +302,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
     }
     return filtered;
-  }, [clients, currentUser, searchQuery, canViewGlobalDashboard]);
+  }, [clients, currentUser, searchQuery, canViewGlobalDashboard, isClientAssignedToRep]);
 
   const visiblePayments = useMemo(() => {
     if (!currentUser) return [];
     if (canViewGlobalDashboard) return payments;
     
-    // For reps, show payments associated with their assigned clients OR recorded by them
     const visibleClientIds = new Set(visibleClients.map(c => c.id));
-    return payments.filter(p => {
-      const isClientMatch = visibleClientIds.has(p.clientId);
-      
-      // Reconcile names to IDs/Names for attribution
-      const recordedByRef = p.recordedBy ? (SALES_NAME_MAPPING[p.recordedBy] || p.recordedBy) : '';
-      const salesRepRef = p.sales_rep_id ? (SALES_NAME_MAPPING[p.sales_rep_id] || p.sales_rep_id) : '';
-      
-      const isDirectMatch = 
-        recordedByRef === currentUser.id || recordedByRef === currentUser.name ||
-        salesRepRef === currentUser.id || salesRepRef === currentUser.name ||
-        p.recordedBy === currentUser.id || p.recordedBy === currentUser.name ||
-        p.sales_rep_id === currentUser.id || p.sales_rep_id === currentUser.name;
-        
-      return isClientMatch || isDirectMatch;
-    });
-  }, [payments, visibleClients, currentUser, canViewGlobalDashboard]);
+    return payments.filter(p => isPaymentAttributedToRep(p, currentUser.id, currentUser.name || '', visibleClientIds));
+  }, [payments, visibleClients, currentUser, canViewGlobalDashboard, isPaymentAttributedToRep]);
 
 
   const visibleTasks = useMemo(() => {

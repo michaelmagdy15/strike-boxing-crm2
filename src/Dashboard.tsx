@@ -74,59 +74,57 @@ export default function Dashboard() {
     return map;
   }, [allClients]);
 
-  const isPaymentAttributedToRep = React.useCallback((payment: any, repId: string, repName: string) => {
-    const normalizedRepName = (repName || '').toLowerCase().trim();
-    const resolvedRepName = (SALES_NAME_MAPPING[repName] || repName).toLowerCase().trim();
+  const getCanonicalName = React.useCallback((name: string) => {
+    if (!name) return '';
+    const trimmed = name.trim();
+    // Check mapping first, then return normalized name
+    const mapped = SALES_NAME_MAPPING[trimmed];
+    if (mapped) return mapped.toLowerCase().trim();
+    return trimmed.toLowerCase();
+  }, []);
 
+  const isClientAssignedToRep = React.useCallback((client: any, repId: string, repName: string) => {
+    if (!client.assignedTo) return false;
+    
+    // 1. Direct ID match
+    if (client.assignedTo === repId) return true;
+    
+    // 2. Name-based match (comparing canonical forms)
+    const canonicalAssigned = getCanonicalName(client.assignedTo);
+    const canonicalRep = getCanonicalName(repName);
+    
+    return canonicalAssigned === canonicalRep && canonicalAssigned !== '';
+  }, [getCanonicalName]);
+
+  const isPaymentAttributedToRep = React.useCallback((payment: any, repId: string, repName: string) => {
     // 1. Direct ID match on sales_rep_id or recordedBy
     if (payment.sales_rep_id === repId || payment.recordedBy === repId) return true;
     
     // 2. Client Assignment match
-    // The assignedTo field may be a real userId OR a raw name string imported from sheets
-    const assignedValue = clientIdToAssignedRepMap.get(payment.clientId);
-    if (assignedValue) {
-      // 2a. Direct UUID match
-      if (assignedValue === repId) return true;
-      
-      // 2b. Name-string match — resolve both and compare
-      const normalizedAssigned = assignedValue.toLowerCase().trim();
-      const resolvedAssigned = (SALES_NAME_MAPPING[assignedValue] || assignedValue).toLowerCase().trim();
-      
-      if (resolvedAssigned === normalizedRepName || 
-          resolvedAssigned === resolvedRepName || 
-          normalizedAssigned === normalizedRepName) return true;
-    }
+    // Find the client associated with this payment to check their assignment
+    const client = allClients.find(c => c.id === payment.clientId);
+    if (client && isClientAssignedToRep(client, repId, repName)) return true;
     
-    // 3. salesName field match
-    const salesName = (payment.salesName || '').trim();
+    // 3. salesName field match on the payment itself
+    const salesName = (payment.salesName || payment.assigned_sales_name || '').trim();
     if (salesName) {
-      const normalizedSalesName = salesName.toLowerCase();
-      const resolvedSalesName = (SALES_NAME_MAPPING[salesName] || salesName).toLowerCase().trim();
-      
-      if (resolvedSalesName === normalizedRepName || 
-          resolvedSalesName === resolvedRepName || 
-          normalizedSalesName === normalizedRepName) return true;
+      const canonicalSalesName = getCanonicalName(salesName);
+      const canonicalRep = getCanonicalName(repName);
+      if (canonicalSalesName === canonicalRep && canonicalSalesName !== '') return true;
     }
     
     return false;
-  }, [clientIdToAssignedRepMap]);
+  }, [allClients, isClientAssignedToRep, getCanonicalName]);
 
   const clients = React.useMemo(() => {
     let filtered = selectedBranch === 'all' ? allClients : allClients.filter(c => c.branch === selectedBranch);
     
     if (!canViewGlobalDashboard && currentUser) {
-      const userIdentities = new Set([currentUser.id, currentUser.name].filter(Boolean));
-      Object.entries(SALES_NAME_MAPPING).forEach(([alias, fullName]) => {
-        if (fullName === currentUser.name || fullName === currentUser.id) {
-          userIdentities.add(alias);
-          userIdentities.add(fullName);
-        }
-      });
-      filtered = filtered.filter(c => c.assignedTo && userIdentities.has(c.assignedTo));
+      filtered = filtered.filter(c => isClientAssignedToRep(c, currentUser.id, currentUser.name || ''));
     }
     
     return filtered;
-  }, [allClients, selectedBranch, canViewGlobalDashboard, currentUser]);
+  }, [allClients, selectedBranch, canViewGlobalDashboard, currentUser, isClientAssignedToRep]);
 
   const payments = React.useMemo(() => {
     let filtered = allPayments;
@@ -136,14 +134,11 @@ export default function Dashboard() {
     }
 
     if (!canViewGlobalDashboard && currentUser) {
-      const repId = currentUser.id;
-      const repName = currentUser.name || '';
-      
-      filtered = filtered.filter(p => isPaymentAttributedToRep(p, repId, repName));
+      filtered = filtered.filter(p => isPaymentAttributedToRep(p, currentUser.id, currentUser.name || ''));
     }
 
     return filtered;
-  }, [allPayments, allClients, selectedBranch, canViewGlobalDashboard, currentUser]);
+  }, [allPayments, allClients, selectedBranch, canViewGlobalDashboard, currentUser, isPaymentAttributedToRep]);
 
   const now = new Date();
   
@@ -392,14 +387,14 @@ export default function Dashboard() {
       const revenue = repPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
 
       const convertedThisMonth = clients.filter(c => 
-        c.assignedTo === rep.id && 
+        isClientAssignedToRep(c, rep.id, rep.name || '') && 
         c.status !== 'Lead' && 
         c.startDate && (c.startDate.startsWith(currentMonthStr))
       ).length;
 
-      const totalLeads = clients.filter(c => c.assignedTo === rep.id).length;
+      const totalLeadsCount = clients.filter(c => isClientAssignedToRep(c, rep.id, rep.name || '')).length;
       const targetAchievement = targetAmount > 0 ? (revenue / targetAmount) * 100 : 0;
-      const conversionRate = totalLeads > 0 ? (convertedThisMonth / totalLeads) * 100 : 0;
+      const conversionRate = totalLeadsCount > 0 ? (convertedThisMonth / totalLeadsCount) * 100 : 0;
 
       return {
         id: rep.id,
@@ -408,7 +403,7 @@ export default function Dashboard() {
         targetAmount,
         targetAchievement: Math.round(targetAchievement),
         converted: convertedThisMonth,
-        totalLeads,
+        totalLeads: totalLeadsCount,
         conversionRate: Math.round(conversionRate * 10) / 10
       };
     });
