@@ -29,7 +29,9 @@ import {
   orderBy
 } from 'firebase/firestore';
 import { onAuthStateChanged, signInAnonymously, User as FirebaseUser } from 'firebase/auth';
-import { auth, db, signInWithGoogle, logOut } from './firebase';
+import { auth, db, logOut } from './firebase'; // Removed signInWithGoogle
+import { useAuth } from './contexts/AuthContext';
+import { useSettings } from './contexts/SettingsContext';
 import { 
   Client, 
   User, 
@@ -185,8 +187,9 @@ function cleanData(data: any) {
 }
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
+  const { currentUser, users, isAuthReady, effectiveRole, previewRole, setPreviewRole, login, logout, updateUser, deleteUser, inviteUser } = useAuth();
+  const { branding, updateBranding, searchQuery, setSearchQuery, salesTarget, updateSalesTarget } = useSettings();
+
   const [baseClients, setBaseClients] = useState<Omit<Client, 'comments' | 'interactions'>[]>([]);
   const [allComments, setAllComments] = useState<Record<string, CRMComment[]>>({});
   const [allInteractions, setAllInteractions] = useState<Record<string, InteractionLog[]>>({});
@@ -207,26 +210,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [importBatches, setImportBatches] = useState<ImportBatch[]>([]);
   const [userTargets, setUserTargets] = useState<UserSalesTarget[]>([]);
   const [attendances, setAttendances] = useState<Attendance[]>([]);
-  const [globalSalesTarget, setGlobalSalesTarget] = useState(50000);
-  const [branding, setBranding] = useState<BrandingSettings>({
-    companyName: 'Strike',
-    logoUrl: '/strikelogo.png'
-  });
   const [commissionRates, setCommissionRates] = useState<CommissionRates>({
     ptRate: 8,
     groupRate: 5
   });
   const [branches, setBranches] = useState<Branch[]>(['COMPLEX', 'MIVIDA', 'Strike IMPACT']);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  const [previewRole, setPreviewRole] = useState<UserRole | null>(null);
-
-  const effectiveRole = useMemo(() => {
-    if ((currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin') && previewRole) {
-      return previewRole;
-    }
-    return currentUser?.role;
-  }, [currentUser, previewRole]);
 
   const isManagerOrSama = useMemo(() => {
     if (!currentUser) return false;
@@ -269,88 +257,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return !!currentUser.can_assign_leads || !!currentUser.can_access_settings_and_history;
   }, [currentUser, effectiveRole]);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        if (firebaseUser.isAnonymous) {
-          setIsAuthReady(true);
-          return;
-        }
-        // Check if user exists in Firestore
-        const userDocRef = doc(db, 'users', firebaseUser.uid);
-        try {
-          const userDoc = await getDoc(userDocRef);
-          let userData: User | null = null;
 
-          if (userDoc.exists()) {
-            userData = userDoc.data() as User;
-            // Force admin role for specific emails if they exist but have wrong role
-            if (firebaseUser.email === "michaelmitry13@gmail.com" && userData.role !== 'crm_admin') {
-              userData.role = 'crm_admin';
-              await updateDoc(userDocRef, { role: 'crm_admin' });
-            } else if (firebaseUser.email === "magd.gallab@gmail.com" && userData.role !== 'super_admin') {
-              userData.role = 'super_admin';
-              await updateDoc(userDocRef, { role: 'super_admin' });
-            }
-            setCurrentUser(userData);
-          } else {
-            // Check if user was invited by email
-            let role: UserRole = 'rep';
-            if (firebaseUser.email === "michaelmitry13@gmail.com") {
-              role = 'crm_admin';
-            } else if (firebaseUser.email === "magd.gallab@gmail.com") {
-              role = 'super_admin';
-            } else if (firebaseUser.email) {
-              const q = query(collection(db, 'users'), where('email', '==', firebaseUser.email));
-              const querySnapshot = await getDocs(q);
-              if (!querySnapshot.empty) {
-                const invitedUserDoc = querySnapshot.docs[0];
-                if (invitedUserDoc) {
-                  role = invitedUserDoc.data().role as UserRole;
-                  try {
-                    await deleteDoc(doc(db, 'users', invitedUserDoc.id));
-                  } catch (e) {
-                    console.warn("Could not delete placeholder invitation doc:", e);
-                  }
-                }
-              }
-            }
-            
-            const newUser: User = {
-              id: firebaseUser.uid,
-              name: firebaseUser.displayName || 'New User',
-              email: firebaseUser.email || '',
-              role: role
-            };
-            await setDoc(userDocRef, newUser);
-            setCurrentUser(newUser);
-          }
-        } catch (error) {
-          console.error("Error fetching user doc:", error);
-        }
-      } else {
-        setCurrentUser(null);
-      }
-      setIsAuthReady(true);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Load branding without auth so kiosk page always has the daily PIN
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'settings', 'branding'), (snapshot) => {
-      if (snapshot.exists()) setBranding(snapshot.data() as BrandingSettings);
-    }, () => {});
-    return () => unsub();
-  }, []);
 
   // Real-time listeners
   useEffect(() => {
     if (!currentUser) return;
-
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      setUsers(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
 
     const unsubClients = onSnapshot(collection(db, 'clients'), (snapshot) => {
       const clientsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Omit<Client, 'comments'>));
@@ -430,15 +341,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }, (error) => handleFirestoreError(error, OperationType.GET, 'settings/commission'));
 
-    const unsubSalesTarget = onSnapshot(doc(db, 'settings', 'sales_target'), (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        if (data && data.globalSalesTarget !== undefined) {
-          setGlobalSalesTarget(data.globalSalesTarget);
-        }
-      }
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'settings/sales_target'));
-
     const unsubBranches = onSnapshot(doc(db, 'settings', 'branches'), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
@@ -449,7 +351,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, (error) => handleFirestoreError(error, OperationType.GET, 'settings/branches'));
 
     return () => {
-      unsubUsers();
       unsubClients();
       unsubComments();
       unsubInteractions();
@@ -487,14 +388,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       seedInitialCoaches();
     }
   }, [isAuthReady, currentUser]);
-
-  const login = async () => {
-    await signInWithGoogle();
-  };
-
-  const logout = async () => {
-    await logOut();
-  };
 
   const addAuditLog = useCallback(async (action: AuditLog['action'], entityType: AuditLog['entityType'], entityId: string, details: string, branch?: Branch) => {
     if (!currentUser) return;
@@ -664,39 +557,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const updateUser = async (id: string, updates: Partial<User>) => {
-    try {
-      await updateDoc(doc(db, 'users', id), cleanData(updates));
-      const userName = users.find(u => u.id === id)?.name || id;
-      addAuditLog('UPDATE', 'CLIENT', id, `Updated user permissions: ${userName}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `users/${id}`);
-    }
-  };
-
-  const deleteUser = async (id: string) => {
-    try {
-      const userName = users.find(u => u.id === id)?.name || id;
-      await deleteDoc(doc(db, 'users', id));
-      await addAuditLog('DELETE', 'CLIENT', id, `Deleted user: ${userName}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `users/${id}`);
-    }
-  };
-
-  const inviteUser = async (email: string, role: UserRole) => {
-    try {
-      const docRef = await addDoc(collection(db, 'users'), {
-        email,
-        role,
-        name: email.split('@')[0],
-      });
-      await addAuditLog('CREATE', 'CLIENT', docRef.id, `Invited user: ${email} as ${role}`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'users');
-    }
-  };
-
   const addComment = async (clientId: string, text: string, author?: string) => {
     try {
       const commentAuthor = author || currentUser?.name || 'Admin';
@@ -774,16 +634,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await addAuditLog('DELETE', 'PAYMENT', id, `Deleted payment of ${amount} LE for ${clientName}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `payments/${id}`);
-    }
-  };
-
-  const updateSalesTarget = async (target: number) => {
-    try {
-      await setDoc(doc(db, 'settings', 'sales_target'), { globalSalesTarget: target }, { merge: true });
-      await addAuditLog('UPDATE', 'TARGET', 'sales-target', `Updated sales target to ${target}`);
-      setGlobalSalesTarget(target);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'settings/sales_target');
     }
   };
 
@@ -949,15 +799,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const updateBranding = async (updates: Partial<BrandingSettings>) => {
-    try {
-      await setDoc(doc(db, 'settings', 'branding'), updates, { merge: true });
-      await addAuditLog('UPDATE', 'TARGET', 'branding', `Updated branding settings`);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'settings/branding');
-    }
-  };
-
   const updateCommissionRates = async (rates: CommissionRates) => {
     try {
       await setDoc(doc(db, 'settings', 'commission'), rates, { merge: true });
@@ -1084,7 +925,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     const currentMonthStr = new Date().toISOString().substring(0, 7); 
 
-    let targetAmount = globalSalesTarget;
+    let targetAmount = salesTarget?.targetAmount || 50000;
 
     if (currentUser?.role === 'rep') {
       const personalTarget = userTargets.find(t => t.userId === currentUser.id && t.month === currentMonthStr);
@@ -1106,7 +947,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       privatePackagesSold: privateSold,
       groupPackagesSold: groupSold
     };
-  }, [visiblePayments, globalSalesTarget, currentUser, userTargets]);
+  }, [visiblePayments, salesTarget, currentUser, userTargets]);
 
   const contextValue = useMemo(() => ({ 
     currentUser: currentUser ? { ...currentUser, role: effectiveRole as any } : null, 
@@ -1624,7 +1465,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     payments,
     canDeleteRecords,
     canAssignLeads,
-    globalSalesTarget,
     isManagerOrSama,
     addAuditLog,
     commissionRates,
