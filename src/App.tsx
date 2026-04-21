@@ -292,14 +292,14 @@ function AppContent() {
                 Attendance
               </TabsTrigger>
 
-              {isManagerOrSama && (
+              {isManagerOrSama && currentUser.role !== 'admin' && (
                 <TabsTrigger value="reports" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
                   <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
                   Reports
                 </TabsTrigger>
               )}
 
-              {canAccessSettings && (
+              {canAccessSettings && currentUser.role !== 'admin' && (
                 <>
                   <TabsTrigger value="audit" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
                     <History className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />

@@ -144,8 +144,15 @@ export default function Dashboard() {
     return filtered;
   }, [allPayments, allClients, selectedBranch, canViewGlobalDashboard, currentUser, isPaymentAttributedToRep]);
 
+  // Only super_admin and crm_admin can drill into individual rep performance.
+  // admin / manager see aggregate global data but cannot filter by rep.
+  const canViewRepBreakdown = currentUser?.role === 'super_admin' || currentUser?.role === 'crm_admin';
+
+  // Ensure non-breakdown users always see the "all" aggregate view
+  const effectiveRepId = canViewRepBreakdown ? selectedRepId : 'all';
+
   const now = new Date();
-  
+
   // Stats
   const totalLeads = clients.filter(c => c.status === 'Lead').length;
   const activeMembers = clients.filter(c => c.status === 'Active').length;
@@ -192,8 +199,8 @@ export default function Dashboard() {
   const handleUpdateTarget = () => {
     const target = parseFloat(newTarget);
     if (!isNaN(target) && target > 0) {
-      if (canViewGlobalDashboard && selectedRepId !== 'all') {
-        updateUserTarget(selectedRepId, currentMonthStr, target);
+      if (canViewGlobalDashboard && effectiveRepId !== 'all') {
+        updateUserTarget(effectiveRepId, currentMonthStr, target);
       } else {
         updateSalesTarget(target);
       }
@@ -212,18 +219,18 @@ export default function Dashboard() {
 
     let relevantPayments = payments.filter(p => format(parseISO(p.date), 'yyyy-MM') === currentMonthStr);
 
-    if (canViewGlobalDashboard && selectedRepId !== 'all') {
+    if (canViewGlobalDashboard && effectiveRepId !== 'all') {
       // Manager viewing a specific rep
       const repTarget = userTargets.find(t =>
-        (t.userId === selectedRepId || t.sales_rep_id === selectedRepId) &&
+        (t.userId === effectiveRepId || t.sales_rep_id === effectiveRepId) &&
         (t.month === currentMonthStr || t.month_year === currentMonthStr)
       );
       targetAmount = repTarget?.targetAmount ?? 0;
 
-      const selectedUser = users.find(u => u.id === selectedRepId);
+      const selectedUser = users.find(u => u.id === effectiveRepId);
       const repName = selectedUser?.name || '';
-      relevantPayments = relevantPayments.filter(p => isPaymentAttributedToRep(p, selectedRepId, repName));
-    } else if (canViewGlobalDashboard && selectedRepId === 'all') {
+      relevantPayments = relevantPayments.filter(p => isPaymentAttributedToRep(p, effectiveRepId, repName));
+    } else if (canViewGlobalDashboard && effectiveRepId === 'all') {
       // Manager viewing all reps — sum every active rep's target for the selected month
       const monthTargets = userTargets.filter(t =>
         t.month === currentMonthStr || t.month_year === currentMonthStr
@@ -275,11 +282,11 @@ export default function Dashboard() {
       instapay,
       percentage: targetAmount > 0 ? Math.round((currentAmount / targetAmount) * 100) : 0
     };
-  }, [payments, selectedRepId, canViewGlobalDashboard, salesTarget, userTargets, currentMonthStr, clients]);
+  }, [payments, effectiveRepId, canViewGlobalDashboard, salesTarget, userTargets, currentMonthStr, clients]);
 
-  const totalCash = canViewGlobalDashboard && selectedRepId !== 'all' ? filteredSalesData.cash : (payments ? payments.filter(p => p.method === 'Cash').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0);
-  const totalVisa = canViewGlobalDashboard && selectedRepId !== 'all' ? filteredSalesData.visa : (payments ? payments.filter(p => p.method === 'Credit Card').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0);
-  const totalInstapay = canViewGlobalDashboard && selectedRepId !== 'all' ? filteredSalesData.instapay : (payments ? payments.filter(p => p.method === 'Instapay').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0);
+  const totalCash = canViewGlobalDashboard && effectiveRepId !== 'all' ? filteredSalesData.cash : (payments ? payments.filter(p => p.method === 'Cash').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0);
+  const totalVisa = canViewGlobalDashboard && effectiveRepId !== 'all' ? filteredSalesData.visa : (payments ? payments.filter(p => p.method === 'Credit Card').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0);
+  const totalInstapay = canViewGlobalDashboard && effectiveRepId !== 'all' ? filteredSalesData.instapay : (payments ? payments.filter(p => p.method === 'Instapay').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0);
 
   const totalPackagesSold = filteredSalesData.privateSessionsSold + filteredSalesData.groupSessionsSold;
   const privatePercentage = totalPackagesSold > 0 ? Math.round((filteredSalesData.privateSessionsSold / totalPackagesSold) * 100) : 0;
@@ -500,21 +507,23 @@ export default function Dashboard() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          <Select value={selectedRepId} onValueChange={(v) => setSelectedRepId(v || 'all')}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select representative">
-                {selectedRepId === 'all'
-                  ? 'All Representatives'
-                  : reps.find(r => r.id === selectedRepId)?.name ?? 'Unknown User'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Representatives</SelectItem>
-              {reps.map(rep => (
-                <SelectItem key={rep.id} value={rep.id}>{rep.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {canViewRepBreakdown && (
+            <Select value={selectedRepId} onValueChange={(v) => setSelectedRepId(v || 'all')}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Select representative">
+                  {selectedRepId === 'all'
+                    ? 'All Representatives'
+                    : reps.find(r => r.id === selectedRepId)?.name ?? 'Unknown User'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Representatives</SelectItem>
+                {reps.map(rep => (
+                  <SelectItem key={rep.id} value={rep.id}>{rep.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={selectedBranch} onValueChange={(v) => setSelectedBranch(v || 'all')}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Select branch" />
@@ -879,7 +888,7 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-1">
             <ConversionFunnel 
-              selectedRepId={selectedRepId} 
+              selectedRepId={effectiveRepId} 
               selectedMonthStr={currentMonthStr} 
             />
           </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './context';
 import { useCoaches } from './hooks/useCoaches';
 import { usePackages } from './hooks/usePackages';
@@ -28,6 +28,9 @@ export default function Payments() {
   const [alertDescription, setAlertDescription] = useState('');
   
   const [clientId, setClientId] = useState('');
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const clientDropdownRef = useRef<HTMLDivElement>(null);
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<Payment['method']>('Cash');
   const [instapayRef, setInstapayRef] = useState('');
@@ -37,7 +40,9 @@ export default function Payments() {
   const [customCoachName, setCustomCoachName] = useState('');
   const [notes, setNotes] = useState('');
   const [recordedById, setRecordedById] = useState('');
+  const [paymentDate, setPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState('');
   const [salesName, setSalesName] = useState('');
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -80,12 +85,28 @@ export default function Payments() {
     }
   };
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(e.target as Node)) {
+        setClientDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const handlePackageChange = (val: string | null) => {
     if (!val) return;
     setPackageType(val);
     const pkg = packages.find(p => p.name === val);
     if (pkg) {
       setAmount(pkg.price.toString());
+      if (startDate) {
+        const s = new Date(startDate);
+        const e = new Date(s);
+        e.setDate(e.getDate() + pkg.expiryDays);
+        setEndDate(format(e, 'yyyy-MM-dd'));
+      }
     }
   };
 
@@ -111,7 +132,7 @@ export default function Payments() {
       addPayment({
         clientId,
         amount: parseFloat(amount),
-        date: new Date(startDate).toISOString(), // Use start date for transaction date as well
+        date: new Date(paymentDate).toISOString(),
         method,
         instapayRef: method === 'Instapay' ? instapayRef : undefined,
         packageType: finalPackageType,
@@ -124,13 +145,16 @@ export default function Payments() {
       // Update client with new package info
       const pkg = packages.find(p => p.name === packageType);
       const selectedClient = clients.find(c => c.id === clientId);
+      const pkgStartDate = new Date(startDate);
+      const resolvedEndDate = endDate
+        ? new Date(endDate).toISOString()
+        : pkg ? addDays(pkgStartDate, pkg.expiryDays).toISOString() : undefined;
       if (pkg) {
-        const pkgStartDate = new Date(startDate);
         const newClientPackage = {
           id: Math.random().toString(36).substr(2, 9),
           packageName: pkg.name,
           startDate: pkgStartDate.toISOString(),
-          endDate: addDays(pkgStartDate, pkg.expiryDays).toISOString(),
+          endDate: resolvedEndDate,
           sessionsTotal: pkg.sessions,
           sessionsRemaining: pkg.sessions,
           status: 'Active' as const
@@ -138,22 +162,23 @@ export default function Payments() {
         updateClient(clientId, {
           packageType: pkg.name,
           sessionsRemaining: pkg.sessions,
-          membershipExpiry: addDays(pkgStartDate, pkg.expiryDays).toISOString(),
+          membershipExpiry: resolvedEndDate,
           startDate: pkgStartDate.toISOString(),
           status: 'Active',
           packages: [...(selectedClient?.packages || []), newClientPackage]
         });
       } else {
-        const pkgStartDate = new Date(startDate);
         const newClientPackage = {
           id: Math.random().toString(36).substr(2, 9),
           packageName: finalPackageType,
           startDate: pkgStartDate.toISOString(),
+          endDate: resolvedEndDate,
           status: 'Active' as const
         };
         updateClient(clientId, {
           packageType: finalPackageType,
           startDate: pkgStartDate.toISOString(),
+          membershipExpiry: resolvedEndDate,
           status: 'Active',
           packages: [...(selectedClient?.packages || []), newClientPackage]
         });
@@ -162,6 +187,7 @@ export default function Payments() {
       setIsNewPaymentOpen(false);
       // Reset form
       setClientId('');
+      setClientSearch('');
       setAmount('');
       setMethod('Cash');
       setInstapayRef('');
@@ -170,7 +196,9 @@ export default function Payments() {
       setCoachName('');
       setCustomCoachName('');
       setNotes('');
+      setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
       setStartDate(format(new Date(), 'yyyy-MM-dd'));
+      setEndDate('');
       const sama = users.find(u => u.name?.toLowerCase().includes('sama'));
       setRecordedById(sama?.id || currentUser?.id || '');
       setSalesName('');
@@ -354,6 +382,30 @@ export default function Payments() {
   const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
   const paginatedPayments = filteredPayments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
+  const canViewBranchTotals = React.useMemo(() => {
+    if (!currentUser) return false;
+    if (['super_admin', 'crm_admin', 'manager'].includes(currentUser.role)) return true;
+    const n = (currentUser.name || currentUser.email || '').toLowerCase();
+    return ['michael', 'magd', 'shady'].some(k => n.includes(k));
+  }, [currentUser]);
+
+  const METHODS = ['Cash', 'Credit Card', 'Bank Transfer', 'Instapay', 'Other'] as const;
+
+  const branchTotals = React.useMemo(() => {
+    if (!canViewBranchTotals) return null;
+    const clientMap = new Map(clients.map(c => [c.id, c]));
+    const totals: Record<string, Record<string, number>> = {};
+    for (const p of filteredPayments) {
+      const branch = clientMap.get(p.clientId)?.branch || 'Unknown';
+      if (!totals[branch]) totals[branch] = { Cash: 0, 'Credit Card': 0, 'Bank Transfer': 0, Instapay: 0, Other: 0, Total: 0 };
+      const row = totals[branch]!;
+      const m = (METHODS as readonly string[]).includes(p.method) ? p.method : 'Other';
+      row[m] = (row[m] || 0) + p.amount;
+      row.Total = (row.Total || 0) + p.amount;
+    }
+    return totals;
+  }, [canViewBranchTotals, filteredPayments, clients]);
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -374,18 +426,55 @@ export default function Payments() {
                 
                 <div className="space-y-3 lg:col-span-2">
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Client / Member</Label>
-                  <Select value={clientId} onValueChange={v => v && setClientId(v)}>
-                    <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
-                      <SelectValue placeholder="Search or select client" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-2xl border-none shadow-2xl max-h-[300px]">
-                      {clients.map(client => (
-                        <SelectItem key={client.id} value={client.id} className="rounded-xl py-3 px-4">
-                          {client.name} {client.phone ? `(${client.phone})` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="relative" ref={clientDropdownRef}>
+                    <div className="relative">
+                      <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        className="h-14 rounded-2xl bg-background/50 border-white/10 pl-14 pr-5 text-lg focus-visible:ring-primary"
+                        placeholder="Search by name, phone, or member ID..."
+                        value={clientSearch}
+                        onChange={e => { setClientSearch(e.target.value); setClientDropdownOpen(true); if (!e.target.value) setClientId(''); }}
+                        onFocus={() => setClientDropdownOpen(true)}
+                      />
+                    </div>
+                    {clientDropdownOpen && (
+                      <div className="absolute z-50 mt-1 w-full rounded-2xl border border-white/10 bg-popover shadow-2xl overflow-hidden">
+                        <div className="max-h-[260px] overflow-y-auto custom-scrollbar">
+                          {clients
+                            .filter(c => {
+                              if (!clientSearch) return true;
+                              const t = clientSearch.toLowerCase();
+                              return c.name?.toLowerCase().includes(t) || c.phone?.includes(t) || c.memberId?.toString().includes(t);
+                            })
+                            .slice(0, 50)
+                            .map(client => (
+                              <button
+                                key={client.id}
+                                type="button"
+                                className="w-full text-left px-5 py-3 hover:bg-muted/60 transition-colors flex items-center gap-3"
+                                onMouseDown={() => {
+                                  setClientId(client.id);
+                                  setClientSearch(`${client.name}${client.phone ? ` (${client.phone})` : ''}`);
+                                  setClientDropdownOpen(false);
+                                }}
+                              >
+                                <div>
+                                  <div className="font-medium text-sm">{client.name}</div>
+                                  <div className="text-xs text-muted-foreground">{[client.phone, client.memberId ? `#${client.memberId}` : null, client.branch].filter(Boolean).join(' · ')}</div>
+                                </div>
+                              </button>
+                            ))}
+                          {clients.filter(c => {
+                            if (!clientSearch) return true;
+                            const t = clientSearch.toLowerCase();
+                            return c.name?.toLowerCase().includes(t) || c.phone?.includes(t) || c.memberId?.toString().includes(t);
+                          }).length === 0 && (
+                            <div className="px-5 py-4 text-sm text-muted-foreground text-center">No clients found</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-3">
@@ -393,8 +482,37 @@ export default function Payments() {
                   <Input
                     type="date"
                     className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Membership Start Date</Label>
+                  <Input
+                    type="date"
+                    className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      const pkg = packages.find(p => p.name === packageType);
+                      if (pkg && e.target.value) {
+                        const s = new Date(e.target.value);
+                        const end = new Date(s);
+                        end.setDate(end.getDate() + pkg.expiryDays);
+                        setEndDate(format(end, 'yyyy-MM-dd'));
+                      }
+                    }}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Membership End Date</Label>
+                  <Input
+                    type="date"
+                    className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
                   />
                 </div>
 
@@ -759,6 +877,60 @@ export default function Payments() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
+        </div>
+      )}
+
+      {canViewBranchTotals && branchTotals && Object.keys(branchTotals).length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center gap-3 mb-4">
+            <h3 className="text-lg font-semibold">Revenue by Branch</h3>
+            {(filterDateFrom || filterDateTo) && (
+              <span className="text-sm text-muted-foreground bg-muted/50 px-3 py-1 rounded-full">
+                {filterDateFrom && filterDateTo
+                  ? `${filterDateFrom} → ${filterDateTo}`
+                  : filterDateFrom
+                  ? `From ${filterDateFrom}`
+                  : `Until ${filterDateTo}`}
+              </span>
+            )}
+            <span className="text-sm text-muted-foreground">· {filteredPayments.length} payments</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {Object.entries(branchTotals)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([branch, data]) => (
+              <Card key={branch} className="bg-card border shadow-sm">
+                <CardHeader className="pb-3 pt-4 px-5">
+                  <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground">{branch}</CardTitle>
+                </CardHeader>
+                <CardContent className="px-5 pb-4 space-y-2">
+                  {METHODS.map(m => (data[m] ?? 0) > 0 && (
+                    <div key={m} className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground flex items-center gap-2">
+                        {getMethodIcon(m as Payment['method'])}
+                        {m}
+                      </span>
+                      <span className="font-medium tabular-nums">{(data[m] ?? 0).toLocaleString()} LE</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between items-center pt-2 border-t font-bold">
+                    <span>Total</span>
+                    <span className="text-primary tabular-nums">{(data.Total || 0).toLocaleString()} LE</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          {Object.keys(branchTotals).length > 1 && (
+            <div className="mt-4 flex justify-end">
+              <div className="bg-primary/10 border border-primary/20 rounded-xl px-6 py-3 flex items-center gap-6">
+                <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Grand Total</span>
+                <span className="text-2xl font-extrabold text-primary tabular-nums">
+                  {Object.values(branchTotals).reduce((sum, d) => sum + (d.Total || 0), 0).toLocaleString()} LE
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
