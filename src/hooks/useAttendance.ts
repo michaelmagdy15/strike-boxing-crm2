@@ -39,11 +39,14 @@ export const useAttendance = (currentUser: User | null, clients: Client[]) => {
         packageName: client.packageType,
       } as Omit<Attendance, 'id'>);
 
+      // Always record attendance for history (including unlimited-session clients)
       if (typeof client.sessionsRemaining === 'number') {
+        // Only decrement for finite session packages
         await updateDoc(doc(db, 'clients', clientId), {
           sessionsRemaining: client.sessionsRemaining - 1,
         });
       }
+      // If sessionsRemaining === 'unlimited', skip decrement — attendance is still recorded above
 
       await addAuditLog('CREATE', 'ATTENDANCE', clientId, `Attendance: ${client.name} at ${branch}`);
     } catch (error) {

@@ -1,9 +1,11 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
     // ===============================================================
-    // Helper Functions
+    // Auth Helpers
     // ===============================================================
+
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -12,21 +14,35 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function userExists() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
     function isAdmin() {
       return isAuthenticated() && (
         (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'manager', 'super_admin', 'crm_admin'])
+        (userExists() && getUserRole() in ['admin', 'manager', 'super_admin', 'crm_admin'])
       );
     }
 
     function isSuperAdmin() {
       return isAuthenticated() && (
         (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'crm_admin'])
+        (userExists() && getUserRole() in ['super_admin', 'crm_admin'])
       );
     }
+
+    function isRep() {
+      return isAuthenticated() && userExists() && getUserRole() == 'rep';
+    }
+
+    // ===============================================================
+    // Field-Level Helpers
+    // ===============================================================
 
     function hasRequiredFields(fields) {
       return request.resource.data.keys().hasAll(fields);
@@ -36,78 +52,163 @@ service cloud.firestore {
       return request.resource.data.keys().hasOnly(fields);
     }
 
+    function isNonEmptyString(val) {
+      return val is string && val.size() > 0;
+    }
+
     function isValidString(field, min, max) {
-      return request.resource.data[field] is string && 
-             request.resource.data[field].size() >= min && 
+      return request.resource.data[field] is string &&
+             request.resource.data[field].size() >= min &&
              request.resource.data[field].size() <= max;
+    }
+
+    function isPositiveNumber(val) {
+      return val is number && val >= 0;
     }
 
     // ===============================================================
     // Entity Validators
     // ===============================================================
 
+    // --- Users ---
+    function isValidRole(role) {
+      return role in ['rep', 'manager', 'admin', 'super_admin', 'crm_admin'];
+    }
+
+    // Fields a user is allowed to touch on their own doc (safe self-edit)
+    function isSafeUserSelfEdit() {
+      let allowed = ['name', 'email', 'lastSeen'];
+      // Ensure the incoming data only changes safe fields compared to current doc
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+    }
+
+    function isValidUserWrite(data) {
+      return isNonEmptyString(data.name) &&
+             isNonEmptyString(data.email) &&
+             isValidRole(data.role);
+    }
+
+    // --- Clients ---
     function isValidClient(data) {
-      return data.name is string && data.name.size() > 0 &&
-             data.phone is string && data.phone.size() > 0 &&
-             data.status in ["Lead", "Active", "Nearly Expired", "Expired", "Hold", "Pending", "Interested", "Interest"];
+      return isNonEmptyString(data.name) &&
+             isNonEmptyString(data.phone) &&
+             data.status in ['Lead', 'Active', 'Nearly Expired', 'Expired', 'Hold'];
     }
 
-    function isValidPayment(data) {
-      return data.clientId is string &&
+    // --- Payments ---
+    function isValidPaymentCreate(data) {
+      return isNonEmptyString(data.clientId) &&
+             isNonEmptyString(data.client_name) &&
+             isNonEmptyString(data.sales_rep_id) &&
+             isNonEmptyString(data.created_at) &&
              data.amount is number && data.amount >= 0 &&
-             data.method in ["Cash", "Credit Card", "Bank Transfer", "Instapay", "Other"] &&
-             (!('instapayRef' in data) || (data.instapayRef is string && data.instapayRef.matches("^[0-9]{12}$"))) &&
-             data.packageType is string;
+             data.amount_paid is number && data.amount_paid >= 0 &&
+             isNonEmptyString(data.packageType) &&
+             data.package_category_type in ['Private Training', 'Group Training'] &&
+             data.method in ['Cash', 'Credit Card', 'Bank Transfer', 'Instapay', 'Other'] &&
+             // If instapayRef is present it must be exactly 12 digits
+             (!('instapayRef' in data) || (data.instapayRef is string && data.instapayRef.matches('^[0-9]{12}$')));
     }
 
+    // On payment UPDATE: nobody can change the financial core or attribution
+    function paymentImmutableFieldsUnchanged() {
+      let immutable = ['clientId', 'client_name', 'amount', 'sales_rep_id', 'created_at',
+                       'package_category_type'];
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(immutable);
+    }
+
+    // --- Sessions (PT) ---
     function isValidSession(data) {
-      return data.clientId is string &&
-             data.status in ["Scheduled", "Attended", "No Show", "Cancelled"];
+      return isNonEmptyString(data.clientId) &&
+             data.status in ['Scheduled', 'Attended', 'No Show', 'Cancelled'];
     }
 
+    // --- Interactions ---
     function isValidInteraction(data) {
-      return data.date is string &&
-             data.type in ["Call", "WhatsApp", "Email", "Visit"] &&
-             data.outcome in ["Interested", "Not Answered", "Scheduled Trial", "Rejected", "Other"] &&
-             data.author is string;
+      return isNonEmptyString(data.date) &&
+             data.type in ['Call', 'WhatsApp', 'Email', 'Visit'] &&
+             data.outcome in ['Interested', 'Not Answered', 'Scheduled Trial', 'Rejected', 'Other'] &&
+             isNonEmptyString(data.author);
     }
 
+    // --- Attendance ---
     function isValidAttendance(data) {
-      return data.clientId is string &&
-             data.branch is string &&
-             data.date is string &&
-             data.recordedBy is string;
+      return isNonEmptyString(data.clientId) &&
+             isNonEmptyString(data.branch) &&
+             isNonEmptyString(data.date) &&
+             isNonEmptyString(data.recordedBy);
     }
 
-    function isValidAuditLog(data) {
-      return data.userId is string &&
-             data.action in ["CREATE", "UPDATE", "DELETE"] &&
-             data.entityType in ["CLIENT", "PAYMENT", "PACKAGE_RECORD", "LEAD", "TARGET", "ATTENDANCE", "COACH", "SYSTEM", "BRANCH", "SESSION"] &&
-             data.entityId is string;
-    }
-
+    // --- Tasks ---
     function isValidTask(data) {
-      return data.title is string && data.title.size() > 0 &&
-             data.dueDate is string &&
-             data.status in ["Pending", "In Progress", "Completed"] &&
-             data.priority in ["Low", "Medium", "High"] &&
-             data.assignedTo is string &&
-             data.createdBy is string &&
-             data.createdAt is string;
+      return isNonEmptyString(data.title) &&
+             isNonEmptyString(data.dueDate) &&
+             data.status in ['Pending', 'In Progress', 'Completed'] &&
+             data.priority in ['Low', 'Medium', 'High'] &&
+             isNonEmptyString(data.assignedTo) &&
+             isNonEmptyString(data.createdBy) &&
+             isNonEmptyString(data.createdAt);
+    }
+
+    function isTaskCreator() {
+      return isAuthenticated() &&
+             resource != null &&
+             resource.data.createdBy == request.auth.uid;
+    }
+
+    // --- Packages ---
+    // sessions == 0 means "unlimited" (time-governed only, e.g. 6-month package)
+    function isValidPackage(data) {
+      return isNonEmptyString(data.name) &&
+             data.price is number && data.price >= 0 &&
+             data.sessions is number && data.sessions >= 0 &&
+             data.expiryDays is number && data.expiryDays >= 0 &&
+             data.type in ['Private', 'Group', 'Other'];
+    }
+
+    // --- Coaches ---
+    function isValidCoach(data) {
+      return isNonEmptyString(data.name) &&
+             data.active is bool;
+    }
+
+    // --- Targets ---
+    function isValidTarget(data) {
+      return isNonEmptyString(data.userId) &&
+             data.targetAmount is number && data.targetAmount >= 0 &&
+             isNonEmptyString(data.month) &&
+             data.month.matches('^[0-9]{4}-[0-9]{2}$');
+    }
+
+    // --- Audit Logs ---
+    function isValidAuditLog(data) {
+      return isNonEmptyString(data.userId) &&
+             data.action in ['CREATE', 'UPDATE', 'DELETE'] &&
+             data.entityType in ['CLIENT', 'PAYMENT', 'PACKAGE_RECORD', 'LEAD',
+                                 'TARGET', 'ATTENDANCE', 'COACH', 'SYSTEM', 'BRANCH', 'SESSION'] &&
+             isNonEmptyString(data.entityId) &&
+             isNonEmptyString(data.timestamp);
+    }
+
+    // --- Branding ---
+    function isValidBranding(data) {
+      return data.keys().hasAny(['companyName', 'logoUrl', 'kioskPin', 'dailyCheckinPin']) &&
+             (!('companyName' in data) || isNonEmptyString(data.companyName)) &&
+             (!('logoUrl' in data) || data.logoUrl is string);
     }
 
     // ===============================================================
-    // Rules
+    // Collection Group Rules (subcollections)
     // ===============================================================
 
-    // Common collections that need recursive access for subcollections or broad reads
     match /{path=**}/comments/{commentId} {
       allow read: if isAuthenticated();
+      // Writes handled by the parent /clients/{clientId}/comments rule below
     }
 
-    // collectionGroup read for interactions dashboard queries; writes handled by client subcollection rule
     match /{path=**}/interactions/{interactionId} {
       allow read: if isAuthenticated();
+      // Writes handled by the parent /clients/{clientId}/interactions rule below
     }
 
     match /{path=**}/attendance/{attendanceId} {
@@ -115,74 +216,126 @@ service cloud.firestore {
       allow write: if isAuthenticated() && isValidAttendance(request.resource.data);
     }
 
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // --- Users ---
+    // Read: any authenticated user (needed to show rep lists, dropdowns, etc.)
+    // Self-write: only safe fields (name, email, lastSeen) — NOT role or permissions
+    // Admin write: admins can update any field; super_admins can create/delete
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isOwner(userId) || isSuperAdmin();
+
+      // An admin/super_admin can create a new user doc (invite placeholder or on first login)
+      allow create: if isSuperAdmin() ||
+                       // Allow the user themselves to create their own doc on first login
+                       isOwner(userId);
+
+      // Updates: self can only touch safe fields; admins can touch any field
+      allow update: if (isOwner(userId) && isSafeUserSelfEdit()) ||
+                       isAdmin();
+
+      // Delete (revoking access): super_admin only
+      allow delete: if isSuperAdmin();
     }
 
-    match /counters/{counterId} {
-      allow read, write: if isAuthenticated();
-    }
-
-    match /packages/{packageId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-
-    match /importBatches/{batchId} {
-      allow read: if isAuthenticated();
-      allow write, delete: if isAdmin();
-    }
-
-    match /tasks/{taskId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && isValidTask(request.resource.data);
-      allow delete: if isAuthenticated();
-    }
-
+    // --- Clients ---
     match /clients/{clientId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && (isAdmin() || isValidClient(request.resource.data));
+      allow create: if isAuthenticated() && isValidClient(request.resource.data);
+      allow update: if isAuthenticated() && isValidClient(request.resource.data);
       allow delete: if isAdmin();
 
       match /comments/{commentId} {
-        allow read, create: if isAuthenticated();
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        // Comments are immutable once written
+        allow update, delete: if isAdmin();
       }
-      
+
       match /interactions/{interactionId} {
-        allow read, write: if isAuthenticated() && isValidInteraction(request.resource.data);
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isValidInteraction(request.resource.data);
+        allow update: if isAuthenticated() && isValidInteraction(request.resource.data);
+        allow delete: if isAdmin();
       }
     }
 
+    // --- Payments ---
     match /payments/{paymentId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidPayment(request.resource.data);
-      allow update, delete: if isAdmin();
+      // Full field validation on creation
+      allow create: if isAuthenticated() && isValidPaymentCreate(request.resource.data);
+      // Admins can update, but cannot change core financial/attribution fields
+      allow update: if isAdmin() && paymentImmutableFieldsUnchanged();
+      // Soft-delete (setting deleted_at) — admin only, hard delete — super_admin only
+      allow delete: if isSuperAdmin();
     }
 
+    // --- Sessions (PT package records) ---
     match /sessions/{sessionId} {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated() && isValidSession(request.resource.data);
       allow delete: if isAdmin();
     }
 
+    // --- Tasks ---
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidTask(request.resource.data);
+      allow update: if isAuthenticated() && isValidTask(request.resource.data);
+      // Only the task creator OR an admin can delete a task
+      allow delete: if isAdmin() || isTaskCreator();
+    }
+
+    // --- Packages ---
+    // sessions == 0 is valid and means "unlimited" (time-governed, e.g. 6-month package)
+    match /packages/{packageId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidPackage(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // --- Coaches ---
+    match /coaches/{coachId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidCoach(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // --- Targets (sales targets) ---
+    match /targets/{targetId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidTarget(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // --- Audit Logs ---
     match /auditLogs/{logId} {
       allow read: if isAdmin();
       allow create: if isAuthenticated() && isValidAuditLog(request.resource.data);
+      // Logs are immutable — no updates
+      allow update: if false;
       allow delete: if isSuperAdmin();
     }
 
+    // --- Settings (branding, global config) ---
     match /settings/{settingId} {
-      allow read: if settingId == "branding" || isAuthenticated();
-      allow write: if isAdmin();
+      // Branding is readable without auth (for logo display on login page)
+      allow read: if settingId == 'branding' || isAuthenticated();
+      allow write: if isAdmin() && (settingId != 'branding' || isValidBranding(request.resource.data));
     }
 
-    match /coaches/{coachId} {
+    // --- Import Batches ---
+    match /importBatches/{batchId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow write, delete: if isAdmin();
     }
-    
-    match /targets/{targetId} {
+
+    // --- Counters (sequential member IDs) ---
+    // Restrict writes to admins to prevent counter manipulation
+    match /counters/{counterId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }

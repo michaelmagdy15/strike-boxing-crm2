@@ -157,7 +157,7 @@ export const recordSessionAttendance = async (
   // 1. Update session status
   batch.update(sessionRef, { status });
 
-  // 2. Handle session deduction logic if attended
+  // 2. Handle session deduction logic if attended — skip for unlimited packages
   if (status === 'Attended' && 'sessionsRemaining' in client && typeof client.sessionsRemaining === 'number') {
     const clientRef = doc(db, 'clients', clientId);
     batch.update(clientRef, { 
@@ -169,6 +169,16 @@ export const recordSessionAttendance = async (
     const commentRef = doc(collection(db, 'clients', clientId, 'comments'));
     batch.set(commentRef, {
       text: `Private Session Attended.`,
+      date: new Date().toISOString(),
+      author: authorName
+    });
+  } else if (status === 'Attended' && client.sessionsRemaining === 'unlimited') {
+    // Unlimited package: still log attendance comment, just don't decrement
+    const clientRef = doc(db, 'clients', clientId);
+    batch.update(clientRef, { lastContactDate: new Date().toISOString() });
+    const commentRef = doc(collection(db, 'clients', clientId, 'comments'));
+    batch.set(commentRef, {
+      text: `Private Session Attended (Unlimited Package).`,
       date: new Date().toISOString(),
       author: authorName
     });

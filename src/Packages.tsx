@@ -23,6 +23,7 @@ export default function Packages() {
 
   const [name, setName] = useState('');
   const [sessions, setSessions] = useState<number | ''>('');
+  const [unlimitedSessions, setUnlimitedSessions] = useState(false);
   const [price, setPrice] = useState<number | ''>('');
   const [expiryDays, setExpiryDays] = useState<number | ''>('');
   const [branch, setBranch] = useState<Branch | 'ALL'>('ALL');
@@ -37,10 +38,10 @@ export default function Packages() {
   }
 
   const handleAdd = async () => {
-    if (name && sessions !== '' && price !== '' && expiryDays !== '') {
+    if (name && (unlimitedSessions || sessions !== '') && price !== '' && expiryDays !== '') {
       await addPackage({
         name,
-        sessions: Number(sessions),
+        sessions: unlimitedSessions ? 0 : Number(sessions),
         price: Number(price),
         expiryDays: Number(expiryDays),
         branch,
@@ -52,10 +53,10 @@ export default function Packages() {
   };
 
   const handleEdit = async () => {
-    if (editingPackage && name && sessions !== '' && price !== '' && expiryDays !== '') {
+    if (editingPackage && name && (unlimitedSessions || sessions !== '') && price !== '' && expiryDays !== '') {
       await updatePackage(editingPackage.id, {
         name,
-        sessions: Number(sessions),
+        sessions: unlimitedSessions ? 0 : Number(sessions),
         price: Number(price),
         expiryDays: Number(expiryDays),
         branch,
@@ -82,7 +83,9 @@ export default function Packages() {
   const openEdit = (pkg: Package) => {
     setEditingPackage(pkg);
     setName(pkg.name);
-    setSessions(pkg.sessions);
+    const isUnlimited = pkg.sessions === 0;
+    setUnlimitedSessions(isUnlimited);
+    setSessions(isUnlimited ? '' : pkg.sessions);
     setPrice(pkg.price);
     setExpiryDays(pkg.expiryDays);
     setBranch(pkg.branch);
@@ -93,6 +96,7 @@ export default function Packages() {
   const resetForm = () => {
     setName('');
     setSessions('');
+    setUnlimitedSessions(false);
     setPrice('');
     setExpiryDays('');
     setBranch('ALL');
@@ -119,7 +123,17 @@ export default function Packages() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Sessions</Label>
-                  <Input type="number" value={sessions} onChange={e => setSessions(e.target.value ? Number(e.target.value) : '')} />
+                  <div className="flex items-center gap-2 mb-1">
+                    <input
+                      type="checkbox"
+                      id="unlimited-add"
+                      checked={unlimitedSessions}
+                      onChange={e => { setUnlimitedSessions(e.target.checked); if (e.target.checked) setSessions(''); }}
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    <label htmlFor="unlimited-add" className="text-sm text-muted-foreground cursor-pointer select-none">∞ Unlimited (time-governed)</label>
+                  </div>
+                  <Input type="number" value={sessions} disabled={unlimitedSessions} placeholder={unlimitedSessions ? 'Unlimited' : ''} onChange={e => setSessions(e.target.value ? Number(e.target.value) : '')} />
                 </div>
                 <div className="space-y-2">
                   <Label>Price (LE)</Label>
@@ -185,7 +199,11 @@ export default function Packages() {
               {packages.map(pkg => (
                 <TableRow key={pkg.id}>
                   <TableCell className="font-medium">{pkg.name}</TableCell>
-                  <TableCell>{pkg.sessions}</TableCell>
+                  <TableCell>
+                    {pkg.sessions === 0
+                      ? <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold">∞ Unlimited</span>
+                      : pkg.sessions}
+                  </TableCell>
                   <TableCell>{pkg.price.toLocaleString()} LE</TableCell>
                   <TableCell>{pkg.expiryDays} days</TableCell>
                   <TableCell>{pkg.branch}</TableCell>
@@ -224,7 +242,17 @@ export default function Packages() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Sessions</Label>
-                <Input type="number" value={sessions} onChange={e => setSessions(e.target.value ? Number(e.target.value) : '')} />
+                <div className="flex items-center gap-2 mb-1">
+                  <input
+                    type="checkbox"
+                    id="unlimited-edit"
+                    checked={unlimitedSessions}
+                    onChange={e => { setUnlimitedSessions(e.target.checked); if (e.target.checked) setSessions(''); }}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <label htmlFor="unlimited-edit" className="text-sm text-muted-foreground cursor-pointer select-none">∞ Unlimited (time-governed)</label>
+                </div>
+                <Input type="number" value={sessions} disabled={unlimitedSessions} placeholder={unlimitedSessions ? 'Unlimited' : ''} onChange={e => setSessions(e.target.value ? Number(e.target.value) : '')} />
               </div>
               <div className="space-y-2">
                 <Label>Price (LE)</Label>

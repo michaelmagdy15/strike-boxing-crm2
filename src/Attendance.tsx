@@ -254,9 +254,13 @@ export default function Attendance({ isKiosk = false }: { isKiosk?: boolean }) {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Packages Left</Label>
-                    <p className={`text-lg font-bold ${Number(lastScannedMember.sessionsRemaining) <= 0 ? 'text-destructive' : 'text-green-600'}`}>
-                      {lastScannedMember.sessionsRemaining} packages
-                    </p>
+                    {lastScannedMember.sessionsRemaining === 'unlimited' ? (
+                      <p className="text-lg font-bold text-emerald-600">∞ Unlimited</p>
+                    ) : (
+                      <p className={`text-lg font-bold ${Number(lastScannedMember.sessionsRemaining) <= 0 ? 'text-destructive' : 'text-green-600'}`}>
+                        {lastScannedMember.sessionsRemaining} packages
+                      </p>
+                    )}
                   </div>
                 </div>
 

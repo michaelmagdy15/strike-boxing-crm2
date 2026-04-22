@@ -387,6 +387,8 @@ export default function Clients() {
                   <Badge variant={client.sessionsRemaining < 0 ? 'destructive' : 'secondary'}>
                     {client.sessionsRemaining} left
                   </Badge>
+                ) : client.sessionsRemaining === 'unlimited' ? (
+                  <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-200 border">∞ Unlimited</Badge>
                 ) : client.sessionsRemaining === 'no attend' ? (
                   <Badge variant="outline" className="text-amber-600 border-amber-600">No Attend</Badge>
                 ) : (
@@ -556,7 +558,7 @@ export default function Clients() {
                                     <div className="p-3 bg-primary/5 rounded-lg border text-xs space-y-2">
                                       <div className="grid grid-cols-2 gap-2">
                                         <div><span className="text-[9px] uppercase text-muted-foreground block">Package</span><span className="font-semibold">{client.packageType}</span></div>
-                                        {typeof client.sessionsRemaining !== 'undefined' && <div><span className="text-[9px] uppercase text-muted-foreground block">Sessions Left</span><span className="font-semibold">{client.sessionsRemaining}</span></div>}
+                                        {typeof client.sessionsRemaining !== 'undefined' && <div><span className="text-[9px] uppercase text-muted-foreground block">Sessions Left</span><span className="font-semibold">{client.sessionsRemaining === 'unlimited' ? '∞ Unlimited' : client.sessionsRemaining}</span></div>}
                                         {client.startDate && <div><span className="text-[9px] uppercase text-muted-foreground block">Start</span><span className="font-semibold">{format(parseISO(client.startDate), 'dd MMM yyyy')}</span></div>}
                                         {client.membershipExpiry && <div><span className="text-[9px] uppercase text-muted-foreground block">Expires</span><span className="font-semibold">{format(parseISO(client.membershipExpiry), 'dd MMM yyyy')}</span></div>}
                                       </div>

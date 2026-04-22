@@ -151,18 +151,19 @@ export default function Payments() {
         ? new Date(endDate).toISOString()
         : pkg ? addDays(pkgStartDate, pkg.expiryDays).toISOString() : undefined;
       if (pkg) {
+        const isUnlimited = pkg.sessions === 0;
         const newClientPackage = {
           id: Math.random().toString(36).substr(2, 9),
           packageName: pkg.name,
           startDate: pkgStartDate.toISOString(),
           endDate: resolvedEndDate,
-          sessionsTotal: pkg.sessions,
-          sessionsRemaining: pkg.sessions,
+          sessionsTotal: isUnlimited ? ('unlimited' as any) : pkg.sessions,
+          sessionsRemaining: isUnlimited ? ('unlimited' as any) : pkg.sessions,
           status: 'Active' as const
         };
         updateClient(clientId, {
           packageType: pkg.name,
-          sessionsRemaining: pkg.sessions,
+          sessionsRemaining: isUnlimited ? ('unlimited' as any) : pkg.sessions,
           membershipExpiry: resolvedEndDate,
           startDate: pkgStartDate.toISOString(),
           status: 'Active',

@@ -70,6 +70,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               userData.role = 'super_admin';
               await updateDoc(userDocRef, { role: 'super_admin' });
             }
+            // Clean up any stale invite placeholder docs with the same email
+            if (firebaseUser.email) {
+              const staleQ = query(collection(db, 'users'), where('email', '==', firebaseUser.email));
+              const staleSnap = await getDocs(staleQ);
+              const staleInvites = staleSnap.docs.filter(d => d.id !== userId);
+              if (staleInvites.length > 0) {
+                const batch = writeBatch(db);
+                staleInvites.forEach(d => batch.delete(d.ref));
+                await batch.commit();
+              }
+            }
             setCurrentUser(userData);
           } else {
             let role: UserRole = 'rep';
@@ -137,7 +148,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!currentUser) return;
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      setUsers(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User)));
+      const allUsers = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as User));
+      // Deduplicate by email: prefer real auth-keyed docs (those that have an 'id'
+      // field stored in Firestore data) over invite placeholders (only email/role/name).
+      const emailMap = new Map<string, { user: User; hasStoredId: boolean }>();
+      snapshot.docs.forEach((d, i) => {
+        const user = allUsers[i]!;
+        const hasStoredId = 'id' in d.data();
+        const existing = emailMap.get(user.email);
+        if (!existing || (hasStoredId && !existing.hasStoredId)) {
+          emailMap.set(user.email, { user, hasStoredId });
+        }
+      });
+      setUsers(Array.from(emailMap.values()).map(e => e.user));
     }, (error) => console.error('Firestore Error (users):', error));
     return () => unsubUsers();
   }, [currentUser]);

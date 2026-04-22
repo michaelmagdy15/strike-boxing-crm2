@@ -113,9 +113,10 @@ export default function RenewalPipeline() {
     const pkg = packages.find(p => p.name === packageType);
     if (pkg) {
       const pkgStartDate = new Date(startDate);
+      const isUnlimited = pkg.sessions === 0;
       await updateClient(selectedClient.id, {
         packageType: pkg.name,
-        sessionsRemaining: pkg.sessions,
+        sessionsRemaining: isUnlimited ? ('unlimited' as any) : pkg.sessions,
         membershipExpiry: addDays(pkgStartDate, pkg.expiryDays).toISOString(),
         startDate: pkgStartDate.toISOString(),
         status: 'Active'
