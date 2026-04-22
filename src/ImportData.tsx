@@ -385,11 +385,18 @@ export default function ImportData({ type }: ImportDataProps) {
 
         const clientId = Math.random().toString(36).substr(2, 9);
         const trimmedSalesName = (salesName || '').trim();
-        const mappedName = SALES_NAME_MAPPING[trimmedSalesName] || trimmedSalesName;
+        const lowerSalesName = trimmedSalesName.toLowerCase();
+        let mappedName = trimmedSalesName;
+        for (const [key, value] of Object.entries(SALES_NAME_MAPPING)) {
+          if (key.toLowerCase() === lowerSalesName) {
+            mappedName = value;
+            break;
+          }
+        }
         
         const systemUser = users.find(u => 
           u.name?.toLowerCase().trim() === mappedName.toLowerCase().trim() ||
-          u.name?.toLowerCase().trim() === trimmedSalesName.toLowerCase().trim()
+          u.name?.toLowerCase().trim() === lowerSalesName
         );
         
         const finalAssignedTo = systemUser ? systemUser.id : (mappedName || (currentUser?.role === 'rep' ? currentUser.id : undefined));

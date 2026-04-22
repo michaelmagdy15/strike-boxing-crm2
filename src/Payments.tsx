@@ -113,24 +113,39 @@ export default function Payments() {
 
   const handleAddPayment = () => {
     const finalPackageType = packageType === 'Custom' ? customPackage : packageType;
-    if (clientId && amount && finalPackageType) {
-      if (method === 'Instapay' && (!instapayRef || !/^\d{12}$/.test(instapayRef))) {
-        setAlertTitle('Invalid Reference');
-        setAlertDescription('Please enter a valid 12-digit Instapay reference number.');
-        setAlertOpen(true);
-        return;
-      }
+    
+    if (!clientId || !amount || !finalPackageType) {
+      setAlertTitle('Missing Information');
+      setAlertDescription('Please select a client, enter an amount, and select a package type.');
+      setAlertOpen(true);
+      return;
+    }
 
-      const isPT = /\bpt\b/i.test(finalPackageType);
-      const resolvedCoachName = coachName === '__custom__' ? customCoachName.trim() : coachName;
-      if (isPT && !resolvedCoachName) {
-        setAlertTitle('Missing Information');
-        setAlertDescription('Please select or enter a coach for this PT package.');
-        setAlertOpen(true);
-        return;
-      }
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      setAlertTitle('Invalid Amount');
+      setAlertDescription('The payment amount must be greater than zero. Free payments are not permitted.');
+      setAlertOpen(true);
+      return;
+    }
 
-      addPayment({
+    if (method === 'Instapay' && (!instapayRef || !/^\d{12}$/.test(instapayRef))) {
+      setAlertTitle('Invalid Reference');
+      setAlertDescription('Please enter a valid 12-digit Instapay reference number.');
+      setAlertOpen(true);
+      return;
+    }
+
+    const isPT = /\bpt\b/i.test(finalPackageType);
+    const resolvedCoachName = coachName === '__custom__' ? customCoachName.trim() : coachName;
+    if (isPT && !resolvedCoachName) {
+      setAlertTitle('Missing Information');
+      setAlertDescription('Please select or enter a coach for this PT package.');
+      setAlertOpen(true);
+      return;
+    }
+
+    addPayment({
         clientId,
         amount: parseFloat(amount),
         date: new Date(paymentDate).toISOString(),
@@ -204,9 +219,7 @@ export default function Payments() {
       const sama = users.find(u => u.name?.toLowerCase().includes('sama'));
       setRecordedById(sama?.id || currentUser?.id || '');
       setSalesName('');
-    }
   };
-
   const printInvoice = (payment: Payment, client: any) => {
     const win = window.open('', '_blank');
     if (!win) {

@@ -106,8 +106,6 @@ export interface AppContextType {
   canAssignLeads: boolean;
   recalculateAllPackages: () => Promise<void>;
   selfCheckIn: (identifier: string, pin: string, branch: Branch) => Promise<{ success: boolean; message: string }>;
-  mergeDuplicates: () => Promise<void>;
-  backfillMemberIds: () => Promise<void>;
   commissionRates: CommissionRates;
   updateCommissionRates: (rates: CommissionRates) => Promise<void>;
   isManagerOrSama: boolean;
@@ -356,21 +354,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const snap = await getDocs(q);
     if (snap.empty) return { success: false, message: 'Member not found' };
     
-    const doc = snap.docs[0];
-    if (!doc) return { success: false, message: 'Member not found' };
+    const clientDoc = snap.docs[0];
+    if (!clientDoc) return { success: false, message: 'Member not found' };
     
-    const client = doc.data() as Client;
-    await recordAttendance(doc.id, branch);
+    const client = clientDoc.data() as Client;
+
+    // Validate PIN: check against branding dailyCheckinPin if set
+    if (branding.dailyCheckinPin && pin !== branding.dailyCheckinPin) {
+      return { success: false, message: 'Incorrect PIN. Please try again.' };
+    }
+
+    await recordAttendance(clientDoc.id, branch);
     return { success: true, message: `Welcome ${client.name}!` };
-  }, [recordAttendance]);
-
-  const mergeDuplicates = useCallback(async () => {
-    console.log('Merging duplicates...');
-  }, []);
-
-  const backfillMemberIds = useCallback(async () => {
-    console.log('Backfilling member IDs...');
-  }, []);
+  }, [recordAttendance, branding.dailyCheckinPin]);
 
   const wipeSystem = useCallback(async () => {
     if (!isManagerOrSama) return;
@@ -412,7 +408,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (count > 0) await batch.commit();
   }, []);
 
-  const contextValue: AppContextType = {
+  const contextValue = useMemo<AppContextType>(() => ({
     currentUser: currentUser ? { ...currentUser, role: effectiveRole as any } : null,
     users,
     login,
@@ -476,14 +472,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     canAssignLeads,
     recalculateAllPackages,
     selfCheckIn,
-    mergeDuplicates,
-    backfillMemberIds,
     commissionRates,
     updateCommissionRates,
     isManagerOrSama,
     branches,
     updateBranches
-  };
+  }), [
+    currentUser, effectiveRole, users, visibleClients, loadingClients,
+    salesStats, visiblePayments, loadingPayments, ptPackageRecords,
+    auditLogs, visibleTasks, allTasks, packages, loadingPackages,
+    coaches, importBatches, userTargets, searchQuery, isAuthReady, branding,
+    previewRole, attendances, canDeletePayments, canAccessSettings,
+    canViewGlobalDashboard, canDeleteRecords, canAssignLeads,
+    commissionRates, isManagerOrSama, branches
+  ]);
 
   return (
     <AppContext.Provider value={contextValue}>

@@ -83,15 +83,14 @@ service cloud.firestore {
     }
 
     function isValidUserWrite(data) {
-      return isNonEmptyString(data.name) &&
-             isNonEmptyString(data.email) &&
+      return isNonEmptyString(data.name) && data.name.size() >= 2 &&
+             isNonEmptyString(data.email) && data.email.matches('^[^@]+@[^@]+\\.[^@]+$') &&
              isValidRole(data.role);
     }
 
-    // --- Clients ---
     function isValidClient(data) {
-      return isNonEmptyString(data.name) &&
-             isNonEmptyString(data.phone) &&
+      return isNonEmptyString(data.name) && data.name.size() >= 2 &&
+             isNonEmptyString(data.phone) && data.phone.size() >= 10 &&
              data.status in ['Lead', 'Active', 'Nearly Expired', 'Expired', 'Hold'];
     }
 
@@ -101,8 +100,8 @@ service cloud.firestore {
              isNonEmptyString(data.client_name) &&
              isNonEmptyString(data.sales_rep_id) &&
              isNonEmptyString(data.created_at) &&
-             data.amount is number && data.amount >= 0 &&
-             data.amount_paid is number && data.amount_paid >= 0 &&
+             data.amount is number && data.amount > 0 &&
+             data.amount_paid is number && data.amount_paid > 0 &&
              isNonEmptyString(data.packageType) &&
              data.package_category_type in ['Private Training', 'Group Training'] &&
              data.method in ['Cash', 'Credit Card', 'Bank Transfer', 'Instapay', 'Other'] &&
@@ -334,10 +333,12 @@ service cloud.firestore {
     }
 
     // --- Counters (sequential member IDs) ---
-    // Restrict writes to admins to prevent counter manipulation
+    // The 'clients' counter must be writable by any authenticated user
+    // because sales reps call generateMemberId() when adding new clients.
+    // Other counters remain admin-only.
     match /counters/{counterId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow write: if counterId == 'clients' ? isAuthenticated() : isAdmin();
     }
   }
 }

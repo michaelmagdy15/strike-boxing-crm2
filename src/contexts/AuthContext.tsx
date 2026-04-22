@@ -89,7 +89,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } else if (firebaseUser.email === "magd.gallab@gmail.com") {
               role = 'super_admin';
             } else if (firebaseUser.email) {
-              const q = query(collection(db, 'users'), where('email', '==', firebaseUser.email));
+              const emailLower = firebaseUser.email.toLowerCase();
+              const emailsToSearch = [...new Set([firebaseUser.email, emailLower])];
+              const q = query(collection(db, 'users'), where('email', 'in', emailsToSearch));
               const querySnapshot = await getDocs(q);
               if (!querySnapshot.empty) {
                 // Take role from the first valid invite, then delete all existing docs with this email
@@ -98,6 +100,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const batch = writeBatch(db);
                 querySnapshot.docs.forEach(d => batch.delete(d.ref));
                 await batch.commit();
+              } else {
+                // As a fallback for case variations not caught by exact or lowercase match
+                // we can do a quick check to see if any user document matches case insensitively.
+                // This is slightly heavier (fetching all users), but users collection is small.
+                const allUsersSnap = await getDocs(collection(db, 'users'));
+                const match = allUsersSnap.docs.find(d => (d.data().email || '').toLowerCase() === emailLower);
+                if (match) {
+                   role = match.data()['role'] as UserRole;
+                   const batch = writeBatch(db);
+                   allUsersSnap.docs.filter(d => (d.data().email || '').toLowerCase() === emailLower).forEach(d => batch.delete(d.ref));
+                   await batch.commit();
+                }
               }
             }
             
@@ -155,9 +169,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       snapshot.docs.forEach((d, i) => {
         const user = allUsers[i]!;
         const hasStoredId = 'id' in d.data();
-        const existing = emailMap.get(user.email);
+        const emailKey = (user.email || '').toLowerCase();
+        const existing = emailMap.get(emailKey);
         if (!existing || (hasStoredId && !existing.hasStoredId)) {
-          emailMap.set(user.email, { user, hasStoredId });
+          emailMap.set(emailKey, { user, hasStoredId });
         }
       });
       setUsers(Array.from(emailMap.values()).map(e => e.user));

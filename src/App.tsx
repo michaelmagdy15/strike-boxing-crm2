@@ -7,6 +7,7 @@ import React from 'react';
 import { AppProvider, useAppContext } from './context';
 import { AuthProvider } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { BrowserRouter } from 'react-router-dom';
@@ -516,14 +517,16 @@ function AppContent() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <SettingsProvider>
-          <AppProvider>
-            <AppContent />
-          </AppProvider>
-        </SettingsProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <SettingsProvider>
+            <AppProvider>
+              <AppContent />
+            </AppProvider>
+          </SettingsProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

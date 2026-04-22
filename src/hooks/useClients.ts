@@ -257,9 +257,18 @@ export const useClients = (currentUser: User | null) => {
 
   const deleteMultipleClients = async (ids: string[]) => {
     try {
+      let batch = writeBatch(db);
+      let count = 0;
       for (const id of ids) {
-        await deleteDoc(doc(db, 'clients', id));
+        batch.delete(doc(db, 'clients', id));
+        count++;
+        if (count === 500) {
+          await batch.commit();
+          batch = writeBatch(db);
+          count = 0;
+        }
       }
+      if (count > 0) await batch.commit();
       await addAuditLog('DELETE', 'CLIENT', 'bulk', `Deleted ${ids.length} clients/leads`);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, 'clients/bulk');

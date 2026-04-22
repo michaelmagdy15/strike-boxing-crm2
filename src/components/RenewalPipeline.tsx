@@ -93,9 +93,25 @@ export default function RenewalPipeline() {
   const handleRecordPayment = async () => {
     if (!selectedClient || !amount || !packageType) return;
 
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      alert('Invalid Amount: The payment amount must be greater than zero. Free payments are not permitted.');
+      return;
+    }
+
+    if (method === 'Instapay' && (!instapayRef || !/^\d{12}$/.test(instapayRef))) {
+      alert('Invalid Reference: Please enter a valid 12-digit Instapay reference number.');
+      return;
+    }
+
     const finalPackageType = packageType;
     const isPT = /\bpt\b/i.test(finalPackageType);
     
+    if (isPT && !coachName) {
+      alert('Missing Information: Please select a coach for this PT package.');
+      return;
+    }
+
     await addPayment({
       clientId: selectedClient.id,
       amount: parseFloat(amount),

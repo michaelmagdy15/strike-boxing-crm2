@@ -19,7 +19,13 @@
       "Bash(grep -v \"^$\")",
       "Bash(npx tsc *)",
       "Bash(firebase deploy *)",
-      "Bash(awk -F: '{print $1}')"
+      "Bash(awk -F: '{print $1}')",
+      "Bash(pandoc --version)",
+      "Bash(npx --yes md-to-pdf --version)",
+      "Bash(npm list *)",
+      "Bash(node convert-to-html.js)",
+      "Bash(node convert-to-html.cjs)",
+      "Bash(git push *)"
     ]
   }
 }

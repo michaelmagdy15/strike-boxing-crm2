@@ -54,7 +54,15 @@ export default function ResyncAssignments({ clients, users, currentUser }: Resyn
 
   const resolveAssignment = (salesNameRaw: string): { assignedTo: string; salesName: string } => {
     const trimmed = (salesNameRaw || '').trim();
-    const canonical = SALES_NAME_MAPPING[trimmed] || trimmed;
+    const lowerTrimmed = trimmed.toLowerCase();
+    let canonical = trimmed;
+    
+    for (const [key, value] of Object.entries(SALES_NAME_MAPPING)) {
+      if (key.toLowerCase() === lowerTrimmed) {
+        canonical = value;
+        break;
+      }
+    }
 
     const matched = users.find(u =>
       u.role === 'rep' &&

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { BrandingSettings, SalesTarget, Branch } from '../types';
 import { db } from '../firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
@@ -61,26 +61,26 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return () => { unsubBranding(); unsubBranches(); unsubCommission(); unsubTarget(); };
   }, []);
 
-  const updateBranding = async (updates: Partial<BrandingSettings>) => {
+  const updateBranding = useCallback(async (updates: Partial<BrandingSettings>) => {
     await setDoc(doc(db, 'settings', 'branding'), updates, { merge: true });
     await addAuditLog('UPDATE', 'TARGET', 'branding', `Updated branding settings`);
-  };
+  }, []);
 
-  const updateSalesTarget = async (target: number) => {
+  const updateSalesTarget = useCallback(async (target: number) => {
     await setDoc(doc(db, 'settings', 'sales-target'), { targetAmount: target }, { merge: true });
     await addAuditLog('UPDATE', 'TARGET', 'sales-target', `Updated overall sales target to ${target}`);
-  };
+  }, []);
 
-  const updateBranches = async (newBranches: Branch[]) => {
+  const updateBranches = useCallback(async (newBranches: Branch[]) => {
     await setDoc(doc(db, 'settings', 'branches'), { branches: newBranches }, { merge: true });
     setBranches(newBranches);
     await addAuditLog('UPDATE', 'SYSTEM', 'branches', `Updated system branches`);
-  };
+  }, []);
 
-  const updateCommissionRates = async (rates: { ptRate: number; groupRate: number }) => {
+  const updateCommissionRates = useCallback(async (rates: { ptRate: number; groupRate: number }) => {
     await setDoc(doc(db, 'settings', 'commission'), rates, { merge: true });
     await addAuditLog('UPDATE', 'TARGET', 'commission', `Updated commission rates: PT ${rates.ptRate}%, Group ${rates.groupRate}%`);
-  };
+  }, []);
 
   const value = useMemo(() => ({
     branding,
@@ -94,7 +94,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     updateBranches,
     commissionRates,
     updateCommissionRates,
-  }), [branding, searchQuery, salesTarget, branches, commissionRates]);
+  }), [branding, searchQuery, salesTarget, branches, commissionRates, updateBranding, updateSalesTarget, updateBranches, updateCommissionRates]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 };

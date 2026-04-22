@@ -8,8 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAppContext } from './context';
-import { useClients } from './hooks/useClients';
-import { usePayments } from './hooks/usePayments';
 import { SALES_NAME_MAPPING } from './constants';
 import { differenceInDays, isSameDay, parseISO, isAfter, isBefore, addDays, subDays, subMonths, startOfMonth, endOfMonth, isWithinInterval, format } from 'date-fns';
 import { Target, Users, CalendarDays, AlertTriangle, Gift, Settings, ChevronLeft, ChevronRight, Trophy, Download, ArrowUpDown, UserCheck } from 'lucide-react';
@@ -56,9 +54,13 @@ function PaginatedList({ items, renderItem, itemsPerPage = 5 }: { items: any[], 
 }
 
 export default function Dashboard() {
-  const { salesTarget, updateSalesTarget, updateUserTarget, currentUser, userTargets, users, canViewGlobalDashboard, canAccessSettings, branches } = useAppContext();
-  const { clients: allClients } = useClients(currentUser);
-  const { payments: allPayments } = usePayments({ currentUser, clients: allClients, canDeletePayments: false });
+  const { salesTarget, updateSalesTarget, updateUserTarget, currentUser, userTargets, users, canViewGlobalDashboard, canAccessSettings, branches, clients: contextClients, payments: contextPayments } = useAppContext();
+  // Use context data directly instead of creating duplicate Firestore listeners.
+  // Context 'clients' and 'payments' are already filtered for the current user's visibility.
+  // For manager cross-rep analysis we need unfiltered data — but all users in context already
+  // receive the full dataset when canViewGlobalDashboard is true. For reps, they only see their own.
+  const allClients = contextClients;
+  const allPayments = contextPayments;
   const [isTargetDialogOpen, setIsTargetDialogOpen] = useState(false);
   const [newTarget, setNewTarget] = useState(salesTarget.targetAmount.toString());
   const [selectedRepId, setSelectedRepId] = useState<string>('all');
@@ -76,11 +78,14 @@ export default function Dashboard() {
 
   const getCanonicalName = React.useCallback((name: string) => {
     if (!name) return '';
-    const trimmed = name.trim();
-    // Check mapping first, then return normalized name
-    const mapped = SALES_NAME_MAPPING[trimmed];
-    if (mapped) return mapped.toLowerCase().trim();
-    return trimmed.toLowerCase();
+    const trimmed = name.trim().toLowerCase();
+    // Check mapping first (case-insensitive), then return normalized name
+    for (const [key, value] of Object.entries(SALES_NAME_MAPPING)) {
+      if (key.toLowerCase() === trimmed) {
+        return value.toLowerCase().trim();
+      }
+    }
+    return trimmed;
   }, []);
 
   const isClientAssignedToRep = React.useCallback((client: any, repId: string, repName: string) => {
@@ -202,6 +207,9 @@ export default function Dashboard() {
       if (canViewGlobalDashboard && effectiveRepId !== 'all') {
         updateUserTarget(effectiveRepId, currentMonthStr, target);
       } else {
+        if (canViewGlobalDashboard) {
+          updateUserTarget('global', currentMonthStr, target);
+        }
         updateSalesTarget(target);
       }
       setIsTargetDialogOpen(false);
@@ -231,13 +239,22 @@ export default function Dashboard() {
       const repName = selectedUser?.name || '';
       relevantPayments = relevantPayments.filter(p => isPaymentAttributedToRep(p, effectiveRepId, repName));
     } else if (canViewGlobalDashboard && effectiveRepId === 'all') {
-      // Manager viewing all reps — sum every active rep's target for the selected month
-      const monthTargets = userTargets.filter(t =>
-        t.month === currentMonthStr || t.month_year === currentMonthStr
+      const globalMonthlyTarget = userTargets.find(t => 
+        t.userId === 'global' && 
+        (t.month === currentMonthStr || t.month_year === currentMonthStr)
       );
-      targetAmount = monthTargets.length > 0
-        ? monthTargets.reduce((sum, t) => sum + (t.targetAmount || 0), 0)
-        : salesTarget.targetAmount;
+
+      if (globalMonthlyTarget) {
+        targetAmount = globalMonthlyTarget.targetAmount;
+      } else {
+        // Manager viewing all reps — sum every active rep's target for the selected month
+        const monthTargets = userTargets.filter(t =>
+          (t.month === currentMonthStr || t.month_year === currentMonthStr) && t.userId !== 'global'
+        );
+        targetAmount = monthTargets.length > 0
+          ? monthTargets.reduce((sum, t) => sum + (t.targetAmount || 0), 0)
+          : salesTarget.targetAmount;
+      }
     } else if (!canViewGlobalDashboard && currentUser) {
       // Rep viewing their own data
       const repTarget = userTargets.find(t =>

@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.onClientAssigned = exports.onLeadCreated = exports.metaWebhook = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
+const params_1 = require("firebase-functions/params");
 const logger = __importStar(require("firebase-functions/logger"));
 const admin = __importStar(require("firebase-admin"));
 const mailer_1 = require("./utils/mailer");
@@ -45,12 +46,12 @@ const db = admin.firestore();
 // -------------------------------------------------------------
 // SECRETS & CONFIGURATION
 // -------------------------------------------------------------
-const STRIKE_WEBHOOK_SECRET = "strike_zapier_secret_2026";
+const STRIKE_WEBHOOK_SECRET = (0, params_1.defineSecret)("STRIKE_WEBHOOK_SECRET");
 /**
  * Generic Webhook Endpoint for Zapier / Make.com
  * Accepts a POST request with name, phone, email, and source.
  */
-exports.metaWebhook = (0, https_1.onRequest)(async (req, res) => {
+exports.metaWebhook = (0, https_1.onRequest)({ secrets: [STRIKE_WEBHOOK_SECRET] }, async (req, res) => {
     logger.info(`[${req.method}] Webhook triggered`);
     // Only allow POST
     if (req.method !== "POST") {
@@ -61,9 +62,9 @@ exports.metaWebhook = (0, https_1.onRequest)(async (req, res) => {
         const body = req.body;
         const secret = req.headers["x-strike-secret"];
         logger.info("Incoming Webhook Data:", JSON.stringify(body, null, 2));
-        // Optional: Check secret if you want to be safe
-        if (secret && secret !== STRIKE_WEBHOOK_SECRET) {
-            logger.warn("Invalid secret received");
+        // MANDATORY: Verify webhook secret — reject all unauthenticated requests
+        if (!secret || secret !== STRIKE_WEBHOOK_SECRET.value()) {
+            logger.warn("Missing or invalid webhook secret");
             res.status(401).send("Unauthorized");
             return;
         }

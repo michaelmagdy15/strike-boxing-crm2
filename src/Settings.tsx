@@ -17,7 +17,7 @@ import { Branch } from './types';
 import { exportDatabaseToJson, restoreDatabaseFromJson } from './services/backupService';
 
 export default function Settings() {
-  const { branding, updateBranding, currentUser, wipeSystem, canAccessSettings, backfillMemberIds, branches, updateBranches } = useAppContext();
+  const { branding, updateBranding, currentUser, wipeSystem, canAccessSettings, branches, updateBranches } = useAppContext();
   const [companyName, setCompanyName] = useState(branding.companyName);
   const [logoUrl, setLogoUrl] = useState(branding.logoUrl);
   const [kioskPin, setKioskPin] = useState(branding.kioskPin || '');
@@ -498,8 +498,8 @@ export default function Settings() {
                   </Button>
                 </div>
 
-                <div className="p-4 border border-primary/20 rounded-lg bg-background/50 space-y-3">
-                  <h4 className="font-bold text-primary flex items-center gap-2">
+                <div className="p-4 border border-muted/40 rounded-lg bg-background/50 space-y-3 opacity-60">
+                  <h4 className="font-bold text-muted-foreground flex items-center gap-2">
                     <ShieldAlert className="h-4 w-4" />
                     Standardize ID System
                   </h4>
@@ -507,9 +507,7 @@ export default function Settings() {
                     Assign a permanent, sequential Member ID to all existing records that don't have one yet.
                     Required for self check-in by member ID.
                   </p>
-                  <Button variant="default" className="font-bold" onClick={backfillMemberIds}>
-                    Backfill Missing IDs
-                  </Button>
+                  <p className="text-xs text-muted-foreground italic">This feature is not yet implemented.</p>
                 </div>
               </CardContent>
             </Card>

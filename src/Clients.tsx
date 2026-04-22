@@ -24,7 +24,7 @@ import RenewalPipeline from './components/RenewalPipeline';
 import ResyncAssignments from './components/ResyncAssignments';
 
 export default function Clients() {
-  const { currentUser, users, payments, canViewGlobalDashboard, canDeleteRecords, recalculateAllPackages, mergeDuplicates, isManagerOrSama, branches } = useAppContext();
+  const { currentUser, users, payments, canViewGlobalDashboard, canDeleteRecords, recalculateAllPackages, isManagerOrSama, branches } = useAppContext();
   const { clients, addClient, updateClient, deleteMultipleClients, deleteClient, addInteraction, addComment } = useClients(currentUser);
   const { packages } = usePackages();
   const [activeTab, setActiveTab] = useState('active');
@@ -60,25 +60,32 @@ export default function Clients() {
   const deferredSortBy = useDeferredValue(sortBy);
 
   const handleAddMember = () => {
-    if (newMemberName && newMemberPhone) {
-      addClient({
-        id: Math.random().toString(36).substr(2, 9),
-        name: newMemberName,
-        phone: newMemberPhone,
-        status: 'Active',
-        branch: newMemberBranch || undefined,
-        stage: 'Converted',
-        comments: [],
-        interactions: [],
-        assignedTo: newMemberAssignedTo || (currentUser?.role === 'rep' ? currentUser.id : undefined),
-        startDate: new Date().toISOString()
-      });
-      setIsNewMemberOpen(false);
-      setNewMemberName('');
-      setNewMemberPhone('');
-      setNewMemberBranch('');
-      setNewMemberAssignedTo('');
+    if (!newMemberName || newMemberName.trim().length < 2) {
+      alert('Please enter a valid member name (at least 2 characters).');
+      return;
     }
+    if (!newMemberPhone || newMemberPhone.trim().length < 10) {
+      alert('Please enter a valid phone number (at least 10 digits).');
+      return;
+    }
+    
+    addClient({
+      id: Math.random().toString(36).substr(2, 9),
+      name: newMemberName,
+      phone: newMemberPhone,
+      status: 'Active',
+      branch: newMemberBranch || undefined,
+      stage: 'Converted',
+      comments: [],
+      interactions: [],
+      assignedTo: newMemberAssignedTo || (currentUser?.role === 'rep' ? currentUser.id : undefined),
+      startDate: new Date().toISOString()
+    });
+    setIsNewMemberOpen(false);
+    setNewMemberName('');
+    setNewMemberPhone('');
+    setNewMemberBranch('');
+    setNewMemberAssignedTo('');
   };
 
   const handleAddInteraction = async (clientId: string) => {
@@ -895,17 +902,6 @@ export default function Clients() {
             <RefreshCw className={`mr-2 h-4 w-4 ${isRecalculating ? 'animate-spin' : ''}`} />
             Recalculate All Expiry
           </Button>
-          {isManagerOrSama && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
-              onClick={mergeDuplicates}
-            >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Merge Duplicates
-            </Button>
-          )}
           <ImportData type="Active" />
           <ImportHistory />
           {isManagerOrSama && (
