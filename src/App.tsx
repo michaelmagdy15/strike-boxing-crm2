@@ -22,6 +22,7 @@ import Settings from './Settings';
 import Login from './Login';
 import Reports from './Reports';
 import MemberCheckin from './MemberCheckin';
+import HelpPage from './HelpPage';
 import { Activity, Users, UserPlus, CreditCard, LogOut, Calendar as CalendarIcon, ShieldAlert, Settings as SettingsIcon, Eye, EyeOff, CheckSquare, Package, Search, Scan, History, BarChart3, LayoutDashboard, MoreHorizontal, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -33,6 +34,7 @@ function AppContent() {
   const { currentUser, logout, isAuthReady, previewRole, setPreviewRole, searchQuery, setSearchQuery, branding, canAccessSettings, canViewGlobalDashboard, canDeletePayments, isManagerOrSama } = useAppContext();
   const [isKioskMode, setIsKioskMode] = React.useState(window.location.pathname === '/kiosk');
   const [isCheckinMode, setIsCheckinMode] = React.useState(window.location.pathname === '/checkin');
+  const [isHelpMode, setIsHelpMode] = React.useState(window.location.pathname === '/help');
   const [kioskAuthenticated, setKioskAuthenticated] = React.useState(false);
   const [pinInput, setPinInput] = React.useState('');
   const [pinError, setPinError] = React.useState(false);
@@ -44,6 +46,7 @@ function AppContent() {
     const handlePopState = () => {
       setIsKioskMode(window.location.pathname === '/kiosk');
       setIsCheckinMode(window.location.pathname === '/checkin');
+      setIsHelpMode(window.location.pathname === '/help');
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -60,6 +63,10 @@ function AppContent() {
       setTimeout(() => setPinError(false), 2000);
     }
   };
+
+  if (isHelpMode) {
+    return <HelpPage />;
+  }
 
   if (isKioskMode) {
     if (!kioskAuthenticated) {
