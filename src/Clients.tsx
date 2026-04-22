@@ -10,11 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, Gift, Phone, Calendar, Download, Plus, Search, ArrowUpDown, QrCode, RefreshCw, User, Users, UserPlus, Copy, MessageSquare, Activity } from 'lucide-react';
 import { Client, InteractionType, InteractionOutcome } from './types';
 import { format, parseISO, isAfter, isBefore, addDays, subDays, differenceInDays } from 'date-fns';
-import { SALES_MEMBERS } from './constants';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { QRCodeSVG } from 'qrcode.react';
@@ -418,16 +417,9 @@ export default function Clients() {
                     onChange={(e) => updateClient(client.id, { assignedTo: e.target.value === 'unassigned' ? '' : e.target.value })}
                   >
                     <option value="unassigned">Unassigned</option>
-                    <optgroup label="System Users">
-                      {users.filter(u => u.role === 'rep').map(rep => (
-                        <option key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Sales Members">
-                      {SALES_MEMBERS.map(name => (
-                        <option key={name} value={name}>{name}</option>
-                      ))}
-                    </optgroup>
+                    {users.filter(u => u.role === 'rep').map(rep => (
+                      <option key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</option>
+                    ))}
                   </select>
                 </TableCell>
               )}
@@ -520,16 +512,9 @@ export default function Clients() {
                                       onChange={(e) => updateClient(client.id, { assignedTo: e.target.value === 'unassigned' ? '' : e.target.value })}
                                     >
                                       <option value="unassigned">Unassigned</option>
-                                      <optgroup label="System Users">
-                                        {users.filter(u => u.role === 'rep').map(rep => (
-                                          <option key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown'}</option>
-                                        ))}
-                                      </optgroup>
-                                      <optgroup label="Sales Members">
-                                        {SALES_MEMBERS.map(name => (
-                                          <option key={name} value={name}>{name}</option>
-                                        ))}
-                                      </optgroup>
+                                      {users.filter(u => u.role === 'rep').map(rep => (
+                                        <option key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown'}</option>
+                                      ))}
                                     </select>
                                   </div>
                                 </div>
@@ -821,18 +806,9 @@ export default function Clients() {
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl border-none shadow-2xl">
                       <SelectItem value="unassigned" className="rounded-xl py-3 px-4">Unassigned</SelectItem>
-                      <SelectGroup>
-                        <SelectLabel className="px-4 py-2 text-xs font-bold text-muted-foreground uppercase tracking-tighter">System Users</SelectLabel>
-                        {users.filter(u => u.role === 'rep').map(rep => (
-                          <SelectItem key={rep.id} value={rep.id} className="rounded-xl py-3 px-4">{rep.name || rep.email}</SelectItem>
-                        ))}
-                      </SelectGroup>
-                      <SelectGroup>
-                        <SelectLabel className="px-4 py-2 text-xs font-bold text-muted-foreground uppercase tracking-tighter">Sales Members</SelectLabel>
-                        {SALES_MEMBERS.map(name => (
-                          <SelectItem key={name} value={name} className="rounded-xl py-3 px-4">{name}</SelectItem>
-                        ))}
-                      </SelectGroup>
+                      {users.filter(u => u.role === 'rep').map(rep => (
+                        <SelectItem key={rep.id} value={rep.id} className="rounded-xl py-3 px-4">{rep.name || rep.email}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

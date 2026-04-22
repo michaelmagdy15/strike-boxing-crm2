@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, parseISO, addDays } from 'date-fns';
 import { Payment } from './types';
-import { SALES_MEMBERS } from './constants';
+import { resolveUserDisplay } from './utils/resolveUserDisplay';
 import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search, Trash2, ChevronLeft, ChevronRight, User } from 'lucide-react';
 import { AlertDialog } from './components/AlertDialog';
 
@@ -71,8 +71,9 @@ export default function Payments() {
   useEffect(() => {
     if (clientId) {
       const client = clients.find(c => c.id === clientId);
-      if (client && client.assignedTo && SALES_MEMBERS.includes(client.assignedTo)) {
-        setSalesName(client.assignedTo);
+      if (client?.assignedTo) {
+        const resolved = resolveUserDisplay(client.assignedTo, users);
+        setSalesName(resolved || '');
       } else {
         setSalesName('');
       }
@@ -620,8 +621,8 @@ export default function Payments() {
                       <SelectValue placeholder="For commission" />
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl border-none shadow-2xl">
-                      {SALES_MEMBERS.map(name => (
-                        <SelectItem key={name} value={name} className="rounded-xl py-3 px-4">{name}</SelectItem>
+                      {users.filter(u => u.role === 'rep').map(u => (
+                        <SelectItem key={u.id} value={u.name || u.id} className="rounded-xl py-3 px-4">{u.name || u.email}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -814,7 +815,7 @@ export default function Payments() {
                           {payment.salesName ? (
                             <Badge variant="outline" className="flex items-center gap-1 w-fit bg-amber-50 dark:bg-amber-900/10 text-amber-600 border-amber-200">
                               <User className="h-3 w-3" />
-                              {payment.salesName}
+                              {resolveUserDisplay(payment.salesName, users, payment.salesName || '')}
                             </Badge>
                           ) : '-'}
                         </TableCell>

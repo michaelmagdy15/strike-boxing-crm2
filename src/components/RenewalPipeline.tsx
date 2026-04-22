@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAppContext } from '../context';
 import { useCoaches } from '../hooks/useCoaches';
 import { usePackages } from '../hooks/usePackages';
@@ -6,24 +6,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format, parseISO, isAfter, isBefore, addDays, differenceInDays, startOfDay } from 'date-fns';
 import { Client, Payment } from '../types';
-import { SALES_MEMBERS } from '../constants';
-import { CheckCircle, AlertTriangle, Clock, Phone, DollarSign, User, Calendar, CreditCard } from 'lucide-react';
+import { resolveUserDisplay } from '../utils/resolveUserDisplay';
+import { AlertTriangle, Clock, Phone, DollarSign, User, Calendar } from 'lucide-react';
 
 export default function RenewalPipeline() {
-  const { 
-    clients, 
-    updateClient, 
-    addComment, 
-    currentUser, 
-    payments, 
-    addPayment, 
-    users 
+  const {
+    clients,
+    updateClient,
+    addComment,
+    currentUser,
+    addPayment,
+    users
   } = useAppContext();
   const { coaches } = useCoaches();
   const { packages } = usePackages();
@@ -207,7 +206,7 @@ export default function RenewalPipeline() {
                     <TableCell>
                       <div className="flex items-center gap-1.5 text-sm text-slate-600">
                         <User className="w-3.5 h-3.5" />
-                        {client.assignedTo || 'Unassigned'}
+                        {resolveUserDisplay(client.assignedTo, users, client.salesName || 'Unassigned')}
                       </div>
                     </TableCell>
                     <TableCell className="text-right pr-6">

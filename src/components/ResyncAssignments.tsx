@@ -103,7 +103,7 @@ export default function ResyncAssignments({ clients, users, currentUser }: Resyn
         setStep('preview');
         setIsLoading(false);
       },
-      error: (err) => {
+      error: (err: { message: string }) => {
         setError(`CSV parse error: ${err.message}`);
         setIsLoading(false);
       }
@@ -208,7 +208,7 @@ export default function ResyncAssignments({ clients, users, currentUser }: Resyn
     let count = 0;
 
     for (let i = 0; i < toUpdate.length; i++) {
-      const m = toUpdate[i];
+      const m = toUpdate[i]!;
       const { assignedTo, salesName } = resolveAssignment(m.newSalesName);
       batchOps.update(doc(db, 'clients', m.clientId), { assignedTo, salesName });
       count++;
@@ -259,7 +259,7 @@ export default function ResyncAssignments({ clients, users, currentUser }: Resyn
           Resync Assignments
         </Button>
       } />
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Resync Sales Assignments from Sheet</DialogTitle>
         </DialogHeader>
@@ -321,7 +321,7 @@ export default function ResyncAssignments({ clients, users, currentUser }: Resyn
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Phone Number Column <span className="text-destructive">*</span></Label>
-                <Select value={phoneCol} onValueChange={setPhoneCol}>
+                <Select value={phoneCol} onValueChange={v => v && setPhoneCol(v)}>
                   <SelectTrigger><SelectValue placeholder="Select column" /></SelectTrigger>
                   <SelectContent>
                     {headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
@@ -330,7 +330,7 @@ export default function ResyncAssignments({ clients, users, currentUser }: Resyn
               </div>
               <div className="space-y-2">
                 <Label>Sales Rep / Assigned To Column <span className="text-destructive">*</span></Label>
-                <Select value={salesCol} onValueChange={setSalesCol}>
+                <Select value={salesCol} onValueChange={v => v && setSalesCol(v)}>
                   <SelectTrigger><SelectValue placeholder="Select column" /></SelectTrigger>
                   <SelectContent>
                     {headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
@@ -357,28 +357,28 @@ export default function ResyncAssignments({ clients, users, currentUser }: Resyn
                   <Badge variant="destructive">{willMiss} not found</Badge>
                 </div>
 
-                <ScrollArea className="h-[260px] border rounded-md">
+                <ScrollArea className="h-[280px] border rounded-md">
                   <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-muted">
+                    <thead className="sticky top-0 bg-muted z-10">
                       <tr>
-                        <th className="px-3 py-2 text-left font-semibold">Name</th>
-                        <th className="px-3 py-2 text-left font-semibold">Phone</th>
-                        <th className="px-3 py-2 text-left font-semibold">Current</th>
-                        <th className="px-3 py-2 text-left font-semibold">New</th>
-                        <th className="px-3 py-2 text-left font-semibold">Status</th>
+                        <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Name</th>
+                        <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Phone</th>
+                        <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Current</th>
+                        <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">New</th>
+                        <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Status</th>
                       </tr>
                     </thead>
                     <tbody>
                       {previewMatches.map((m, i) => (
-                        <tr key={i} className="border-t">
-                          <td className="px-3 py-1.5 font-medium">{m.clientName}</td>
-                          <td className="px-3 py-1.5 text-muted-foreground">{m.phone}</td>
-                          <td className="px-3 py-1.5 text-muted-foreground">{m.oldAssignedTo || '—'}</td>
-                          <td className="px-3 py-1.5">{m.newAssignedTo || '—'}</td>
-                          <td className="px-3 py-1.5">
-                            {m.status === 'matched' && <Badge className="bg-emerald-500 text-[10px]">Update</Badge>}
-                            {m.status === 'no-change' && <Badge variant="secondary" className="text-[10px]">Same</Badge>}
-                            {m.status === 'unmatched' && <Badge variant="destructive" className="text-[10px]">Not Found</Badge>}
+                        <tr key={i} className={`border-t ${m.status === 'matched' ? 'bg-emerald-50/50 dark:bg-emerald-900/10' : m.status === 'unmatched' ? 'bg-destructive/5' : ''}`}>
+                          <td className="px-3 py-2 font-medium whitespace-nowrap max-w-[140px] truncate">{m.clientName}</td>
+                          <td className="px-3 py-2 text-muted-foreground whitespace-nowrap font-mono text-[11px]">{m.phone}</td>
+                          <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{m.oldAssignedTo || '—'}</td>
+                          <td className="px-3 py-2 font-medium whitespace-nowrap">{m.newAssignedTo || '—'}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {m.status === 'matched' && <Badge className="bg-emerald-500 text-[10px] px-2">Update</Badge>}
+                            {m.status === 'no-change' && <Badge variant="secondary" className="text-[10px] px-2">Same</Badge>}
+                            {m.status === 'unmatched' && <Badge variant="destructive" className="text-[10px] px-2">Not Found</Badge>}
                           </td>
                         </tr>
                       ))}

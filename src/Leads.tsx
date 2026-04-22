@@ -20,6 +20,7 @@ import ImportHistory from './ImportHistory';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Trash2, ChevronLeft, ChevronRight, User, Search, MapPin, Tag, Info, AlertCircle, Activity, QrCode, Copy } from 'lucide-react';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { resolveUserDisplay } from './utils/resolveUserDisplay';
 
 export default function Leads() {
   const {
@@ -296,7 +297,7 @@ export default function Leads() {
     const csvRows = [
       headers.join(','),
       ...leads.map(l => {
-        const assignedUser = l.assignedTo ? (users.find(u => u.id === l.assignedTo)?.name || l.assignedTo) : 'Unassigned';
+        const assignedUser = resolveUserDisplay(l.assignedTo, users, 'Unassigned');
         return [
           `"${l.name}"`,
           `"${l.phone}"`,
@@ -545,7 +546,7 @@ export default function Leads() {
                     <SelectTrigger className="w-[130px] h-8 text-xs">
                       <SelectValue placeholder="Assign rep">
                         {lead.assignedTo && lead.assignedTo !== 'unassigned'
-                          ? users.find(u => u.id === lead.assignedTo)?.name || 'Unknown User'
+                          ? resolveUserDisplay(lead.assignedTo, users, 'Unknown User')
                           : undefined}
                       </SelectValue>
                     </SelectTrigger>
