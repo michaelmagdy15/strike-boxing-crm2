@@ -43,6 +43,7 @@ export default function Clients() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBranch, setFilterBranch] = useState('All');
+  const [filterRep, setFilterRep] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
 
   // Interaction Logging State
@@ -54,6 +55,7 @@ export default function Clients() {
 
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const deferredFilterBranch = useDeferredValue(filterBranch);
+  const deferredFilterRep = useDeferredValue(filterRep);
   const deferredActiveTab = useDeferredValue(activeTab);
   const deferredSortBy = useDeferredValue(sortBy);
 
@@ -200,6 +202,32 @@ export default function Clients() {
       filtered = filtered.filter(m => m.branch === deferredFilterBranch);
     }
 
+    // Assigned Rep filter (managers/admins only)
+    // Checks both assignedTo (userId) AND salesName (legacy name string from import)
+    if (deferredFilterRep !== 'all') {
+      if (deferredFilterRep === 'unassigned') {
+        // Show clients with no assignedTo AND no matching salesName
+        filtered = filtered.filter(m => {
+          if (m.assignedTo && m.assignedTo !== '') return false;
+          if (m.salesName) {
+            const matchedRep = users.find(u => u.name && m.salesName!.trim().toLowerCase() === u.name.trim().toLowerCase());
+            if (matchedRep) return false; // Has a salesName matching a known rep → not unassigned
+          }
+          return true;
+        });
+      } else {
+        filtered = filtered.filter(m => {
+          const repUser = users.find(u => u.id === deferredFilterRep);
+          if (!repUser) return false;
+          // Match by userId
+          if (m.assignedTo === deferredFilterRep) return true;
+          // Match by legacy salesName (case-insensitive) for imported records
+          if (m.salesName && repUser.name && m.salesName.trim().toLowerCase() === repUser.name.trim().toLowerCase()) return true;
+          return false;
+        });
+      }
+    }
+
     // Sort
     filtered = [...filtered].sort((a, b) => {
       if (deferredSortBy === 'id-asc') return (Number(a.memberId) || 0) - (Number(b.memberId) || 0);
@@ -260,7 +288,7 @@ export default function Clients() {
   React.useEffect(() => {
     setCurrentPage(1);
     setSelectedClientIds([]);
-  }, [activeTab, searchTerm, filterBranch, sortBy]);
+  }, [activeTab, searchTerm, filterBranch, filterRep, sortBy]);
 
   const exportToCSV = () => {
     const headers = ['Member ID', 'Name', 'Phone', 'Branch', 'Package', 'Packages Rem.', 'Status', 'Expiry Date', 'Total Paid', 'Assigned To'];
@@ -325,7 +353,133 @@ export default function Clients() {
   };
 
   const renderClientTable = (clientList: Client[]) => (
-    <div className="overflow-x-auto">
+    <div>
+      {/* ── Mobile card list (< md) ── */}
+      <div className="md:hidden divide-y divide-border">
+        {clientList.length === 0 ? (
+          <div className="py-12 text-center text-sm text-muted-foreground">No members found.</div>
+        ) : clientList.map(client => {
+          const totalPaid = payments.filter(p => p.clientId === client.id).reduce((s, p) => s + p.amount, 0);
+          const assignedName = (() => {
+            if (!client.assignedTo) return client.salesName || null;
+            const u = users.find(u => u.id === client.assignedTo);
+            return u ? (u.name || u.email) : client.salesName || client.assignedTo;
+          })();
+          return (
+            <div key={client.id} className="flex items-center gap-3 px-4 py-3">
+              <Checkbox
+                checked={selectedClientIds.includes(client.id)}
+                onCheckedChange={(checked) => handleSelectClient(client.id, !!checked)}
+                className="shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {client.memberId && <span className="text-[10px] font-bold text-muted-foreground">#{client.memberId}</span>}
+                  <span className="font-semibold text-sm truncate">{client.name}</span>
+                  {upcomingBirthdays.some(b => b.id === client.id) && <Gift className="h-3.5 w-3.5 text-pink-500 shrink-0" />}
+                </div>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  {getStatusBadge(client.status)}
+                  {typeof client.sessionsRemaining === 'number' ? (
+                    <Badge variant={client.sessionsRemaining < 0 ? 'destructive' : 'secondary'} className="text-[10px] h-4">
+                      {client.sessionsRemaining} left
+                    </Badge>
+                  ) : client.sessionsRemaining === 'unlimited' ? (
+                    <Badge className="bg-emerald-500/15 text-emerald-600 border-emerald-200 border text-[10px] h-4">∞</Badge>
+                  ) : null}
+                  {client.membershipExpiry && (
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                      <Calendar className="h-3 w-3" />
+                      {format(parseISO(client.membershipExpiry), 'MMM d, yy')}
+                    </span>
+                  )}
+                  {assignedName && (
+                    <span className="text-[10px] text-muted-foreground">{assignedName}</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <Dialog>
+                  <DialogTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" />}>
+                    <User className="h-4 w-4" />
+                  </DialogTrigger>
+                  <DialogContent className="!w-full !max-w-[1200px] max-h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl bg-background/95 backdrop-blur-xl">
+                    <DialogHeader className="p-4 pb-3 bg-muted/30 border-b shrink-0">
+                      <DialogTitle className="text-lg font-extrabold">{client.name}</DialogTitle>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        {client.memberId && <span className="text-xs font-mono font-bold text-primary">#{client.memberId}</span>}
+                        {getStatusBadge(client.status)}
+                        {client.branch && <Badge variant="secondary" className="text-[10px]">{client.branch}</Badge>}
+                      </div>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                      {/* Quick info grid */}
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div><span className="text-[10px] uppercase text-muted-foreground block">Package</span><span className="font-semibold text-xs">{client.packageType || '—'}</span></div>
+                        <div><span className="text-[10px] uppercase text-muted-foreground block">Sessions Left</span><span className="font-semibold text-xs">{client.sessionsRemaining === 'unlimited' ? '∞ Unlimited' : client.sessionsRemaining ?? '—'}</span></div>
+                        <div><span className="text-[10px] uppercase text-muted-foreground block">Expiry</span><span className="font-semibold text-xs">{client.membershipExpiry ? format(parseISO(client.membershipExpiry), 'MMM d, yyyy') : '—'}</span></div>
+                        <div><span className="text-[10px] uppercase text-muted-foreground block">Total Paid</span><span className="font-semibold text-xs text-green-600">{totalPaid.toLocaleString()} LE</span></div>
+                        <div><span className="text-[10px] uppercase text-muted-foreground block">Phone</span><span className="font-semibold text-xs">{client.phone}</span></div>
+                        <div><span className="text-[10px] uppercase text-muted-foreground block">Assigned To</span><span className="font-semibold text-xs">{assignedName || 'Unassigned'}</span></div>
+                      </div>
+                      {/* Interactions */}
+                      {client.interactions && client.interactions.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Recent Interactions</p>
+                          <div className="space-y-2">
+                            {[...client.interactions].sort((a,b) => new Date(b.date).getTime()-new Date(a.date).getTime()).slice(0,3).map(ia => (
+                              <div key={ia.id} className="text-xs bg-muted/30 rounded-lg p-2.5">
+                                <div className="flex justify-between items-center">
+                                  <span className="font-bold">{ia.type} — {ia.outcome}</span>
+                                  <span className="text-[10px] text-muted-foreground">{format(parseISO(ia.date), 'MMM d')}</span>
+                                </div>
+                                {ia.notes && <p className="text-muted-foreground mt-0.5 italic">{ia.notes}</p>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Comments */}
+                      {client.comments && client.comments.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Notes</p>
+                          <div className="space-y-2">
+                            {[...client.comments].reverse().slice(0,2).map(c => (
+                              <div key={c.id} className="text-xs bg-muted/30 rounded-lg p-2.5">
+                                <p>{c.text}</p>
+                                <div className="text-[10px] text-muted-foreground mt-1">{c.author} · {format(parseISO(c.date), 'MMM d')}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* QR */}
+                      {client.memberId && (
+                        <div className="flex flex-col items-center gap-3 pt-2">
+                          <div className="bg-white p-4 rounded-xl shadow-md">
+                            <QRCodeSVG id={`qr-mobile-${client.id}`} value={client.memberId || client.id} size={140} level="H" includeMargin data-qr-id={client.memberId || client.id} />
+                          </div>
+                          <Button variant="outline" size="sm" className="w-full" onClick={() => downloadQRCode(client.memberId || client.id, client.name)}>
+                            <Download className="mr-2 h-4 w-4" />Download QR
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                {canDeleteRecords && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteClient(client.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Desktop table (≥ md) ── */}
+      <div className="hidden md:block overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
@@ -719,6 +873,7 @@ export default function Clients() {
           })}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 
@@ -870,6 +1025,23 @@ export default function Clients() {
               </select>
             </div>
           </div>
+          {/* Assigned Rep filter — sales manager & CRM admin only */}
+          {(currentUser?.role === 'manager' || currentUser?.role === 'crm_admin') && (
+            <div className="w-full md:w-[200px] space-y-1.5">
+              <Label className="text-xs font-semibold text-muted-foreground ml-1">Assigned To</Label>
+              <select
+                className="flex h-11 w-full items-center justify-between rounded-md bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 border-none"
+                value={filterRep}
+                onChange={(e) => setFilterRep(e.target.value)}
+              >
+                <option value="all">All Reps</option>
+                <option value="unassigned">Unassigned</option>
+                {users.filter(u => u.role === 'rep').map(rep => (
+                  <option key={rep.id} value={rep.id}>{rep.name || rep.email}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">

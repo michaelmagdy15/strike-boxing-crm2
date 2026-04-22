@@ -74,6 +74,7 @@ export default function Leads() {
   
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
   const [leadToConvert, setLeadToConvert] = useState<Client | null>(null);
+  const [isMobileLeadDialogOpen, setIsMobileLeadDialogOpen] = useState(false);
 
   const getQRCodeAsBlob = async (memberId: string): Promise<Blob> => {
     return new Promise((resolve, reject) => {
@@ -433,7 +434,62 @@ export default function Leads() {
   };
 
   const renderLeadsTable = (leadsData: Client[]) => (
-    <div className="overflow-x-auto">
+    <div>
+      {/* ── Mobile card list (< md) ── */}
+      <div className="md:hidden divide-y divide-border">
+        {leadsData.length === 0 ? (
+          <div className="py-12 text-center text-sm text-muted-foreground">No leads found.</div>
+        ) : leadsData.map(lead => {
+          const score = calculateLeadScore(lead);
+          const overdue = lead.nextReminderDate && isBefore(parseISO(lead.nextReminderDate), new Date());
+          const dueSoon = !overdue && lead.nextReminderDate && isBefore(parseISO(lead.nextReminderDate), addDays(new Date(), 3));
+          return (
+            <div
+              key={lead.id}
+              className={`flex items-center gap-3 px-4 py-3 ${overdue ? 'bg-red-50/50 dark:bg-red-900/10' : dueSoon ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}`}
+            >
+              <Checkbox
+                checked={selectedLeadIds.includes(lead.id)}
+                onCheckedChange={(checked) => handleSelectLead(lead.id, !!checked)}
+                className="shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-sm truncate">{lead.name}</span>
+                  <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{lead.stage || 'New'}</Badge>
+                  {score >= 20 ? <Badge className="bg-green-500 text-[10px] h-4 px-1.5">{score}</Badge>
+                    : score >= 10 ? <Badge className="bg-yellow-500 text-black text-[10px] h-4 px-1.5">{score}</Badge>
+                    : <Badge variant="destructive" className="text-[10px] h-4 px-1.5">{score}</Badge>}
+                  {overdue && <Badge variant="destructive" className="text-[10px] h-4 px-1">OVERDUE</Badge>}
+                  {dueSoon && <Badge className="bg-amber-500 text-[10px] h-4 px-1">DUE SOON</Badge>}
+                </div>
+                <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1"><Phone className="h-3 w-3" />
+                    {currentUser?.role === 'rep' && lead.assignedTo !== currentUser.id ? '**********' : lead.phone}
+                  </span>
+                  {lead.source && <Badge variant="outline" className="text-[10px] h-4 px-1.5">{lead.source}</Badge>}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={() => { setSelectedLead(lead); setIsMobileLeadDialogOpen(true); }}
+              >
+                <MessageSquare className="h-4 w-4" />
+              </Button>
+              {canDeleteRecords && (
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-destructive" onClick={() => handleDeleteLead(lead.id)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Desktop table (≥ md) ── */}
+      <div className="hidden md:block overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
@@ -995,6 +1051,7 @@ export default function Leads() {
           ))}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 
@@ -1326,6 +1383,118 @@ export default function Leads() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Shared mobile lead dialog */}
+      {selectedLead && (
+        <Dialog open={isMobileLeadDialogOpen} onOpenChange={(open) => { setIsMobileLeadDialogOpen(open); if (!open) setSelectedLead(null); }}>
+          <DialogContent className="!w-full !max-w-[1400px] h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl bg-background/95 backdrop-blur-xl">
+            <DialogHeader className="p-4 pb-4 bg-muted/30 border-b shrink-0">
+              <DialogTitle className="text-xl font-extrabold tracking-tight">Lead: <span className="text-primary">{selectedLead.name}</span></DialogTitle>
+              <div className="flex items-center gap-2 mt-1">
+                <div className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-xs font-black uppercase border border-primary/20">#{selectedLead.memberId || 'PENDING'}</div>
+                <Badge variant="outline" className="rounded-full text-[10px]">{selectedLead.status}</Badge>
+              </div>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto">
+              {/* Tab nav */}
+              <div className="overflow-x-auto border-b">
+                <div className="flex w-max px-2 pt-2 gap-1">
+                  {(['information','interactions','comments','qrcode'] as const).map(tab => (
+                    <button key={tab} data-mobile-lead-tab={tab} className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground border-b-2 border-transparent data-[active]:border-primary data-[active]:text-primary whitespace-nowrap" onClick={e => {
+                      document.querySelectorAll('[data-mobile-lead-tab]').forEach(el => el.removeAttribute('data-active'));
+                      (e.currentTarget as HTMLElement).setAttribute('data-active','');
+                      document.querySelectorAll('[data-mobile-lead-panel]').forEach(el => (el as HTMLElement).style.display='none');
+                      const panel = document.querySelector(`[data-mobile-lead-panel="${tab}"]`) as HTMLElement;
+                      if(panel) panel.style.display='block';
+                    }}>
+                      {tab === 'information' ? 'Info' : tab === 'interactions' ? 'Activity' : tab === 'comments' ? 'Notes' : 'QR'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Minimal info panel for mobile */}
+              <div data-mobile-lead-panel="information" className="p-4 space-y-3">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-muted-foreground text-xs">Source</span><div className="font-medium">{selectedLead.source || 'Unknown'}</div></div>
+                  <div><span className="text-muted-foreground text-xs">Stage</span><div className="font-medium">{selectedLead.stage || 'New'}</div></div>
+                  <div><span className="text-muted-foreground text-xs">Branch</span><div className="font-medium">{selectedLead.branch || '—'}</div></div>
+                  <div><span className="text-muted-foreground text-xs">Interest</span><div className="font-medium">{selectedLead.interest || 'Pending'}</div></div>
+                  <div><span className="text-muted-foreground text-xs">Phone</span><div className="font-medium">{selectedLead.phone}</div></div>
+                  <div><span className="text-muted-foreground text-xs">Category</span><div className="font-medium">{selectedLead.category || '—'}</div></div>
+                </div>
+                <div className="space-y-2 pt-2">
+                  <Label className="text-xs">Stage</Label>
+                  <Select defaultValue={selectedLead.stage} onValueChange={v => updateClient(selectedLead.id, { stage: v as LeadStage })}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {(['New','Follow Up','Trial','Interested','Not Interested'] as LeadStage[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Label className="text-xs">Interest</Label>
+                  <Select defaultValue={selectedLead.interest} onValueChange={v => handleInterestChange(selectedLead, v as LeadInterest)}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {(['Interested','Not Interested','Pending'] as LeadInterest[]).map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div data-mobile-lead-panel="interactions" style={{display:'none'}} className="p-4 space-y-3">
+                <div className="space-y-2">
+                  <Label className="text-xs">Type</Label>
+                  <Select value={interactionType} onValueChange={v => setInteractionType(v as InteractionType)}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {(['Call','WhatsApp','Email','Visit'] as InteractionType[]).map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Label className="text-xs">Outcome</Label>
+                  <Select value={interactionOutcome} onValueChange={v => setInteractionOutcome(v as InteractionOutcome)}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {(['Interested','Not Answered','Scheduled Trial','Rejected','Other'] as InteractionOutcome[]).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Label className="text-xs">Date <span className="text-destructive">*</span></Label>
+                  <Input type="date" value={interactionDate} onChange={e => setInteractionDate(e.target.value)} className="h-9" />
+                  <Label className="text-xs">Notes</Label>
+                  <Textarea placeholder="Notes..." value={interactionNotes} onChange={e => setInteractionNotes(e.target.value)} className="min-h-[80px]" />
+                  <Button className="w-full" onClick={handleAddInteraction}>Log Interaction</Button>
+                </div>
+                <div className="space-y-2 mt-4">
+                  {(selectedLead.interactions || []).slice().reverse().map((ia, i) => (
+                    <div key={i} className="text-xs bg-muted/30 rounded-lg p-3">
+                      <div className="font-bold">{ia.type} — {ia.outcome}</div>
+                      <div className="text-muted-foreground mt-0.5">{ia.date ? format(parseISO(ia.date), 'MMM d, yyyy') : ''}</div>
+                      {ia.notes && <div className="mt-1">{ia.notes}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div data-mobile-lead-panel="comments" style={{display:'none'}} className="p-4 space-y-3">
+                <div className="space-y-2">
+                  {(selectedLead.comments || []).slice().reverse().map(c => (
+                    <div key={c.id} className="text-xs bg-muted/30 rounded-lg p-3">
+                      <p>{c.text}</p>
+                      <div className="text-muted-foreground mt-1">{c.author} · {format(parseISO(c.date), 'MMM d')}</div>
+                    </div>
+                  ))}
+                  <Textarea placeholder="Add note..." value={newComment} onChange={e => setNewComment(e.target.value)} className="min-h-[80px]" />
+                  <Button className="w-full" onClick={handleAddComment}>Save Note</Button>
+                </div>
+              </div>
+              <div data-mobile-lead-panel="qrcode" style={{display:'none'}} className="p-4 flex flex-col items-center gap-4">
+                <div className="p-6 bg-white rounded-2xl shadow-lg">
+                  <QRCodeSVG value={selectedLead.memberId || selectedLead.id} size={200} level="H" includeMargin={true} data-qr-id={selectedLead.memberId || selectedLead.id} />
+                  <div className="text-center mt-2 text-black font-bold text-sm">#{selectedLead.memberId || 'PENDING'}</div>
+                </div>
+                <Button className="w-full" onClick={() => downloadQRCode(selectedLead.memberId || selectedLead.id, selectedLead.name)}>
+                  <Download className="mr-2 h-4 w-4" />Download QR
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

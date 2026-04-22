@@ -22,7 +22,7 @@ import Settings from './Settings';
 import Login from './Login';
 import Reports from './Reports';
 import MemberCheckin from './MemberCheckin';
-import { Activity, Users, UserPlus, CreditCard, LogOut, Calendar as CalendarIcon, ShieldAlert, Settings as SettingsIcon, Eye, EyeOff, CheckSquare, Package, Search, Scan, History, BarChart3 } from 'lucide-react';
+import { Activity, Users, UserPlus, CreditCard, LogOut, Calendar as CalendarIcon, ShieldAlert, Settings as SettingsIcon, Eye, EyeOff, CheckSquare, Package, Search, Scan, History, BarChart3, LayoutDashboard, MoreHorizontal, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,6 +36,8 @@ function AppContent() {
   const [kioskAuthenticated, setKioskAuthenticated] = React.useState(false);
   const [pinInput, setPinInput] = React.useState('');
   const [pinError, setPinError] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState('dashboard');
+  const [showMoreMenu, setShowMoreMenu] = React.useState(false);
 
   // Monitor URL changes for kiosk mode
   React.useEffect(() => {
@@ -256,57 +258,58 @@ function AppContent() {
         </div>
       </div>
 
-      <main className="flex-1 container mx-auto px-4 py-6 sm:py-8">
-        <Tabs defaultValue="dashboard" className="space-y-6">
-          <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
-            <TabsList className="flex w-max sm:w-full bg-muted/50 rounded-lg p-1 justify-start sm:justify-center">
-              <TabsTrigger value="dashboard" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">Dashboard</TabsTrigger>
+      <main className="flex-1 container mx-auto px-4 py-4 sm:py-8 pb-24 md:pb-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
+          {/* ── Desktop tab bar (md and up, unchanged) ── */}
+          <div className="hidden md:block overflow-x-auto pb-2 no-scrollbar">
+            <TabsList className="flex w-full bg-muted/50 rounded-lg p-1 justify-center">
+              <TabsTrigger value="dashboard" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 text-sm">Dashboard</TabsTrigger>
               
               {(currentUser.role === 'manager' || currentUser.role === 'rep' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') && (
-                <TabsTrigger value="leads" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                  <UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                <TabsTrigger value="leads" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 text-sm">
+                  <UserPlus className="h-4 w-4 mr-2" />
                   Leads
                 </TabsTrigger>
               )}
               
-              <TabsTrigger value="clients" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+              <TabsTrigger value="clients" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 text-sm">
+                <Users className="h-4 w-4 mr-2" />
                 Members
               </TabsTrigger>
 
               {currentUser.role !== 'admin' && (
-                <TabsTrigger value="tasks" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                  <CheckSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                <TabsTrigger value="tasks" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 text-sm">
+                  <CheckSquare className="h-4 w-4 mr-2" />
                   Tasks
                 </TabsTrigger>
               )}
               
               {(canViewGlobalDashboard || canDeletePayments) && (
-                <TabsTrigger value="payments" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                  <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                <TabsTrigger value="payments" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 text-sm">
+                  <CreditCard className="h-4 w-4 mr-2" />
                   Payments
                 </TabsTrigger>
               )}
-              <TabsTrigger value="attendance" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                <Scan className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+              <TabsTrigger value="attendance" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 text-sm">
+                <Scan className="h-4 w-4 mr-2" />
                 Attendance
               </TabsTrigger>
 
               {isManagerOrSama && currentUser.role !== 'admin' && (
-                <TabsTrigger value="reports" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                  <BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                <TabsTrigger value="reports" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 text-sm">
+                  <BarChart3 className="h-4 w-4 mr-2" />
                   Reports
                 </TabsTrigger>
               )}
 
               {canAccessSettings && currentUser.role !== 'admin' && (
                 <>
-                  <TabsTrigger value="audit" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                    <History className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                  <TabsTrigger value="audit" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 text-sm">
+                    <History className="h-4 w-4 mr-2" />
                     History
                   </TabsTrigger>
-                  <TabsTrigger value="settings" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 sm:px-4 text-xs sm:text-sm">
-                    <SettingsIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                  <TabsTrigger value="settings" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 text-sm">
+                    <SettingsIcon className="h-4 w-4 mr-2" />
                     Settings
                   </TabsTrigger>
                 </>
@@ -314,54 +317,192 @@ function AppContent() {
             </TabsList>
           </div>
 
-          <TabsContent value="dashboard" className="m-0 animate-in fade-in-50 duration-500">
+          {/* ── Tab contents (shared between mobile & desktop) ── */}
+          <TabsContent value="dashboard" className="m-0 animate-in fade-in-50 duration-300">
             <Dashboard />
           </TabsContent>
 
           {(currentUser.role === 'manager' || currentUser.role === 'rep' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') && (
-            <TabsContent value="leads" className="m-0 animate-in fade-in-50 duration-500">
+            <TabsContent value="leads" className="m-0 animate-in fade-in-50 duration-300">
               <Leads />
             </TabsContent>
           )}
 
-          <TabsContent value="clients" className="m-0 animate-in fade-in-50 duration-500">
+          <TabsContent value="clients" className="m-0 animate-in fade-in-50 duration-300">
             <Clients />
           </TabsContent>
 
           {currentUser.role !== 'admin' && (
-            <TabsContent value="tasks" className="m-0 animate-in fade-in-50 duration-500">
+            <TabsContent value="tasks" className="m-0 animate-in fade-in-50 duration-300">
               <Tasks />
             </TabsContent>
           )}
 
           {(canViewGlobalDashboard || canDeletePayments) && (
-            <TabsContent value="payments" className="m-0 animate-in fade-in-50 duration-500">
+            <TabsContent value="payments" className="m-0 animate-in fade-in-50 duration-300">
               <Payments />
             </TabsContent>
           )}
 
-          <TabsContent value="attendance" className="m-0 animate-in fade-in-50 duration-500">
+          <TabsContent value="attendance" className="m-0 animate-in fade-in-50 duration-300">
             <Attendance />
           </TabsContent>
 
           {isManagerOrSama && (
-            <TabsContent value="reports" className="m-0 animate-in fade-in-50 duration-500">
+            <TabsContent value="reports" className="m-0 animate-in fade-in-50 duration-300">
               <Reports />
             </TabsContent>
           )}
 
           {canAccessSettings && (
             <>
-              <TabsContent value="audit" className="m-0 animate-in fade-in-50 duration-500">
+              <TabsContent value="audit" className="m-0 animate-in fade-in-50 duration-300">
                 <AuditLogs />
               </TabsContent>
-              <TabsContent value="settings" className="m-0 animate-in fade-in-50 duration-500">
+              <TabsContent value="settings" className="m-0 animate-in fade-in-50 duration-300">
                 <Settings />
               </TabsContent>
             </>
           )}
         </Tabs>
       </main>
+
+      {/* ── Mobile Bottom Navigation (hidden on md+) ── */}
+      <nav className="mobile-nav md:hidden" aria-label="Mobile navigation">
+        {/* Dashboard */}
+        <button
+          onClick={() => { setActiveTab('dashboard'); setShowMoreMenu(false); }}
+          className={`flex flex-col items-center gap-0.5 px-3 py-2 min-w-[52px] transition-colors ${
+            activeTab === 'dashboard' ? 'text-primary' : 'text-muted-foreground'
+          }`}
+        >
+          <LayoutDashboard className="h-5 w-5" />
+          <span className="text-[10px] font-semibold tracking-wide">Home</span>
+        </button>
+
+        {/* Leads (role-gated) */}
+        {(currentUser.role === 'manager' || currentUser.role === 'rep' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') && (
+          <button
+            onClick={() => { setActiveTab('leads'); setShowMoreMenu(false); }}
+            className={`flex flex-col items-center gap-0.5 px-3 py-2 min-w-[52px] transition-colors ${
+              activeTab === 'leads' ? 'text-primary' : 'text-muted-foreground'
+            }`}
+          >
+            <UserPlus className="h-5 w-5" />
+            <span className="text-[10px] font-semibold tracking-wide">Leads</span>
+          </button>
+        )}
+
+        {/* Members */}
+        <button
+          onClick={() => { setActiveTab('clients'); setShowMoreMenu(false); }}
+          className={`flex flex-col items-center gap-0.5 px-3 py-2 min-w-[52px] transition-colors ${
+            activeTab === 'clients' ? 'text-primary' : 'text-muted-foreground'
+          }`}
+        >
+          <Users className="h-5 w-5" />
+          <span className="text-[10px] font-semibold tracking-wide">Members</span>
+        </button>
+
+        {/* Attendance */}
+        <button
+          onClick={() => { setActiveTab('attendance'); setShowMoreMenu(false); }}
+          className={`flex flex-col items-center gap-0.5 px-3 py-2 min-w-[52px] transition-colors ${
+            activeTab === 'attendance' ? 'text-primary' : 'text-muted-foreground'
+          }`}
+        >
+          <Scan className="h-5 w-5" />
+          <span className="text-[10px] font-semibold tracking-wide">Scan</span>
+        </button>
+
+        {/* More menu trigger */}
+        <button
+          onClick={() => setShowMoreMenu(prev => !prev)}
+          className={`flex flex-col items-center gap-0.5 px-3 py-2 min-w-[52px] transition-colors ${
+            showMoreMenu || ['tasks','payments','reports','audit','settings'].includes(activeTab)
+              ? 'text-primary' : 'text-muted-foreground'
+          }`}
+        >
+          <MoreHorizontal className="h-5 w-5" />
+          <span className="text-[10px] font-semibold tracking-wide">More</span>
+        </button>
+
+        {/* More drawer */}
+        {showMoreMenu && (
+          <div className="absolute bottom-full left-0 right-0 bg-card border-t border-border shadow-xl rounded-t-2xl p-4 pb-2 animate-in slide-in-from-bottom-2 duration-200">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">More</span>
+              <button onClick={() => setShowMoreMenu(false)} className="text-muted-foreground p-1">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {currentUser.role !== 'admin' && (
+                <button
+                  onClick={() => { setActiveTab('tasks'); setShowMoreMenu(false); }}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-colors ${
+                    activeTab === 'tasks' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
+                  }`}
+                >
+                  <CheckSquare className="h-5 w-5" />
+                  <span className="text-[10px] font-semibold">Tasks</span>
+                </button>
+              )}
+              {(canViewGlobalDashboard || canDeletePayments) && (
+                <button
+                  onClick={() => { setActiveTab('payments'); setShowMoreMenu(false); }}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-colors ${
+                    activeTab === 'payments' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
+                  }`}
+                >
+                  <CreditCard className="h-5 w-5" />
+                  <span className="text-[10px] font-semibold">Payments</span>
+                </button>
+              )}
+              {isManagerOrSama && currentUser.role !== 'admin' && (
+                <button
+                  onClick={() => { setActiveTab('reports'); setShowMoreMenu(false); }}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-colors ${
+                    activeTab === 'reports' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
+                  }`}
+                >
+                  <BarChart3 className="h-5 w-5" />
+                  <span className="text-[10px] font-semibold">Reports</span>
+                </button>
+              )}
+              {canAccessSettings && currentUser.role !== 'admin' && (
+                <>
+                  <button
+                    onClick={() => { setActiveTab('audit'); setShowMoreMenu(false); }}
+                    className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-colors ${
+                      activeTab === 'audit' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
+                    }`}
+                  >
+                    <History className="h-5 w-5" />
+                    <span className="text-[10px] font-semibold">History</span>
+                  </button>
+                  <button
+                    onClick={() => { setActiveTab('settings'); setShowMoreMenu(false); }}
+                    className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-colors ${
+                      activeTab === 'settings' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
+                    }`}
+                  >
+                    <SettingsIcon className="h-5 w-5" />
+                    <span className="text-[10px] font-semibold">Settings</span>
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => { logout(); setShowMoreMenu(false); }}
+                className="flex flex-col items-center gap-1 p-3 rounded-xl bg-destructive/10 text-destructive transition-colors"
+              >
+                <LogOut className="h-5 w-5" />
+                <span className="text-[10px] font-semibold">Logout</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </nav>
     </div>
   );
 }

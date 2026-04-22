@@ -375,6 +375,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const wipeSystem = useCallback(async () => {
     if (!isManagerOrSama) return;
     console.warn('System wipe initiated!');
+    const collections = ['clients', 'payments', 'attendance', 'tasks', 'interactions', 'importBatches'];
+    for (const col of collections) {
+      const { getDocs, collection: col_ } = await import('firebase/firestore');
+      const snap = await getDocs(col_(db, col));
+      if (snap.empty) continue;
+      let batch = writeBatch(db);
+      let count = 0;
+      for (const d of snap.docs) {
+        batch.delete(d.ref);
+        count++;
+        if (count === 450) {
+          await batch.commit();
+          batch = writeBatch(db);
+          count = 0;
+        }
+      }
+      if (count > 0) await batch.commit();
+    }
+    console.warn('System wipe complete.');
   }, [isManagerOrSama]);
 
   const bulkAddPayments = useCallback(async (newPayments: Payment[]) => {

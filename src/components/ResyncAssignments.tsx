@@ -197,7 +197,8 @@ export default function ResyncAssignments({ clients, users, currentUser }: Resyn
   };
 
   const handleSync = async () => {
-    const toUpdate = matches.filter(m => m.status === 'matched');
+    // Use the live-computed previewMatches, not the stale `matches` state
+    const toUpdate = previewMatches.filter(m => m.status === 'matched');
     if (toUpdate.length === 0) return;
 
     setStep('syncing');
@@ -227,8 +228,8 @@ export default function ResyncAssignments({ clients, users, currentUser }: Resyn
 
     setSyncStats({
       updated,
-      unchanged: matches.filter(m => m.status === 'no-change').length,
-      unmatched: matches.filter(m => m.status === 'unmatched').length,
+      unchanged: previewMatches.filter(m => m.status === 'no-change').length,
+      unmatched: previewMatches.filter(m => m.status === 'unmatched').length,
     });
     setStep('done');
   };
@@ -259,7 +260,7 @@ export default function ResyncAssignments({ clients, users, currentUser }: Resyn
           Resync Assignments
         </Button>
       } />
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Resync Sales Assignments from Sheet</DialogTitle>
         </DialogHeader>

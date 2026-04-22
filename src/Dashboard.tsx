@@ -479,41 +479,26 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {canViewGlobalDashboard ? (
-        <div className="flex flex-wrap items-center gap-4 bg-muted/30 p-4 rounded-lg border border-border/50">
+        <div className="flex flex-wrap items-center gap-3 bg-muted/30 p-3 rounded-lg border border-border/50">
           <Users className="h-5 w-5 text-muted-foreground shrink-0" />
           <div className="flex-1 min-w-0">
             <h3 className="text-sm font-medium">Representative Performance</h3>
-            <p className="text-xs text-muted-foreground">Filter statistics by sales representative</p>
+            <p className="text-xs text-muted-foreground hidden sm:block">Filter statistics by sales representative</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setSelectedMonthOffset(o => o + 1)}
-            >
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setSelectedMonthOffset(o => o + 1)}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-sm font-medium w-28 text-center">
-              {format(selectedMonth, 'MMM yyyy')}
-            </span>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setSelectedMonthOffset(o => Math.max(0, o - 1))}
-              disabled={selectedMonthOffset === 0}
-            >
+            <span className="text-sm font-medium w-24 text-center">{format(selectedMonth, 'MMM yyyy')}</span>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setSelectedMonthOffset(o => Math.max(0, o - 1))} disabled={selectedMonthOffset === 0}>
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
           {canViewRepBreakdown && (
             <Select value={selectedRepId} onValueChange={(v) => setSelectedRepId(v || 'all')}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-full sm:w-[200px]">
                 <SelectValue placeholder="Select representative">
-                  {selectedRepId === 'all'
-                    ? 'All Representatives'
-                    : reps.find(r => r.id === selectedRepId)?.name ?? 'Unknown User'}
+                  {selectedRepId === 'all' ? 'All Representatives' : reps.find(r => r.id === selectedRepId)?.name ?? 'Unknown User'}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -525,7 +510,7 @@ export default function Dashboard() {
             </Select>
           )}
           <Select value={selectedBranch} onValueChange={(v) => setSelectedBranch(v || 'all')}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Select branch" />
             </SelectTrigger>
             <SelectContent>
@@ -565,7 +550,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-2 lg:grid-cols-5">
         {currentUser?.role === 'admin' ? (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -1007,7 +992,7 @@ export default function Dashboard() {
               </Button>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
+            <div className="overflow-x-auto -mx-4 md:mx-0 scroll-touch">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-gray-50/80 border-b border-gray-100">
