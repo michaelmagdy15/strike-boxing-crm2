@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { format, parseISO, isAfter, isBefore, addDays, differenceInDays, startOfDay } from 'date-fns';
+import { format, parseISO, isBefore, addDays, differenceInDays, startOfDay } from 'date-fns';
 import { Client, Payment } from '../types';
 import { resolveUserDisplay } from '../utils/resolveUserDisplay';
 import { AlertTriangle, Clock, Phone, DollarSign, User, Calendar } from 'lucide-react';
@@ -42,27 +42,39 @@ export default function RenewalPipeline() {
 
   const now = startOfDay(new Date());
 
+  const safeParseISO = (dateStr: string | undefined): Date | null => {
+    if (!dateStr) return null;
+    try {
+      const d = parseISO(dateStr);
+      return isNaN(d.getTime()) ? null : d;
+    } catch {
+      return null;
+    }
+  };
+
   // Filter members for renewal
   const renewalMembers = clients.filter(c => c.status === 'Nearly Expired' || c.status === 'Expired');
 
   // Grouping logic
   const expired = renewalMembers.filter(c => {
-    if (!c.membershipExpiry) return c.status === 'Expired';
-    return isBefore(parseISO(c.membershipExpiry), now);
+    const expiry = safeParseISO(c.membershipExpiry);
+    if (!expiry) return c.status === 'Expired';
+    return isBefore(expiry, now);
   });
 
   const urgent = renewalMembers.filter(c => {
-    if (!c.membershipExpiry) return false;
-    const expiry = parseISO(c.membershipExpiry);
+    const expiry = safeParseISO(c.membershipExpiry);
+    if (!expiry) return false;
     const diff = differenceInDays(expiry, now);
-    return isAfter(expiry, now) && diff <= 7;
+    // Includes today (diff === 0) through 7 days
+    return diff >= 0 && diff <= 7;
   });
 
   const upcoming = renewalMembers.filter(c => {
-    if (!c.membershipExpiry) return false;
-    const expiry = parseISO(c.membershipExpiry);
+    const expiry = safeParseISO(c.membershipExpiry);
+    if (!expiry) return false;
     const diff = differenceInDays(expiry, now);
-    return isAfter(expiry, now) && diff > 7 && diff <= 30;
+    return diff > 7 && diff <= 30;
   });
 
   const handleMarkContacted = async (client: Client) => {
@@ -125,24 +137,33 @@ export default function RenewalPipeline() {
       salesName: selectedClient.assignedTo || undefined
     });
 
-    // Update client
-    const pkg = packages.find(p => p.name === packageType);
-    if (pkg) {
-      const pkgStartDate = new Date(startDate);
-      const isUnlimited = pkg.sessions === 0;
-      await updateClient(selectedClient.id, {
-        packageType: pkg.name,
-        sessionsRemaining: isUnlimited ? ('unlimited' as any) : pkg.sessions,
-        membershipExpiry: addDays(pkgStartDate, pkg.expiryDays).toISOString(),
-        startDate: pkgStartDate.toISOString(),
-        status: 'Active'
-      });
-    } else {
-      await updateClient(selectedClient.id, {
-        packageType: finalPackageType,
-        startDate: new Date(startDate).toISOString(),
-        status: 'Active'
-      });
+    // Update client membership — wrapped so a failure here doesn't silently lose the payment
+    try {
+      const pkg = packages.find(p => p.name === packageType);
+      if (pkg) {
+        const pkgStartDate = new Date(startDate);
+        const isUnlimited = pkg.sessions === 0;
+        await updateClient(selectedClient.id, {
+          packageType: pkg.name,
+          sessionsRemaining: isUnlimited ? ('unlimited' as any) : pkg.sessions,
+          membershipExpiry: addDays(pkgStartDate, pkg.expiryDays).toISOString(),
+          startDate: pkgStartDate.toISOString(),
+          status: 'Active'
+        });
+      } else {
+        await updateClient(selectedClient.id, {
+          packageType: finalPackageType,
+          startDate: new Date(startDate).toISOString(),
+          status: 'Active'
+        });
+      }
+    } catch (err) {
+      console.error('Payment saved but member update failed:', err);
+      await addComment(
+        selectedClient.id,
+        `⚠️ Payment recorded but membership was NOT updated automatically. Please update manually: package="${packageType}", start=${startDate}.`,
+        'System'
+      );
     }
 
     setPaymentDialogOpen(false);
@@ -184,10 +205,10 @@ export default function RenewalPipeline() {
               </TableRow>
             ) : (
               members.map((client) => {
-                const daysLeft = client.membershipExpiry 
-                  ? differenceInDays(parseISO(client.membershipExpiry), now)
-                  : 0;
-                
+                const expiryDate = safeParseISO(client.membershipExpiry);
+                const daysLeft = expiryDate ? differenceInDays(expiryDate, now) : 0;
+                const lastContactDate = safeParseISO(client.lastContactDate);
+
                 return (
                   <TableRow key={client.id} className="hover:bg-slate-50 transition-colors">
                     <TableCell className="pl-6">
@@ -197,25 +218,25 @@ export default function RenewalPipeline() {
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         <Badge variant={daysLeft < 0 ? 'destructive' : 'outline'} className={daysLeft >= 0 && daysLeft <= 7 ? 'w-fit text-orange-600 border-orange-200 bg-orange-50' : 'w-fit'}>
-                          {daysLeft < 0 
-                            ? `Expired ${Math.abs(daysLeft)}d ago` 
-                            : daysLeft === 0 
-                              ? 'Expires today' 
+                          {daysLeft < 0
+                            ? `Expired ${Math.abs(daysLeft)}d ago`
+                            : daysLeft === 0
+                              ? 'Expires today'
                               : `${daysLeft} days left`}
                         </Badge>
                         <div className="text-xs text-slate-500">
-                          {client.membershipExpiry ? format(parseISO(client.membershipExpiry), 'MMM d, yyyy') : 'N/A'}
+                          {expiryDate ? format(expiryDate, 'MMM d, yyyy') : 'N/A'}
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col">
                         <span className="text-sm">
-                          {client.lastContactDate ? format(parseISO(client.lastContactDate), 'MMM d, yyyy') : 'Never'}
+                          {lastContactDate ? format(lastContactDate, 'MMM d, yyyy') : 'Never'}
                         </span>
-                        {client.lastContactDate && (
+                        {lastContactDate && (
                           <span className="text-xs text-slate-400">
-                            {differenceInDays(now, parseISO(client.lastContactDate))} days ago
+                            {differenceInDays(now, lastContactDate)} days ago
                           </span>
                         )}
                       </div>

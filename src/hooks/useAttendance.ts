@@ -4,6 +4,7 @@ import { db } from '../firebase';
 import { Attendance, Branch, Client, User } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandler';
 import { addAuditLog } from '../services/auditService';
+import { isBefore, parseISO, startOfDay } from 'date-fns';
 
 export const useAttendance = (currentUser: User | null, clients: Client[]) => {
   const [attendances, setAttendances] = useState<Attendance[]>([]);
@@ -31,6 +32,17 @@ export const useAttendance = (currentUser: User | null, clients: Client[]) => {
       const client = clients.find(c => c.id === clientId);
       if (!client) throw new Error('Client not found');
 
+      // Block expired members from checking in
+      if (client.membershipExpiry) {
+        const expiry = startOfDay(parseISO(client.membershipExpiry));
+        const today = startOfDay(new Date());
+        if (isBefore(expiry, today)) {
+          throw new Error(`${client.name}'s membership expired on ${expiry.toLocaleDateString()}. Please renew before checking in.`);
+        }
+      } else if (client.status === 'Expired') {
+        throw new Error(`${client.name}'s membership is expired. Please renew before checking in.`);
+      }
+
       await addDoc(collection(db, 'attendance'), {
         clientId,
         branch,
@@ -39,14 +51,12 @@ export const useAttendance = (currentUser: User | null, clients: Client[]) => {
         packageName: client.packageType,
       } as Omit<Attendance, 'id'>);
 
-      // Always record attendance for history (including unlimited-session clients)
-      if (typeof client.sessionsRemaining === 'number') {
-        // Only decrement for finite session packages
+      // Decrement sessions only for finite packages with sessions remaining
+      if (typeof client.sessionsRemaining === 'number' && client.sessionsRemaining > 0) {
         await updateDoc(doc(db, 'clients', clientId), {
           sessionsRemaining: client.sessionsRemaining - 1,
         });
       }
-      // If sessionsRemaining === 'unlimited', skip decrement — attendance is still recorded above
 
       await addAuditLog('CREATE', 'ATTENDANCE', clientId, `Attendance: ${client.name} at ${branch}`);
     } catch (error) {

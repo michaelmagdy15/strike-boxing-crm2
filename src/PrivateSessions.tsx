@@ -97,7 +97,8 @@ export default function PrivateSessions() {
           const match = client.packageType?.match(/(\d+)\s*S/i) || client.packageType?.match(/(\d+)\s*Session/i);
           currentSessions = match ? parseInt(match[1]!, 10) : 0;
         }
-        if (typeof currentSessions === 'number') {
+        // Only decrement if sessions are finite and above zero (prevent negative sessions)
+        if (typeof currentSessions === 'number' && currentSessions > 0) {
           updateClient(client.id, { sessionsRemaining: currentSessions - 1 });
         }
       }

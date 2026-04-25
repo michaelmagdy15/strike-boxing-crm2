@@ -119,6 +119,9 @@ export default function Clients() {
     const startISO = new Date(upgradeStartDate).toISOString();
     const endISO = addDays(new Date(upgradeStartDate), pkg.expiryDays).toISOString();
     const isUnlimited = pkg.sessions === 0;
+    const prevActive = (client.packages || []).find(p => p.status === 'Active');
+    const prevSysPkg = prevActive ? packages.find(p => p.name === prevActive.packageName) : null;
+    const priceDiff = prevSysPkg ? pkg.price - prevSysPkg.price : pkg.price;
     const updatedPkgs = (client.packages || []).map(p =>
       p.status === 'Active' ? { ...p, status: 'Expired' as const } : p
     );
@@ -138,6 +141,12 @@ export default function Clients() {
       startDate: startISO,
       packages: [...updatedPkgs, newPkg]
     });
+    const prevName = prevActive?.packageName || client.packageType || 'previous package';
+    addComment(
+      client.id,
+      `Package upgraded: "${prevName}" → "${pkg.name}" starting ${format(new Date(upgradeStartDate), 'dd MMM yyyy')}. Amount to collect: ${priceDiff.toLocaleString()} LE.`,
+      currentUser?.name || 'System'
+    );
     setUpgradeDialogClientId(null);
     setUpgradePkgName('');
     setUpgradeStartDate(format(new Date(), 'yyyy-MM-dd'));
@@ -864,7 +873,48 @@ export default function Clients() {
                           <TabsContent value="history" className="mt-0 outline-none p-5">
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                               {/* Payments (2/3 width) */}
-                              <div className="lg:col-span-2 space-y-3">
+                              <div className="lg:col-span-2 space-y-5">
+
+                                {/* Package History */}
+                                {(client.packages || []).length > 0 && (
+                                  <div className="space-y-3">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Package History</p>
+                                    <div className="rounded-xl border bg-background overflow-hidden">
+                                      <Table>
+                                        <TableHeader className="bg-muted/30">
+                                          <TableRow>
+                                            <TableHead className="text-[10px] uppercase py-2.5 px-3">Package</TableHead>
+                                            <TableHead className="text-[10px] uppercase py-2.5 px-3">Start</TableHead>
+                                            <TableHead className="text-[10px] uppercase py-2.5 px-3">Expires</TableHead>
+                                            <TableHead className="text-[10px] uppercase py-2.5 px-3 text-center">Sessions</TableHead>
+                                            <TableHead className="text-[10px] uppercase py-2.5 px-3 text-center">Status</TableHead>
+                                          </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                          {[...(client.packages || [])]
+                                            .sort((a, b) => new Date(b.startDate || 0).getTime() - new Date(a.startDate || 0).getTime())
+                                            .map(pkg => (
+                                              <TableRow key={pkg.id} className="hover:bg-muted/20 border-b transition-colors">
+                                                <TableCell className="py-2.5 px-3 text-xs font-medium">{pkg.packageName || '—'}</TableCell>
+                                                <TableCell className="py-2.5 px-3 text-xs">{pkg.startDate ? format(parseISO(pkg.startDate), 'dd MMM yyyy') : '—'}</TableCell>
+                                                <TableCell className="py-2.5 px-3 text-xs">{pkg.endDate ? format(parseISO(pkg.endDate), 'dd MMM yyyy') : '—'}</TableCell>
+                                                <TableCell className="py-2.5 px-3 text-xs text-center">
+                                                  {(pkg.sessionsRemaining as any) === 'unlimited' ? '∞' : typeof pkg.sessionsRemaining === 'number' ? `${pkg.sessionsRemaining} / ${pkg.sessionsTotal ?? '?'}` : '—'}
+                                                </TableCell>
+                                                <TableCell className="py-2.5 px-3 text-center">
+                                                  <Badge className={`text-[9px] px-1.5 py-0 ${pkg.status === 'Active' ? 'bg-green-500' : pkg.status === 'Expired' ? 'bg-muted text-muted-foreground' : 'bg-red-500'}`}>
+                                                    {pkg.status}
+                                                  </Badge>
+                                                </TableCell>
+                                              </TableRow>
+                                            ))}
+                                        </TableBody>
+                                      </Table>
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="space-y-3">
                                 <div className="flex items-center justify-between">
                                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Payment History</p>
                                   <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary border-none">{payments.filter(p => p.clientId === client.id).length} entries</Badge>
@@ -893,6 +943,7 @@ export default function Clients() {
                                       )}
                                     </TableBody>
                                   </Table>
+                                </div>
                                 </div>
                               </div>
 

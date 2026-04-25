@@ -55,7 +55,8 @@ function AppContent() {
 
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (branding.kioskPin && pinInput === branding.kioskPin) {
+    // Allow entry if no PIN is configured OR the entered PIN matches
+    if (!branding.kioskPin || pinInput === branding.kioskPin) {
       setKioskAuthenticated(true);
       setPinError(false);
     } else {

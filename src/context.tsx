@@ -1,10 +1,13 @@
 import React, { createContext, useContext, useMemo, useCallback, useState } from 'react';
-import { db } from './firebase';
-import { 
-  doc, 
+import { auth, db } from './firebase';
+import { signInAnonymously } from 'firebase/auth';
+import {
+  doc,
   collection,
   writeBatch,
   getDocs,
+  addDoc,
+  updateDoc,
   query,
   where
 } from 'firebase/firestore';
@@ -351,23 +354,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
 
   const selfCheckIn = useCallback(async (identifier: string, pin: string, branch: Branch) => {
-    const q = query(collection(db, 'clients'), where('memberId', '==', identifier));
-    const snap = await getDocs(q);
-    if (snap.empty) return { success: false, message: 'Member not found' };
-    
-    const clientDoc = snap.docs[0];
-    if (!clientDoc) return { success: false, message: 'Member not found' };
-    
-    const client = clientDoc.data() as Client;
-
-    // Validate PIN: check against branding dailyCheckinPin if set
-    if (branding.dailyCheckinPin && pin !== branding.dailyCheckinPin) {
-      return { success: false, message: 'Incorrect PIN. Please try again.' };
+    // Ensure a valid Firebase auth token exists (anonymous sign-in for public kiosk/checkin pages)
+    if (!auth.currentUser) {
+      try {
+        await signInAnonymously(auth);
+      } catch {
+        return { success: false, message: 'Check-in service unavailable. Please ask staff for assistance.' };
+      }
     }
 
-    await recordAttendance(clientDoc.id, branch);
-    return { success: true, message: `Welcome ${client.name}!` };
-  }, [recordAttendance, branding.dailyCheckinPin]);
+    // Validate PIN first
+    if (branding.dailyCheckinPin && pin !== branding.dailyCheckinPin) {
+      return { success: false, message: "Incorrect PIN. Please ask staff for today's PIN." };
+    }
+
+    // Search by memberId, then fall back to phone number
+    let snap = await getDocs(query(collection(db, 'clients'), where('memberId', '==', identifier)));
+    if (snap.empty) {
+      snap = await getDocs(query(collection(db, 'clients'), where('phone', '==', identifier)));
+    }
+    if (snap.empty) return { success: false, message: 'Member not found. Please check your ID or phone number.' };
+
+    const clientDoc = snap.docs[0];
+    if (!clientDoc) return { success: false, message: 'Member not found.' };
+    const client = clientDoc.data() as Client;
+
+    // Check membership is not expired
+    if (client.membershipExpiry) {
+      const expiry = new Date(client.membershipExpiry);
+      if (expiry < new Date()) {
+        const dateStr = expiry.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        return { success: false, message: `Membership expired on ${dateStr}. Please renew with staff.` };
+      }
+    } else if (client.status === 'Expired') {
+      return { success: false, message: 'Membership is expired. Please contact staff to renew.' };
+    }
+
+    try {
+      const recordedBy = currentUser?.id || auth.currentUser?.uid || 'self-checkin';
+      await addDoc(collection(db, 'attendance'), {
+        clientId: clientDoc.id,
+        branch,
+        date: new Date().toISOString(),
+        recordedBy,
+        packageName: client.packageType || '',
+      });
+
+      // Decrement sessions only if finite and above zero
+      if (typeof client.sessionsRemaining === 'number' && client.sessionsRemaining > 0) {
+        await updateDoc(doc(db, 'clients', clientDoc.id), {
+          sessionsRemaining: client.sessionsRemaining - 1,
+        });
+      }
+    } catch {
+      return { success: false, message: 'Failed to record attendance. Please ask staff for help.' };
+    }
+
+    return { success: true, message: `Welcome, ${client.name}! Attendance recorded.` };
+  }, [currentUser, branding.dailyCheckinPin]);
 
   const wipeSystem = useCallback(async () => {
     if (!isManagerOrSama) return;

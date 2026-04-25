@@ -251,7 +251,11 @@ export default function Leads() {
   };
 
   const handleBulkAssign = async (userId: string) => {
+    const isRep = currentUser?.role === 'rep';
     for (const id of selectedLeadIds) {
+      const lead = clients.find(c => c.id === id);
+      // Reps cannot reassign leads that already have an assigned rep (commission protection)
+      if (isRep && lead?.assignedTo) continue;
       await updateClient(id, { assignedTo: userId === 'unassigned' ? '' : userId });
     }
     setSelectedLeadIds([]);
