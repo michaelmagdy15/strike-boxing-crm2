@@ -71,7 +71,8 @@ export default function Leads() {
   const [newLeadAssignedTo, setNewLeadAssignedTo] = useState<string>(
     currentUser?.role === 'rep' ? currentUser.id : ''
   );
-  
+  const [newLeadLinked, setNewLeadLinked] = useState(false);
+
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
   const [leadToConvert, setLeadToConvert] = useState<Client | null>(null);
   const [isMobileLeadDialogOpen, setIsMobileLeadDialogOpen] = useState(false);
@@ -187,6 +188,8 @@ export default function Leads() {
       case 'instagram': filtered = filtered.filter(l => l.source === 'Instagram'); break;
       case 'whatsapp': filtered = filtered.filter(l => l.source === 'WhatsApp'); break;
       case 'walkin': filtered = filtered.filter(l => l.source === 'Walk-in'); break;
+      case 'tiktok': filtered = filtered.filter(l => l.source === 'TikTok'); break;
+      case 'other': filtered = filtered.filter(l => l.source === 'Other'); break;
       case 'trials': filtered = filtered.filter(l => l.stage === 'Trial'); break;
       case 'followup': filtered = filtered.filter(l => l.stage === 'Follow Up'); break;
     }
@@ -368,6 +371,7 @@ export default function Leads() {
         assignedTo: newLeadAssignedTo || (currentUser?.role === 'rep' ? currentUser.id : undefined),
         lastContactDate: new Date().toISOString().split('T')[0],
         nextReminderDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+        linkedAccount: newLeadLinked || undefined,
       };
       addClient(newLead);
       setIsNewLeadOpen(false);
@@ -376,6 +380,7 @@ export default function Leads() {
       setNewLeadSource('Instagram');
       setNewLeadBranch('');
       setNewLeadAssignedTo('');
+      setNewLeadLinked(false);
     }
   };
 
@@ -1140,6 +1145,17 @@ export default function Leads() {
                     </Select>
                   </div>
                 )}
+                <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-dashed border-muted-foreground/30 bg-muted/10 p-3">
+                  <Checkbox
+                    checked={newLeadLinked}
+                    onCheckedChange={(checked) => setNewLeadLinked(!!checked)}
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold">Linked family account</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Shares a phone number with another member (e.g. parent's number for a child)</p>
+                  </div>
+                </label>
                 <Button className="w-full" onClick={handleAddLead}>Save Lead</Button>
               </div>
             </DialogContent>
@@ -1327,6 +1343,8 @@ export default function Leads() {
             <TabsTrigger value="instagram" className="px-4 text-xs sm:text-sm">Instagram</TabsTrigger>
             <TabsTrigger value="whatsapp" className="px-4 text-xs sm:text-sm">WhatsApp</TabsTrigger>
             <TabsTrigger value="walkin" className="px-4 text-xs sm:text-sm">Walk-in</TabsTrigger>
+            <TabsTrigger value="tiktok" className="px-4 text-xs sm:text-sm">TikTok</TabsTrigger>
+            <TabsTrigger value="other" className="px-4 text-xs sm:text-sm">Other</TabsTrigger>
             <TabsTrigger value="trials" className="px-4 text-xs sm:text-sm">Trials</TabsTrigger>
             <TabsTrigger value="followup" className="px-4 text-xs sm:text-sm">Follow up</TabsTrigger>
           </TabsList>

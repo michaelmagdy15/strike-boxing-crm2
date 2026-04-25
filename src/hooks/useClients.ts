@@ -110,8 +110,8 @@ export const useClients = (currentUser: User | null) => {
     try {
       const { id, comments, ...clientData } = client;
       
-      // Check for duplicates
-      const isDuplicate = baseClients.some(c => c.phone === clientData.phone);
+      // Check for duplicates (skip for linked family accounts sharing a phone)
+      const isDuplicate = !clientData.linkedAccount && baseClients.some(c => c.phone === clientData.phone);
       if (isDuplicate) {
         throw new Error(`A client with phone number ${clientData.phone} already exists.`);
       }

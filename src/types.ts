@@ -139,7 +139,8 @@ export interface Client {
   salesName?: string;
   
   packages?: ClientPackage[];
-  
+  linkedAccount?: boolean; // Shares phone number with another member (family/parent)
+
   comments?: CRMComment[];
   interactions?: InteractionLog[];
   lastContactDate?: string; // ISO string

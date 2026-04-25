@@ -251,10 +251,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const getCanonicalName = useCallback((name: string) => {
     if (!name) return '';
-    const trimmed = name.trim();
-    const mapped = SALES_NAME_MAPPING[trimmed];
-    if (mapped) return mapped.toLowerCase().trim();
-    return trimmed.toLowerCase();
+    const trimmed = name.trim().toLowerCase();
+    for (const [key, value] of Object.entries(SALES_NAME_MAPPING)) {
+      if (key.toLowerCase() === trimmed) return value.toLowerCase().trim();
+    }
+    return trimmed;
   }, []);
 
   const isClientAssignedToRep = useCallback((client: any, repId: string, repName: string) => {

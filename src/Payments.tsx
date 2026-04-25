@@ -14,11 +14,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { format, parseISO, addDays } from 'date-fns';
 import { Payment } from './types';
 import { resolveUserDisplay } from './utils/resolveUserDisplay';
-import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search, Trash2, ChevronLeft, ChevronRight, User } from 'lucide-react';
+import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search, Trash2, ChevronLeft, ChevronRight, User, UserPlus } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog } from './components/AlertDialog';
 
 export default function Payments() {
-  const { clients, users, updateClient, currentUser, branding, canDeletePayments } = useAppContext();
+  const { clients, users, updateClient, addClient, currentUser, branding, canDeletePayments, branches } = useAppContext();
   const { coaches } = useCoaches();
   const { packages } = usePackages();
   const { payments, addPayment, deletePayment } = usePayments({ currentUser, clients, canDeletePayments });
@@ -31,6 +32,24 @@ export default function Payments() {
   const [clientSearch, setClientSearch] = useState('');
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
   const clientDropdownRef = useRef<HTMLDivElement>(null);
+
+  // New member inline creation
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientPhone, setNewClientPhone] = useState('');
+  const [newClientBranch, setNewClientBranch] = useState('');
+  const [newClientLinked, setNewClientLinked] = useState(false);
+  const [pendingNewPhone, setPendingNewPhone] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pendingNewPhone) return;
+    const found = clients.find(c => c.phone === pendingNewPhone);
+    if (found) {
+      setClientId(found.id);
+      setClientSearch(`${found.name}${found.phone ? ` (${found.phone})` : ''}`);
+      setPendingNewPhone(null);
+    }
+  }, [clients, pendingNewPhone]);
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<Payment['method']>('Cash');
   const [instapayRef, setInstapayRef] = useState('');
@@ -95,6 +114,30 @@ export default function Payments() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleCreateNewClient = async () => {
+    if (!newClientName.trim() || !newClientPhone.trim()) return;
+    await addClient({
+      id: Math.random().toString(36).substr(2, 9),
+      name: newClientName.trim(),
+      phone: newClientPhone.trim(),
+      status: 'Active',
+      branch: newClientBranch || undefined,
+      stage: 'Converted',
+      comments: [],
+      interactions: [],
+      assignedTo: currentUser?.role === 'rep' ? currentUser.id : undefined,
+      startDate: new Date().toISOString(),
+      linkedAccount: newClientLinked || undefined,
+    } as any);
+    setPendingNewPhone(newClientPhone.trim());
+    setIsCreatingNew(false);
+    setClientDropdownOpen(false);
+    setNewClientName('');
+    setNewClientPhone('');
+    setNewClientBranch('');
+    setNewClientLinked(false);
+  };
 
   const handlePackageChange = (val: string | null) => {
     if (!val) return;
@@ -182,6 +225,7 @@ export default function Payments() {
           membershipExpiry: resolvedEndDate,
           startDate: pkgStartDate.toISOString(),
           status: 'Active',
+          ...(selectedClient?.status === 'Lead' ? { stage: 'Converted' } : {}),
           packages: [...(selectedClient?.packages || []), newClientPackage]
         });
       } else {
@@ -197,11 +241,13 @@ export default function Payments() {
           startDate: pkgStartDate.toISOString(),
           membershipExpiry: resolvedEndDate,
           status: 'Active',
+          ...(selectedClient?.status === 'Lead' ? { stage: 'Converted' } : {}),
           packages: [...(selectedClient?.packages || []), newClientPackage]
         });
       }
 
       setIsNewPaymentOpen(false);
+      setIsCreatingNew(false);
       // Reset form
       setClientId('');
       setClientSearch('');
@@ -454,39 +500,86 @@ export default function Payments() {
                     </div>
                     {clientDropdownOpen && (
                       <div className="absolute z-50 mt-1 w-full rounded-2xl border border-white/10 bg-popover shadow-2xl overflow-hidden">
-                        <div className="max-h-[260px] overflow-y-auto custom-scrollbar">
-                          {clients
-                            .filter(c => {
-                              if (!clientSearch) return true;
-                              const t = clientSearch.toLowerCase();
-                              return c.name?.toLowerCase().includes(t) || c.phone?.includes(t) || c.memberId?.toString().includes(t);
-                            })
-                            .slice(0, 50)
-                            .map(client => (
-                              <button
-                                key={client.id}
-                                type="button"
-                                className="w-full text-left px-5 py-3 hover:bg-muted/60 transition-colors flex items-center gap-3"
-                                onMouseDown={() => {
-                                  setClientId(client.id);
-                                  setClientSearch(`${client.name}${client.phone ? ` (${client.phone})` : ''}`);
-                                  setClientDropdownOpen(false);
-                                }}
-                              >
-                                <div>
-                                  <div className="font-medium text-sm">{client.name}</div>
-                                  <div className="text-xs text-muted-foreground">{[client.phone, client.memberId ? `#${client.memberId}` : null, client.branch].filter(Boolean).join(' · ')}</div>
-                                </div>
-                              </button>
-                            ))}
-                          {clients.filter(c => {
-                            if (!clientSearch) return true;
-                            const t = clientSearch.toLowerCase();
-                            return c.name?.toLowerCase().includes(t) || c.phone?.includes(t) || c.memberId?.toString().includes(t);
-                          }).length === 0 && (
-                            <div className="px-5 py-4 text-sm text-muted-foreground text-center">No clients found</div>
-                          )}
-                        </div>
+                        {isCreatingNew ? (
+                          <div className="p-5 space-y-3">
+                            <p className="text-sm font-bold flex items-center gap-2"><UserPlus className="h-4 w-4 text-primary" />New Member</p>
+                            <Input
+                              placeholder="Full name *"
+                              className="h-10 rounded-xl text-sm bg-background/60"
+                              value={newClientName}
+                              onChange={e => setNewClientName(e.target.value)}
+                              autoFocus
+                            />
+                            <Input
+                              placeholder="Phone number *"
+                              className="h-10 rounded-xl text-sm bg-background/60"
+                              value={newClientPhone}
+                              onChange={e => setNewClientPhone(e.target.value)}
+                            />
+                            <select
+                              className="flex h-10 w-full rounded-xl border border-input bg-background/60 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                              value={newClientBranch}
+                              onChange={e => setNewClientBranch(e.target.value)}
+                            >
+                              <option value="">Branch (optional)</option>
+                              {branches.map(b => <option key={b} value={b}>{b}</option>)}
+                            </select>
+                            <label className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground">
+                              <Checkbox checked={newClientLinked} onCheckedChange={c => setNewClientLinked(!!c)} />
+                              Linked family account (shares phone with another member)
+                            </label>
+                            <div className="flex gap-2 pt-1">
+                              <Button size="sm" variant="outline" className="flex-1 rounded-xl" onMouseDown={() => { setIsCreatingNew(false); }}>Cancel</Button>
+                              <Button size="sm" className="flex-1 rounded-xl font-bold" onMouseDown={handleCreateNewClient} disabled={!newClientName.trim() || !newClientPhone.trim()}>
+                                Create &amp; Select
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="w-full text-left px-5 py-3 hover:bg-primary/10 transition-colors flex items-center gap-3 border-b border-white/10"
+                              onMouseDown={() => { setIsCreatingNew(true); }}
+                            >
+                              <UserPlus className="h-4 w-4 text-primary shrink-0" />
+                              <span className="text-sm font-semibold text-primary">New Member — create &amp; select</span>
+                            </button>
+                            <div className="max-h-[240px] overflow-y-auto custom-scrollbar">
+                              {clients
+                                .filter(c => {
+                                  if (!clientSearch) return true;
+                                  const t = clientSearch.toLowerCase();
+                                  return c.name?.toLowerCase().includes(t) || c.phone?.includes(t) || c.memberId?.toString().includes(t);
+                                })
+                                .slice(0, 50)
+                                .map(client => (
+                                  <button
+                                    key={client.id}
+                                    type="button"
+                                    className="w-full text-left px-5 py-3 hover:bg-muted/60 transition-colors flex items-center gap-3"
+                                    onMouseDown={() => {
+                                      setClientId(client.id);
+                                      setClientSearch(`${client.name}${client.phone ? ` (${client.phone})` : ''}`);
+                                      setClientDropdownOpen(false);
+                                    }}
+                                  >
+                                    <div>
+                                      <div className="font-medium text-sm">{client.name}</div>
+                                      <div className="text-xs text-muted-foreground">{[client.phone, client.memberId ? `#${client.memberId}` : null, client.branch].filter(Boolean).join(' · ')}</div>
+                                    </div>
+                                  </button>
+                                ))}
+                              {clients.filter(c => {
+                                if (!clientSearch) return true;
+                                const t = clientSearch.toLowerCase();
+                                return c.name?.toLowerCase().includes(t) || c.phone?.includes(t) || c.memberId?.toString().includes(t);
+                              }).length === 0 && (
+                                <div className="px-5 py-4 text-sm text-muted-foreground text-center">No clients found</div>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>

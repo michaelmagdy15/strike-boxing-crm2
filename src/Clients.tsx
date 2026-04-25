@@ -40,6 +40,11 @@ export default function Clients() {
   const [newMemberPhone, setNewMemberPhone] = useState('');
   const [newMemberBranch, setNewMemberBranch] = useState<any>('');
   const [newMemberAssignedTo, setNewMemberAssignedTo] = useState<string>('');
+  const [newMemberLinked, setNewMemberLinked] = useState(false);
+
+  const [upgradeDialogClientId, setUpgradeDialogClientId] = useState<string | null>(null);
+  const [upgradePkgName, setUpgradePkgName] = useState('');
+  const [upgradeStartDate, setUpgradeStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBranch, setFilterBranch] = useState('All');
@@ -79,13 +84,15 @@ export default function Clients() {
       comments: [],
       interactions: [],
       assignedTo: newMemberAssignedTo || (currentUser?.role === 'rep' ? currentUser.id : undefined),
-      startDate: new Date().toISOString()
+      startDate: new Date().toISOString(),
+      linkedAccount: newMemberLinked || undefined,
     });
     setIsNewMemberOpen(false);
     setNewMemberName('');
     setNewMemberPhone('');
     setNewMemberBranch('');
     setNewMemberAssignedTo('');
+    setNewMemberLinked(false);
   };
 
   const handleAddInteraction = async (clientId: string) => {
@@ -101,6 +108,39 @@ export default function Clients() {
 
     setInteractionNotes('');
     setNextFollowUpDate('');
+  };
+
+  const handleUpgradePackage = () => {
+    if (!upgradeDialogClientId || !upgradePkgName) return;
+    const client = clients.find(c => c.id === upgradeDialogClientId);
+    if (!client) return;
+    const pkg = packages.find(p => p.name === upgradePkgName);
+    if (!pkg) return;
+    const startISO = new Date(upgradeStartDate).toISOString();
+    const endISO = addDays(new Date(upgradeStartDate), pkg.expiryDays).toISOString();
+    const isUnlimited = pkg.sessions === 0;
+    const updatedPkgs = (client.packages || []).map(p =>
+      p.status === 'Active' ? { ...p, status: 'Expired' as const } : p
+    );
+    const newPkg = {
+      id: Math.random().toString(36).substr(2, 9),
+      packageName: pkg.name,
+      startDate: startISO,
+      endDate: endISO,
+      sessionsTotal: isUnlimited ? ('unlimited' as any) : pkg.sessions,
+      sessionsRemaining: isUnlimited ? ('unlimited' as any) : pkg.sessions,
+      status: 'Active' as const
+    };
+    updateClient(client.id, {
+      packageType: pkg.name,
+      sessionsRemaining: isUnlimited ? ('unlimited' as any) : pkg.sessions,
+      membershipExpiry: endISO,
+      startDate: startISO,
+      packages: [...updatedPkgs, newPkg]
+    });
+    setUpgradeDialogClientId(null);
+    setUpgradePkgName('');
+    setUpgradeStartDate(format(new Date(), 'yyyy-MM-dd'));
   };
 
   const handleAddComment = async (clientId: string) => {
@@ -670,8 +710,9 @@ export default function Clients() {
                                   <div className="space-y-1 col-span-2">
                                     <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Assigned Sales Rep</Label>
                                     <select
-                                      className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                      className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-60 disabled:cursor-not-allowed"
                                       value={client.assignedTo || 'unassigned'}
+                                      disabled={currentUser?.role === 'rep' && !!client.assignedTo}
                                       onChange={(e) => updateClient(client.id, { assignedTo: e.target.value === 'unassigned' ? '' : e.target.value })}
                                     >
                                       <option value="unassigned">Unassigned</option>
@@ -679,6 +720,9 @@ export default function Clients() {
                                         <option key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown'}</option>
                                       ))}
                                     </select>
+                                    {currentUser?.role === 'rep' && !!client.assignedTo && (
+                                      <p className="text-[9px] text-muted-foreground mt-0.5">Assignment locked — contact a manager to reassign.</p>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -687,9 +731,14 @@ export default function Clients() {
                               <div className="p-4 rounded-xl border bg-muted/20 space-y-3">
                                 <div className="flex items-center justify-between">
                                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Current Package</p>
-                                  <Button variant="outline" size="sm" className="h-7 text-[10px] bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-200" onClick={() => { const newPkg = { id: Math.random().toString(36).substring(7), packageName: '', status: 'Active' as const }; updateClient(client.id, { packages: [...(client.packages || []), newPkg] }); }}>
-                                    <Plus className="h-3 w-3 mr-1" /> Add
-                                  </Button>
+                                  <div className="flex gap-1">
+                                    <Button variant="outline" size="sm" className="h-7 text-[10px] bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 border-blue-200" onClick={() => { setUpgradeDialogClientId(client.id); setUpgradePkgName(''); setUpgradeStartDate(format(new Date(), 'yyyy-MM-dd')); }}>
+                                      <ArrowUpDown className="h-3 w-3 mr-1" /> Upgrade
+                                    </Button>
+                                    <Button variant="outline" size="sm" className="h-7 text-[10px] bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-200" onClick={() => { const newPkg = { id: Math.random().toString(36).substring(7), packageName: '', status: 'Active' as const }; updateClient(client.id, { packages: [...(client.packages || []), newPkg] }); }}>
+                                      <Plus className="h-3 w-3 mr-1" /> Add
+                                    </Button>
+                                  </div>
                                 </div>
                                 {(client.packages || []).length > 0 ? (
                                   <div className="space-y-2">
@@ -966,7 +1015,22 @@ export default function Clients() {
                   </Select>
                 </div>
               </div>
-              <div className="mt-12">
+              <div className="mt-8 p-5 rounded-2xl border border-dashed border-muted-foreground/30 bg-muted/10">
+                <label className="flex items-start gap-4 cursor-pointer">
+                  <Checkbox
+                    checked={newMemberLinked}
+                    onCheckedChange={(checked) => setNewMemberLinked(!!checked)}
+                    className="mt-0.5 h-5 w-5"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold">Linked family account</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Check this if this member shares a phone number with another member (e.g. a child using a parent's number, or siblings). Bypasses the duplicate phone check.
+                    </p>
+                  </div>
+                </label>
+              </div>
+              <div className="mt-6">
                 <Button onClick={handleAddMember} className="w-full h-16 rounded-2xl text-xl font-extrabold shadow-2xl shadow-primary/30 hover:shadow-primary/50 transition-all hover:scale-[1.01] active:scale-[0.99]">
                   Create Member Profile
                 </Button>
@@ -1145,6 +1209,75 @@ export default function Clients() {
         confirmText="Delete All Selected"
       />
       
+      <Dialog open={!!upgradeDialogClientId} onOpenChange={(open) => { if (!open) { setUpgradeDialogClientId(null); setUpgradePkgName(''); setUpgradeStartDate(format(new Date(), 'yyyy-MM-dd')); } }}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">Upgrade Package</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">New Package</Label>
+              <Select value={upgradePkgName} onValueChange={v => v && setUpgradePkgName(v)}>
+                <SelectTrigger className="h-11 rounded-xl">
+                  <SelectValue placeholder="Select package" />
+                </SelectTrigger>
+                <SelectContent>
+                  {packages.map(p => (
+                    <SelectItem key={p.id} value={p.name}>{p.name} ({p.price.toLocaleString()} LE)</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">Start Date</Label>
+              <Input
+                type="date"
+                className="h-11 rounded-xl"
+                value={upgradeStartDate}
+                onChange={e => setUpgradeStartDate(e.target.value)}
+              />
+            </div>
+            {upgradePkgName && upgradeStartDate && (() => {
+              const pkg = packages.find(p => p.name === upgradePkgName);
+              if (!pkg) return null;
+              const endDate = format(addDays(new Date(upgradeStartDate), pkg.expiryDays), 'dd MMM yyyy');
+              const upgradeClient = upgradeDialogClientId ? clients.find(c => c.id === upgradeDialogClientId) : null;
+              const currentActivePkg = upgradeClient?.packages?.find(p => p.status === 'Active');
+              const currentSysPkg = currentActivePkg ? packages.find(p => p.name === currentActivePkg.packageName) : null;
+              const priceDiff = currentSysPkg ? pkg.price - currentSysPkg.price : pkg.price;
+              return (
+                <div className="rounded-xl bg-muted/30 p-3 text-sm space-y-1.5">
+                  {currentSysPkg && (
+                    <div className="flex justify-between text-muted-foreground text-xs">
+                      <span>Current ({currentActivePkg?.packageName}):</span>
+                      <span>{currentSysPkg.price.toLocaleString()} LE</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between"><span className="text-muted-foreground">New Package:</span><span className="font-semibold">{pkg.price.toLocaleString()} LE</span></div>
+                  <div className="flex justify-between border-t pt-1.5 mt-1">
+                    <span className="font-bold">Amount to Collect:</span>
+                    <span className={`font-bold text-base ${priceDiff > 0 ? 'text-primary' : 'text-green-600'}`}>
+                      {priceDiff > 0 ? '+' : ''}{priceDiff.toLocaleString()} LE
+                    </span>
+                  </div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Sessions:</span><span className="font-semibold">{pkg.sessions === 0 ? 'Unlimited' : pkg.sessions}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Expires:</span><span className="font-semibold">{endDate}</span></div>
+                </div>
+              );
+            })()}
+            <p className="text-xs text-muted-foreground">Current active packages will be marked as Expired. Record the difference amount as a new payment.</p>
+          </div>
+          <div className="flex gap-3 mt-2">
+            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setUpgradeDialogClientId(null); setUpgradePkgName(''); setUpgradeStartDate(format(new Date(), 'yyyy-MM-dd')); }}>
+              Cancel
+            </Button>
+            <Button className="flex-1 rounded-xl font-bold" disabled={!upgradePkgName} onClick={handleUpgradePackage}>
+              Confirm Upgrade
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {upcomingBirthdays.length > 0 && (
         <Card className="border-pink-200 dark:border-pink-900">
           <CardHeader className="bg-pink-50 dark:bg-pink-900/20 pb-4">
