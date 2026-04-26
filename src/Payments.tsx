@@ -591,6 +591,7 @@ export default function Payments() {
                     type="date"
                     className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
                     value={paymentDate}
+                    max={format(new Date(), 'yyyy-MM-dd')}
                     onChange={(e) => setPaymentDate(e.target.value)}
                   />
                 </div>
@@ -887,7 +888,14 @@ export default function Payments() {
                     return (
                       <TableRow key={payment.id}>
                         <TableCell className="text-xs sm:text-sm">
-                          <div className="font-medium">{format(parseISO(payment.date), 'MMM d')}</div>
+                          <div className="font-medium">
+                            {format(parseISO(payment.date), 'MMM d')}
+                            {parseISO(payment.date).getFullYear() !== new Date().getFullYear() && (
+                              <span className="text-[10px] text-amber-600 font-semibold ml-1">
+                                {parseISO(payment.date).getFullYear()}
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[10px] text-muted-foreground">{format(parseISO(payment.date), 'h:mm a')}</div>
                         </TableCell>
                         <TableCell className="font-medium text-xs sm:text-sm">{client?.name || 'Unknown Client'}</TableCell>
