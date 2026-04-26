@@ -27,6 +27,11 @@ export default function Payments() {
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [editAmount, setEditAmount] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  const [editBranch, setEditBranch] = useState('');
+  const [editMethod, setEditMethod] = useState<Payment['method']>('Cash');
+  const [editSalesName, setEditSalesName] = useState('');
+  const [editClientName, setEditClientName] = useState('');
+  const [editClientPhone, setEditClientPhone] = useState('');
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertDescription, setAlertDescription] = useState('');
@@ -228,6 +233,7 @@ export default function Payments() {
         notes,
         recordedBy: recordedById || currentUser?.id,
         salesName: salesName || undefined,
+        branch: newClientBranch || clients.find(c => c.id === clientId)?.branch || undefined,
         discountType: discountType ? (discountType as 'percentage' | 'amount') : undefined,
         discountValue: discountValue ? parseFloat(discountValue) : undefined,
         discountedAmount: discountedAmount ? parseFloat(discountedAmount) : undefined
@@ -776,6 +782,9 @@ export default function Payments() {
                       <SelectValue placeholder="For commission" />
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl border-none shadow-2xl">
+                      {adminUsers.map(u => (
+                        <SelectItem key={u.id} value={u.name || u.id} className="rounded-xl py-3 px-4">{u.name || u.email}</SelectItem>
+                      ))}
                       {users.filter(u => u.role === 'rep').map(u => (
                         <SelectItem key={u.id} value={u.name || u.id} className="rounded-xl py-3 px-4">{u.name || u.email}</SelectItem>
                       ))}
@@ -919,6 +928,7 @@ export default function Payments() {
                   <TableHead>Date</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Amount</TableHead>
+                  <TableHead className="hidden sm:table-cell">Branch</TableHead>
                   <TableHead className="hidden sm:table-cell">Method</TableHead>
                   <TableHead className="hidden md:table-cell">Package</TableHead>
                   <TableHead className="hidden lg:table-cell">Recorded By</TableHead>
@@ -947,6 +957,11 @@ export default function Payments() {
                         </TableCell>
                         <TableCell className="font-medium text-xs sm:text-sm">{client?.name || 'Unknown Client'}</TableCell>
                         <TableCell className="font-bold text-green-600 text-xs sm:text-sm">{payment.amount.toLocaleString()} LE</TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          <Badge variant="secondary" className="text-[10px]">
+                            {payment.branch || client?.branch || 'Unassigned'}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="hidden sm:table-cell">
                           <div className="flex items-center">
                             {getMethodIcon(payment.method)}
@@ -993,6 +1008,11 @@ export default function Payments() {
                                   setEditingPaymentId(payment.id);
                                   setEditAmount(payment.amount.toString());
                                   setEditNotes(payment.notes || '');
+                                  setEditBranch(payment.branch || client?.branch || '');
+                                  setEditMethod(payment.method);
+                                  setEditSalesName(payment.salesName || '');
+                                  setEditClientName(client?.name || '');
+                                  setEditClientPhone(client?.phone || client?.memberId || '');
                                 } else {
                                   setEditingPaymentId(null);
                                 }
@@ -1002,13 +1022,77 @@ export default function Payments() {
                                     <DollarSign className="h-4 w-4" />
                                   </Button>
                                 </DialogTrigger>
-                                <DialogContent className="max-w-md">
+                                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                                   <DialogHeader>
-                                    <DialogTitle>Edit Payment</DialogTitle>
+                                    <DialogTitle>Edit Payment - {client?.name}</DialogTitle>
                                   </DialogHeader>
-                                  <div className="space-y-4">
+                                  <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                      <Label>Amount (LE)</Label>
+                                      <Label className="text-xs font-semibold">Customer Name</Label>
+                                      <Input
+                                        value={editClientName}
+                                        onChange={(e) => setEditClientName(e.target.value)}
+                                        placeholder="Customer name"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs font-semibold">Customer Number/Phone</Label>
+                                      <Input
+                                        value={editClientPhone}
+                                        onChange={(e) => setEditClientPhone(e.target.value)}
+                                        placeholder="Phone or member ID"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs font-semibold">Branch</Label>
+                                      <Select value={editBranch} onValueChange={setEditBranch}>
+                                        <SelectTrigger className="h-9">
+                                          <SelectValue placeholder="Select branch" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {branches.map(b => (
+                                            <SelectItem key={b} value={b}>{b}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs font-semibold">Payment Method</Label>
+                                      <Select value={editMethod} onValueChange={(val) => setEditMethod(val as Payment['method'])}>
+                                        <SelectTrigger className="h-9">
+                                          <SelectValue placeholder="Select method" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="Cash">Cash</SelectItem>
+                                          <SelectItem value="Credit Card">Credit Card</SelectItem>
+                                          <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                                          <SelectItem value="Instapay">Instapay</SelectItem>
+                                          <SelectItem value="Other">Other</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs font-semibold">Sales Name</Label>
+                                      <Select value={editSalesName} onValueChange={setEditSalesName}>
+                                        <SelectTrigger className="h-9">
+                                          <SelectValue placeholder="Select sales rep" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {adminUsers.map(u => (
+                                            <SelectItem key={u.id} value={u.name || u.email || u.id}>
+                                              {u.name || u.email || 'Unknown User'}
+                                            </SelectItem>
+                                          ))}
+                                          {users.filter(u => u.role === 'rep').map(u => (
+                                            <SelectItem key={u.id} value={u.name || u.email || u.id}>
+                                              {u.name || u.email || 'Unknown User'}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs font-semibold">Amount (LE)</Label>
                                       <Input
                                         type="number"
                                         value={editAmount}
@@ -1016,33 +1100,36 @@ export default function Payments() {
                                         step="0.01"
                                       />
                                     </div>
-                                    <div>
-                                      <Label>Notes</Label>
+                                    <div className="col-span-2">
+                                      <Label className="text-xs font-semibold">Notes</Label>
                                       <Input
                                         value={editNotes}
                                         onChange={(e) => setEditNotes(e.target.value)}
                                         placeholder="Add notes..."
                                       />
                                     </div>
-                                    <div className="flex gap-2">
-                                      <Button
-                                        variant="outline"
-                                        onClick={() => setEditingPaymentId(null)}
-                                      >
-                                        Cancel
-                                      </Button>
-                                      <Button
-                                        onClick={async () => {
-                                          await updatePayment(payment.id, {
-                                            amount: parseFloat(editAmount),
-                                            notes: editNotes || undefined
-                                          });
-                                          setEditingPaymentId(null);
-                                        }}
-                                      >
-                                        Save Changes
-                                      </Button>
-                                    </div>
+                                  </div>
+                                  <div className="flex gap-2 mt-6">
+                                    <Button
+                                      variant="outline"
+                                      onClick={() => setEditingPaymentId(null)}
+                                    >
+                                      Cancel
+                                    </Button>
+                                    <Button
+                                      onClick={async () => {
+                                        await updatePayment(payment.id, {
+                                          amount: parseFloat(editAmount),
+                                          notes: editNotes || undefined,
+                                          branch: editBranch || undefined,
+                                          method: editMethod,
+                                          salesName: editSalesName || undefined,
+                                        });
+                                        setEditingPaymentId(null);
+                                      }}
+                                    >
+                                      Save Changes
+                                    </Button>
                                   </div>
                                 </DialogContent>
                               </Dialog>

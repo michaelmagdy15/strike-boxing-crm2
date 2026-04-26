@@ -106,6 +106,7 @@ export interface Payment {
   recordedBy?: string; // userId
   sales_rep_id: string;
   salesName?: string;
+  branch?: Branch; // Branch where payment was recorded
   discountType?: 'percentage' | 'amount'; // Type of discount
   discountValue?: number; // Discount percentage (0-100) or fixed amount
   discountedAmount?: number; // Final amount after discount
