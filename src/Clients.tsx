@@ -50,6 +50,7 @@ export default function Clients() {
   const [filterBranch, setFilterBranch] = useState('All');
   const [filterRep, setFilterRep] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
+  const [filterDiscount, setFilterDiscount] = useState('All');
 
   // Interaction Logging State
   const [interactionType, setInteractionType] = useState<InteractionType>('Call');
@@ -63,6 +64,7 @@ export default function Clients() {
   const deferredFilterRep = useDeferredValue(filterRep);
   const deferredActiveTab = useDeferredValue(activeTab);
   const deferredSortBy = useDeferredValue(sortBy);
+  const deferredFilterDiscount = useDeferredValue(filterDiscount);
 
   const handleAddMember = () => {
     if (!newMemberName || newMemberName.trim().length < 2) {
@@ -284,6 +286,13 @@ export default function Clients() {
       }
     }
 
+    // Discount filter
+    if (deferredFilterDiscount === 'with-discount') {
+      filtered = filtered.filter(m => m.hasDiscount);
+    } else if (deferredFilterDiscount === 'no-discount') {
+      filtered = filtered.filter(m => !m.hasDiscount);
+    }
+
     // Sort
     filtered = [...filtered].sort((a, b) => {
       if (deferredSortBy === 'id-asc') return (Number(a.memberId) || 0) - (Number(b.memberId) || 0);
@@ -344,7 +353,7 @@ export default function Clients() {
   React.useEffect(() => {
     setCurrentPage(1);
     setSelectedClientIds([]);
-  }, [activeTab, searchTerm, filterBranch, filterRep, sortBy]);
+  }, [activeTab, searchTerm, filterBranch, filterRep, sortBy, filterDiscount]);
 
   const exportToCSV = () => {
     const headers = ['Member ID', 'Name', 'Phone', 'Branch', 'Package', 'Packages Rem.', 'Status', 'Expiry Date', 'Total Paid', 'Assigned To'];
