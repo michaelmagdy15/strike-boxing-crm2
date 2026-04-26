@@ -69,7 +69,9 @@ export default function Payments() {
   const [filterBranch, setFilterBranch] = useState('All');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
-  const [sortConfig, setSortConfig] = useState<{key: keyof Payment | 'date', direction: 'asc' | 'desc'}>({key: 'date', direction: 'desc'});
+  const [sortConfig, setSortConfig] = useState<{key: keyof Payment | 'date', direction: 'asc' | 'desc'}>({key: 'date', direction: 'desc'}); const [discountType, setDiscountType] = useState<'percentage' | 'amount' | ''>('');
+  const [discountValue, setDiscountValue] = useState('');
+  const [discountedAmount, setDiscountedAmount] = useState('');
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
@@ -114,6 +116,25 @@ export default function Payments() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (amount && discountType && discountValue) {
+      const baseAmount = parseFloat(amount);
+      let finalAmount = baseAmount;
+
+      if (discountType === 'percentage') {
+        const discountPercent = Math.min(Math.max(parseFloat(discountValue), 0), 100);
+        finalAmount = baseAmount * (1 - discountPercent / 100);
+      } else if (discountType === 'amount') {
+        const discountAmt = parseFloat(discountValue);
+        finalAmount = Math.max(baseAmount - discountAmt, 0);
+      }
+
+      setDiscountedAmount(finalAmount.toFixed(2));
+    } else {
+      setDiscountedAmount('');
+    }
+  }, [amount, discountType, discountValue]);
 
   const handleCreateNewClient = async () => {
     if (!newClientName.trim() || !newClientPhone.trim()) return;
@@ -188,9 +209,11 @@ export default function Payments() {
       return;
     }
 
+    const finalAmount = discountedAmount ? parseFloat(discountedAmount) : parseFloat(amount);
+
     addPayment({
         clientId,
-        amount: parseFloat(amount),
+        amount: finalAmount,
         date: new Date(paymentDate).toISOString(),
         method,
         instapayRef: method === 'Instapay' ? instapayRef : undefined,
@@ -198,7 +221,10 @@ export default function Payments() {
         coachName: isPT ? resolvedCoachName : undefined,
         notes,
         recordedBy: recordedById || currentUser?.id,
-        salesName: salesName || undefined
+        salesName: salesName || undefined,
+        discountType: discountType ? (discountType as 'percentage' | 'amount') : undefined,
+        discountValue: discountValue ? parseFloat(discountValue) : undefined,
+        discountedAmount: discountedAmount ? parseFloat(discountedAmount) : undefined
       });
 
       // Update client with new package info
@@ -226,7 +252,8 @@ export default function Payments() {
           startDate: pkgStartDate.toISOString(),
           status: 'Active',
           ...(selectedClient?.status === 'Lead' ? { stage: 'Converted' } : {}),
-          packages: [...(selectedClient?.packages || []), newClientPackage]
+          packages: [...(selectedClient?.packages || []), newClientPackage],
+          hasDiscount: discountType ? true : false
         });
       } else {
         const newClientPackage = {
@@ -242,7 +269,8 @@ export default function Payments() {
           membershipExpiry: resolvedEndDate,
           status: 'Active',
           ...(selectedClient?.status === 'Lead' ? { stage: 'Converted' } : {}),
-          packages: [...(selectedClient?.packages || []), newClientPackage]
+          packages: [...(selectedClient?.packages || []), newClientPackage],
+          hasDiscount: discountType ? true : false
         });
       }
 
@@ -265,6 +293,9 @@ export default function Payments() {
       const sama = users.find(u => u.name?.toLowerCase().includes('sama'));
       setRecordedById(sama?.id || currentUser?.id || '');
       setSalesName('');
+      setDiscountType('');
+      setDiscountValue('');
+      setDiscountedAmount('');
   };
   const printInvoice = (payment: Payment, client: any) => {
     const win = window.open('', '_blank');
