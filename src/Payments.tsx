@@ -67,11 +67,14 @@ export default function Payments() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMethod, setFilterMethod] = useState('All');
   const [filterBranch, setFilterBranch] = useState('All');
+  const [filterSalesName, setFilterSalesName] = useState('All');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
-  const [sortConfig, setSortConfig] = useState<{key: keyof Payment | 'date', direction: 'asc' | 'desc'}>({key: 'date', direction: 'desc'}); const [discountType, setDiscountType] = useState<'percentage' | 'amount' | ''>('');
+  const [sortConfig, setSortConfig] = useState<{key: keyof Payment | 'date', direction: 'asc' | 'desc'}>({key: 'date', direction: 'desc'});
+  const [discountType, setDiscountType] = useState<'percentage' | 'amount' | ''>('');
   const [discountValue, setDiscountValue] = useState('');
   const [discountedAmount, setDiscountedAmount] = useState('');
+  const [isMemberOnHold, setIsMemberOnHold] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
@@ -234,6 +237,10 @@ export default function Payments() {
       const resolvedEndDate = endDate
         ? new Date(endDate).toISOString()
         : pkg ? addDays(pkgStartDate, pkg.expiryDays).toISOString() : undefined;
+
+      // Determine member status (on hold if checkbox is checked, otherwise active)
+      const memberStatus = isMemberOnHold ? 'Hold' : 'Active';
+
       if (pkg) {
         const isUnlimited = pkg.sessions === 0;
         const newClientPackage = {
@@ -250,7 +257,8 @@ export default function Payments() {
           sessionsRemaining: isUnlimited ? ('unlimited' as any) : pkg.sessions,
           membershipExpiry: resolvedEndDate,
           startDate: pkgStartDate.toISOString(),
-          status: 'Active',
+          status: memberStatus,
+          assignedTo: salesName || undefined,
           ...(selectedClient?.status === 'Lead' ? { stage: 'Converted' } : {}),
           packages: [...(selectedClient?.packages || []), newClientPackage],
           hasDiscount: discountType ? true : false
@@ -267,7 +275,8 @@ export default function Payments() {
           packageType: finalPackageType,
           startDate: pkgStartDate.toISOString(),
           membershipExpiry: resolvedEndDate,
-          status: 'Active',
+          status: memberStatus,
+          assignedTo: salesName || undefined,
           ...(selectedClient?.status === 'Lead' ? { stage: 'Converted' } : {}),
           packages: [...(selectedClient?.packages || []), newClientPackage],
           hasDiscount: discountType ? true : false
@@ -296,6 +305,7 @@ export default function Payments() {
       setDiscountType('');
       setDiscountValue('');
       setDiscountedAmount('');
+      setIsMemberOnHold(false);
   };
   const printInvoice = (payment: Payment, client: any) => {
     const win = window.open('', '_blank');
@@ -440,6 +450,9 @@ export default function Payments() {
       // Branch filter (via client)
       if (deferredFilterBranch !== 'All' && client?.branch !== deferredFilterBranch) return false;
 
+      // Sales name filter
+      if (filterSalesName !== 'All' && payment.salesName !== filterSalesName) return false;
+
       // Date filter
       if (deferredFilterDateFrom) {
         if (payment.date.substring(0, 10) < deferredFilterDateFrom) return false;
@@ -465,7 +478,7 @@ export default function Payments() {
     });
 
     return result;
-  }, [payments, clients, deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, deferredFilterDateFrom, deferredFilterDateTo, deferredSortConfig, isRep, currentUser]);
+  }, [payments, clients, deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, deferredFilterDateFrom, deferredFilterDateTo, deferredSortConfig, isRep, currentUser, filterSalesName]);
 
   useEffect(() => {
     setCurrentPage(1);
