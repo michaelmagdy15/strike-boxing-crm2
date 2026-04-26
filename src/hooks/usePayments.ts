@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Payment, Client, User } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandler';
@@ -70,5 +70,20 @@ export const usePayments = ({ currentUser, clients, canDeletePayments }: UsePaym
     }
   };
 
-  return { payments, loading, addPayment, deletePayment };
+  const updatePayment = async (id: string, updates: Partial<Payment>) => {
+    if (!currentUser) return;
+    try {
+      const payment = payments.find(p => p.id === id);
+      const clientName = payment
+        ? (clients.find(c => c.id === payment.clientId)?.name || payment.clientId)
+        : id;
+
+      await updateDoc(doc(db, 'payments', id), cleanData(updates));
+      await addAuditLog('UPDATE', 'PAYMENT', id, `Updated payment for ${clientName}`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `payments/${id}`);
+    }
+  };
+
+  return { payments, loading, addPayment, deletePayment, updatePayment };
 };

@@ -22,8 +22,11 @@ export default function Payments() {
   const { clients, users, updateClient, addClient, currentUser, branding, canDeletePayments, branches } = useAppContext();
   const { coaches } = useCoaches();
   const { packages } = usePackages();
-  const { payments, addPayment, deletePayment } = usePayments({ currentUser, clients, canDeletePayments });
+  const { payments, addPayment, deletePayment, updatePayment } = usePayments({ currentUser, clients, canDeletePayments });
   const [isNewPaymentOpen, setIsNewPaymentOpen] = useState(false);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [editAmount, setEditAmount] = useState('');
+  const [editNotes, setEditNotes] = useState('');
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertDescription, setAlertDescription] = useState('');
@@ -984,11 +987,71 @@ export default function Payments() {
                             <Button variant="ghost" size="sm" onClick={() => printInvoice(payment, client)} title="Print Invoice">
                               <Printer className="h-4 w-4" />
                             </Button>
+                            {['manager', 'super_admin', 'crm_admin'].includes(currentUser?.role || '') && (
+                              <Dialog open={editingPaymentId === payment.id} onOpenChange={(open) => {
+                                if (open) {
+                                  setEditingPaymentId(payment.id);
+                                  setEditAmount(payment.amount.toString());
+                                  setEditNotes(payment.notes || '');
+                                } else {
+                                  setEditingPaymentId(null);
+                                }
+                              }}>
+                                <DialogTrigger asChild>
+                                  <Button variant="ghost" size="sm" title="Edit Payment">
+                                    <DollarSign className="h-4 w-4" />
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-md">
+                                  <DialogHeader>
+                                    <DialogTitle>Edit Payment</DialogTitle>
+                                  </DialogHeader>
+                                  <div className="space-y-4">
+                                    <div>
+                                      <Label>Amount (LE)</Label>
+                                      <Input
+                                        type="number"
+                                        value={editAmount}
+                                        onChange={(e) => setEditAmount(e.target.value)}
+                                        step="0.01"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label>Notes</Label>
+                                      <Input
+                                        value={editNotes}
+                                        onChange={(e) => setEditNotes(e.target.value)}
+                                        placeholder="Add notes..."
+                                      />
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <Button
+                                        variant="outline"
+                                        onClick={() => setEditingPaymentId(null)}
+                                      >
+                                        Cancel
+                                      </Button>
+                                      <Button
+                                        onClick={async () => {
+                                          await updatePayment(payment.id, {
+                                            amount: parseFloat(editAmount),
+                                            notes: editNotes || undefined
+                                          });
+                                          setEditingPaymentId(null);
+                                        }}
+                                      >
+                                        Save Changes
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
+                            )}
                             {canDeletePayment && (
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="text-destructive hover:bg-destructive/10" 
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:bg-destructive/10"
                                 onClick={() => handleDeletePayment(payment.id)}
                                 title="Delete Payment"
                               >

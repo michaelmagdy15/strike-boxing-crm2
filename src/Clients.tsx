@@ -23,6 +23,28 @@ import ImportHistory from './ImportHistory';
 import RenewalPipeline from './components/RenewalPipeline';
 import ResyncAssignments from './components/ResyncAssignments';
 
+// Migrate legacy packageType to new packages array format
+const migratePackageData = (client: Client, systemPackages: any[]): Partial<Client> => {
+  if (client.packages && client.packages.length > 0) return {}; // Already migrated
+  if (!client.packageType || client.packageType === 'Unknown') return {}; // No legacy data
+
+  const sysPkg = systemPackages.find(p => p.name === client.packageType);
+  const startDate = client.startDate || new Date().toISOString();
+  const endDate = sysPkg ? addDays(parseISO(startDate), sysPkg.expiryDays).toISOString() : (client.membershipExpiry || addDays(new Date(), 30).toISOString());
+
+  return {
+    packages: [{
+      id: Math.random().toString(36).substring(7),
+      packageName: client.packageType,
+      startDate,
+      endDate,
+      sessionsTotal: typeof client.sessionsRemaining === 'number' ? client.sessionsRemaining : sysPkg?.sessions || 0,
+      sessionsRemaining: typeof client.sessionsRemaining === 'number' ? client.sessionsRemaining : sysPkg?.sessions || 0,
+      status: client.status === 'Expired' ? 'Expired' : client.status === 'Nearly Expired' ? 'Active' : 'Active' as const,
+    }],
+  };
+};
+
 export default function Clients() {
   const { currentUser, users, payments, canViewGlobalDashboard, canDeleteRecords, recalculateAllPackages, isManagerOrSama, branches } = useAppContext();
   const { clients, addClient, updateClient, deleteMultipleClients, deleteClient, addInteraction, addComment } = useClients(currentUser);
@@ -646,7 +668,14 @@ export default function Clients() {
               )}
               <TableCell>
                 <div className="flex items-center gap-2">
-                  <Dialog>
+                  <Dialog onOpenChange={(open) => {
+                    if (open) {
+                      const migrationData = migratePackageData(client, packages);
+                      if (Object.keys(migrationData).length > 0) {
+                        updateClient(client.id, migrationData);
+                      }
+                    }
+                  }}>
                     <DialogTrigger render={<Button variant="outline" size="sm" />}>
                       Manage
                     </DialogTrigger>
