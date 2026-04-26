@@ -8,15 +8,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { format, parseISO, addDays } from 'date-fns';
 import { Payment } from './types';
 import { SALES_MEMBERS } from './constants';
-import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search, Trash2, ChevronLeft, ChevronRight, User } from 'lucide-react';
+import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search, Trash2, ChevronLeft, ChevronRight, User, Edit } from 'lucide-react';
 import { AlertDialog } from './components/AlertDialog';
 
 export default function Payments() {
-  const { payments, clients, users, packages, coaches, addPayment, deletePayment, updateClient, currentUser, branding, canViewGlobalDashboard, canDeletePayments } = useAppContext();
+  const { payments, clients, users, packages, coaches, addPayment, updatePayment, deletePayment, updateClient, currentUser, branding, canViewGlobalDashboard, canDeletePayments } = useAppContext();
   const [isNewPaymentOpen, setIsNewPaymentOpen] = useState(false);
+  const [isEditPaymentOpen, setIsEditPaymentOpen] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertDescription, setAlertDescription] = useState('');
@@ -33,10 +36,15 @@ export default function Payments() {
   const [recordedById, setRecordedById] = useState('');
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [salesName, setSalesName] = useState('');
+  const [discountType, setDiscountType] = useState<'percentage' | 'amount' | ''>('');
+  const [discountValue, setDiscountValue] = useState('');
+  const [discountedAmount, setDiscountedAmount] = useState('');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMethod, setFilterMethod] = useState('All');
   const [filterBranch, setFilterBranch] = useState('All');
+  const [filterSalesName, setFilterSalesName] = useState('All');
+  const [isMemberOnHold, setIsMemberOnHold] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
@@ -65,10 +73,98 @@ export default function Payments() {
     }
   }, [clientId, clients]);
 
+  useEffect(() => {
+    if (amount && discountType && discountValue) {
+      const baseAmount = parseFloat(amount);
+      let finalAmount = baseAmount;
+
+      if (discountType === 'percentage') {
+        const discountPercent = Math.min(Math.max(parseFloat(discountValue), 0), 100);
+        finalAmount = baseAmount * (1 - discountPercent / 100);
+      } else if (discountType === 'amount') {
+        const discountAmt = parseFloat(discountValue);
+        finalAmount = Math.max(baseAmount - discountAmt, 0);
+      }
+
+      setDiscountedAmount(finalAmount.toFixed(2));
+    } else {
+      setDiscountedAmount('');
+    }
+  }, [amount, discountType, discountValue]);
+
   const handleDeletePayment = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this payment record? This action cannot be undone.')) {
       await deletePayment(id);
     }
+  };
+
+  const openEditPayment = (payment: Payment) => {
+    setEditingPayment(payment);
+    const client = clients.find(c => c.id === payment.clientId);
+    setClientId(payment.clientId);
+    setAmount(payment.amount.toString());
+    setMethod(payment.method);
+    setInstapayRef(payment.instapayRef || '');
+    setPackageType(payment.packageType);
+    setCoachName(payment.coachName || '');
+    setSalesName(payment.salesName || '');
+    setNotes(payment.notes || '');
+    setStartDate(format(parseISO(payment.date), 'yyyy-MM-dd'));
+    const recordedByUser = users.find(u => u.id === payment.recordedBy);
+    setRecordedById(recordedByUser?.id || '');
+    setIsEditPaymentOpen(true);
+  };
+
+  const handleUpdatePayment = async () => {
+    if (editingPayment && clientId && amount) {
+      const finalPackageType = packageType === 'Custom' ? customPackage : packageType;
+      if (method === 'Instapay' && (!instapayRef || !/^\d{12}$/.test(instapayRef))) {
+        setAlertTitle('Invalid Reference');
+        setAlertDescription('Please enter a valid 12-digit Instapay reference number.');
+        setAlertOpen(true);
+        return;
+      }
+
+      const isPT = /\bpt\b/i.test(finalPackageType);
+      const resolvedCoachName = coachName === '__custom__' ? customCoachName.trim() : coachName;
+
+      await updatePayment(editingPayment.id, {
+        clientId,
+        amount: parseFloat(amount),
+        date: new Date(startDate).toISOString(),
+        method,
+        instapayRef: method === 'Instapay' ? instapayRef : undefined,
+        packageType: finalPackageType,
+        coachName: isPT ? resolvedCoachName : undefined,
+        notes,
+        recordedBy: recordedById || currentUser?.id,
+        salesName: salesName || undefined
+      });
+
+      setIsEditPaymentOpen(false);
+      setEditingPayment(null);
+      resetPaymentForm();
+    }
+  };
+
+  const resetPaymentForm = () => {
+    setClientId('');
+    setAmount('');
+    setMethod('Cash');
+    setInstapayRef('');
+    setPackageType('');
+    setCustomPackage('');
+    setCoachName('');
+    setCustomCoachName('');
+    setNotes('');
+    setStartDate(format(new Date(), 'yyyy-MM-dd'));
+    const sama = users.find(u => u.name?.toLowerCase().includes('sama'));
+    setRecordedById(sama?.id || currentUser?.id || '');
+    setSalesName('');
+    setIsMemberOnHold(false);
+    setDiscountType('');
+    setDiscountValue('');
+    setDiscountedAmount('');
   };
 
   const handlePackageChange = (val: string) => {
@@ -98,20 +194,26 @@ export default function Payments() {
         return;
       }
 
+      const finalAmount = discountedAmount ? parseFloat(discountedAmount) : parseFloat(amount);
+
       addPayment({
         clientId,
-        amount: parseFloat(amount),
-        date: new Date(startDate).toISOString(), // Use start date for transaction date as well
+        amount: finalAmount,
+        date: new Date(startDate).toISOString(),
         method,
         instapayRef: method === 'Instapay' ? instapayRef : undefined,
         packageType: finalPackageType,
         coachName: isPT ? resolvedCoachName : undefined,
         notes,
         recordedBy: recordedById || currentUser?.id,
-        salesName: salesName || undefined
+        salesName: salesName || undefined,
+        discountType: discountType ? (discountType as 'percentage' | 'amount') : undefined,
+        discountValue: discountValue ? parseFloat(discountValue) : undefined,
+        discountedAmount: discountedAmount ? parseFloat(discountedAmount) : undefined
       });
 
-      // Update client with new package info
+      // Update client with new package info and assign to sales member
+      const memberStatus = isMemberOnHold ? 'Hold' : 'Active';
       const pkg = packages.find(p => p.name === packageType);
       if (pkg) {
         const pkgStartDate = new Date(startDate);
@@ -120,13 +222,17 @@ export default function Payments() {
           sessionsRemaining: pkg.sessions,
           membershipExpiry: addDays(pkgStartDate, pkg.expiryDays).toISOString(),
           startDate: pkgStartDate.toISOString(),
-          status: 'Active'
+          status: memberStatus,
+          assignedTo: salesName || undefined,
+          hasDiscount: discountType ? true : false
         });
       } else {
         updateClient(clientId, {
           packageType: finalPackageType,
           startDate: new Date(startDate).toISOString(),
-          status: 'Active'
+          status: memberStatus,
+          assignedTo: salesName || undefined,
+          hasDiscount: discountType ? true : false
         });
       }
 
@@ -145,6 +251,7 @@ export default function Payments() {
       const sama = users.find(u => u.name?.toLowerCase().includes('sama'));
       setRecordedById(sama?.id || currentUser?.id || '');
       setSalesName('');
+      setIsMemberOnHold(false);
     }
   };
 
@@ -254,6 +361,7 @@ export default function Payments() {
   const deferredSearchTerm = React.useDeferredValue(searchTerm);
   const deferredFilterMethod = React.useDeferredValue(filterMethod);
   const deferredFilterBranch = React.useDeferredValue(filterBranch);
+  const deferredFilterSalesName = React.useDeferredValue(filterSalesName);
 
   const filteredPayments = React.useMemo(() => {
     const clientMap = new Map();
@@ -288,13 +396,16 @@ export default function Payments() {
       // Branch filter (via client)
       if (deferredFilterBranch !== 'All' && client?.branch !== deferredFilterBranch) return false;
 
+      // Sales name filter
+      if (deferredFilterSalesName !== 'All' && payment.salesName !== deferredFilterSalesName) return false;
+
       return true;
     });
-  }, [payments, clients, deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, isRep, currentUser]);
+  }, [payments, clients, deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, deferredFilterSalesName, isRep, currentUser]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [deferredSearchTerm, deferredFilterMethod, deferredFilterBranch]);
+  }, [deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, deferredFilterSalesName]);
 
   const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
   const paginatedPayments = filteredPayments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -346,16 +457,66 @@ export default function Payments() {
                 <div className="space-y-3">
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Amount (LE)</Label>
                   <div className="relative">
-                    <Input 
-                      type="number" 
-                      placeholder="0.00" 
+                    <Input
+                      type="number"
+                      placeholder="0.00"
                       className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all pl-12 pr-5 text-lg font-bold text-green-600"
-                      value={amount} 
-                      onChange={(e) => setAmount(e.target.value)} 
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
                     />
                     <DollarSign className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                   </div>
                 </div>
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Discount Type</Label>
+                  <Select value={discountType} onValueChange={(v: any) => setDiscountType(v)}>
+                    <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                      <SelectValue placeholder="None" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl border-none shadow-2xl">
+                      <SelectItem value="" className="rounded-xl py-3 px-4">No Discount</SelectItem>
+                      <SelectItem value="percentage" className="rounded-xl py-3 px-4">Percentage (%)</SelectItem>
+                      <SelectItem value="amount" className="rounded-xl py-3 px-4">Fixed Amount (LE)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {discountType && (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">
+                      Discount {discountType === 'percentage' ? '(%)' : '(LE)'}
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder={discountType === 'percentage' ? '0-100' : '0.00'}
+                      className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg font-bold text-amber-600"
+                      value={discountValue}
+                      onChange={(e) => setDiscountValue(e.target.value)}
+                      min="0"
+                      max={discountType === 'percentage' ? '100' : undefined}
+                    />
+                  </div>
+                )}
+
+                {discountedAmount && (
+                  <div className="space-y-3 lg:col-span-1 bg-amber-50 dark:bg-amber-900/20 p-4 rounded-2xl border border-amber-200 dark:border-amber-800">
+                    <Label className="text-sm font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300 ml-1">Final Amount</Label>
+                    <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                      {parseFloat(discountedAmount).toLocaleString()} LE
+                    </div>
+                    {discountType === 'percentage' && (
+                      <div className="text-xs text-amber-600 dark:text-amber-400">
+                        ({discountValue}% off from {amount} LE)
+                      </div>
+                    )}
+                    {discountType === 'amount' && (
+                      <div className="text-xs text-amber-600 dark:text-amber-400">
+                        ({amount} LE - {discountValue} LE)
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="space-y-3">
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Method</Label>
@@ -479,21 +640,210 @@ export default function Payments() {
                     onChange={(e) => setNotes(e.target.value)}
                   />
                 </div>
+
+                <div className="space-y-3 lg:col-span-3 flex items-center gap-3 pt-2">
+                  <Checkbox
+                    id="on-hold-paid"
+                    checked={isMemberOnHold}
+                    onCheckedChange={(checked) => setIsMemberOnHold(!!checked)}
+                  />
+                  <Label htmlFor="on-hold-paid" className="text-sm font-semibold text-muted-foreground cursor-pointer">
+                    Member is on hold but has paid (will set status to Hold instead of Active)
+                  </Label>
+                </div>
               </div>
 
               <div className="mt-12 flex gap-4">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="h-16 px-10 rounded-2xl text-lg font-bold border-white/10 hover:bg-muted/50 transition-all"
                   onClick={() => setIsNewPaymentOpen(false)}
                 >
                   Cancel
                 </Button>
-                <Button 
-                  onClick={handleAddPayment} 
+                <Button
+                  onClick={handleAddPayment}
                   className="flex-1 h-16 rounded-2xl text-xl font-extrabold shadow-2xl shadow-primary/30 hover:shadow-primary/50 transition-all hover:scale-[1.01] active:scale-[0.99]"
                 >
                   Complete Transaction
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isEditPaymentOpen} onOpenChange={setIsEditPaymentOpen}>
+          <DialogContent className="!w-full !max-w-[1400px] max-h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl rounded-3xl bg-background/95 backdrop-blur-xl">
+            <DialogHeader className="p-10 pb-6 bg-muted/30 border-b">
+              <DialogTitle className="text-3xl font-extrabold tracking-tight flex items-center gap-3">
+                <CreditCard className="h-8 w-8 text-primary" />
+                Edit Payment
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto p-10 pt-8 custom-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-8">
+
+                <div className="space-y-3 lg:col-span-2">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Client / Member</Label>
+                  <Select value={clientId} onValueChange={setClientId}>
+                    <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                      <SelectValue placeholder="Search or select client" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl border-none shadow-2xl max-h-[300px]">
+                      {clients.map(client => (
+                        <SelectItem key={client.id} value={client.id} className="rounded-xl py-3 px-4">
+                          {client.name} {client.phone ? `(${client.phone})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Date</Label>
+                  <Input
+                    type="date"
+                    className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Amount (LE)</Label>
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      placeholder="0.00"
+                      className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all pl-12 pr-5 text-lg font-bold text-green-600"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                    />
+                    <DollarSign className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Method</Label>
+                  <Select value={method} onValueChange={(v) => setMethod(v as Payment['method'])}>
+                    <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                      <SelectValue placeholder="Select method" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl border-none shadow-2xl">
+                      <SelectItem value="Cash" className="rounded-xl py-3 px-4">Cash</SelectItem>
+                      <SelectItem value="Credit Card" className="rounded-xl py-3 px-4">Credit Card</SelectItem>
+                      <SelectItem value="Bank Transfer" className="rounded-xl py-3 px-4">Bank Transfer</SelectItem>
+                      <SelectItem value="Instapay" className="rounded-xl py-3 px-4">Instapay</SelectItem>
+                      <SelectItem value="Other" className="rounded-xl py-3 px-4">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {method === 'Instapay' && (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Instapay Ref (12 digits)</Label>
+                    <Input
+                      placeholder="123456789012"
+                      className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg font-mono"
+                      value={instapayRef}
+                      maxLength={12}
+                      onChange={(e) => setInstapayRef(e.target.value.replace(/\D/g, ''))}
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Package Type</Label>
+                  <Select value={packageType} onValueChange={handlePackageChange}>
+                    <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                      <SelectValue placeholder="Select package" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl border-none shadow-2xl">
+                      {packages.map(pkg => (
+                        <SelectItem key={pkg.id} value={pkg.name} className="rounded-xl py-3 px-4">
+                          {pkg.name} ({pkg.price} LE)
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="Custom" className="rounded-xl py-3 px-4 italic">Custom Package...</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {packageType === 'Custom' && (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Custom Package Name</Label>
+                    <Input
+                      placeholder="e.g., 5 S GT Adults"
+                      className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
+                      value={customPackage}
+                      onChange={(e) => setCustomPackage(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {((packageType && packageType !== 'Custom' && /\bpt\b/i.test(packageType)) || (packageType === 'Custom' && /\bpt\b/i.test(customPackage))) && (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Coach</Label>
+                    <Select value={coachName} onValueChange={(v) => { setCoachName(v); if (v !== '__custom__') setCustomCoachName(''); }}>
+                      <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                        <SelectValue placeholder="Assigned coach" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-2xl border-none shadow-2xl">
+                        {coaches.filter(c => c.active).map(coach => (
+                          <SelectItem key={coach.id} value={coach.name} className="rounded-xl py-3 px-4">{coach.name}</SelectItem>
+                        ))}
+                        <SelectItem value="__custom__" className="rounded-xl py-3 px-4">Manual Entry...</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {coachName === '__custom__' && (
+                      <Input
+                        placeholder="Enter coach name"
+                        className="h-12 rounded-xl bg-background/50 mt-2 px-4 shadow-inner"
+                        value={customCoachName}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomCoachName(e.target.value)}
+                      />
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Sales Person</Label>
+                  <Select value={salesName} onValueChange={setSalesName}>
+                    <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                      <SelectValue placeholder="For commission" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl border-none shadow-2xl">
+                      {SALES_MEMBERS.map(name => (
+                        <SelectItem key={name} value={name} className="rounded-xl py-3 px-4">{name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-3 lg:col-span-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Internal Notes (Optional)</Label>
+                  <Input
+                    placeholder="Add descriptive notes for this transaction..."
+                    className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-12 flex gap-4">
+                <Button
+                  variant="outline"
+                  className="h-16 px-10 rounded-2xl text-lg font-bold border-white/10 hover:bg-muted/50 transition-all"
+                  onClick={() => setIsEditPaymentOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleUpdatePayment}
+                  className="flex-1 h-16 rounded-2xl text-xl font-extrabold shadow-2xl shadow-primary/30 hover:shadow-primary/50 transition-all hover:scale-[1.01] active:scale-[0.99]"
+                >
+                  Update Payment
                 </Button>
               </div>
             </div>
@@ -533,7 +883,7 @@ export default function Payments() {
 
         <div className="space-y-1.5">
           <Label className="text-xs font-semibold text-muted-foreground ml-1">Branch</Label>
-          <select 
+          <select
             className="flex h-11 w-full items-center justify-between rounded-md bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 border-none"
             value={filterBranch}
             onChange={(e) => setFilterBranch(e.target.value)}
@@ -542,6 +892,20 @@ export default function Payments() {
             <option value="COMPLEX">COMPLEX</option>
             <option value="MIVIDA">MIVIDA</option>
             <option value="Strike IMPACT">Strike IMPACT</option>
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold text-muted-foreground ml-1">Sales Person</Label>
+          <select
+            className="flex h-11 w-full items-center justify-between rounded-md bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 border-none"
+            value={filterSalesName}
+            onChange={(e) => setFilterSalesName(e.target.value)}
+          >
+            <option value="All">All Sales Persons</option>
+            {SALES_MEMBERS.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
           </select>
         </div>
       </div>
@@ -556,7 +920,8 @@ export default function Payments() {
                   <TableHead>Client</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead className="hidden sm:table-cell">Method</TableHead>
-                  <TableHead className="hidden md:table-cell">Package</TableHead>
+                  <TableHead className="hidden md:table-cell">Branch</TableHead>
+                  <TableHead className="hidden lg:table-cell">Package</TableHead>
                   <TableHead className="hidden lg:table-cell">Recorded By</TableHead>
                   <TableHead className="hidden xl:table-cell">Sales Member</TableHead>
                   <TableHead className="hidden xl:table-cell">Notes</TableHead>
@@ -575,7 +940,16 @@ export default function Payments() {
                           <div className="text-[10px] text-muted-foreground">{format(parseISO(payment.date), 'h:mm a')}</div>
                         </TableCell>
                         <TableCell className="font-medium text-xs sm:text-sm">{client?.name || 'Unknown Client'}</TableCell>
-                        <TableCell className="font-bold text-green-600 text-xs sm:text-sm">{payment.amount.toLocaleString()} LE</TableCell>
+                        <TableCell className="font-bold text-xs sm:text-sm">
+                          <div className={payment.discountType ? 'text-amber-600' : 'text-green-600'}>
+                            {payment.amount.toLocaleString()} LE
+                          </div>
+                          {payment.discountType && (
+                            <div className="text-[10px] text-amber-600 font-semibold">
+                              {payment.discountType === 'percentage' ? `${payment.discountValue}% off` : `${payment.discountValue} LE off`}
+                            </div>
+                          )}
+                        </TableCell>
                         <TableCell className="hidden sm:table-cell">
                           <div className="flex items-center">
                             {getMethodIcon(payment.method)}
@@ -590,6 +964,9 @@ export default function Payments() {
                           </div>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
+                          <Badge variant="secondary" className="text-[10px] sm:text-xs">{client?.branch || 'N/A'}</Badge>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
                           <div className="flex flex-col gap-1 items-start">
                             <Badge variant="outline" className="text-[10px] sm:text-xs">{payment.packageType}</Badge>
                             {payment.coachName && (
@@ -613,14 +990,17 @@ export default function Payments() {
                         <TableCell className="text-muted-foreground text-xs hidden xl:table-cell">{payment.notes || '-'}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => openEditPayment(payment)} title="Edit Payment">
+                              <Edit className="h-4 w-4" />
+                            </Button>
                             <Button variant="ghost" size="sm" onClick={() => printInvoice(payment, client)} title="Print Invoice">
                               <Printer className="h-4 w-4" />
                             </Button>
                             {canDeletePayment && (
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="text-destructive hover:bg-destructive/10" 
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:bg-destructive/10"
                                 onClick={() => handleDeletePayment(payment.id)}
                                 title="Delete Payment"
                               >

@@ -131,6 +131,7 @@ interface AppContextType {
   addComment: (clientId: string, text: string, author?: string) => Promise<void>;
   addInteraction: (clientId: string, interaction: Omit<InteractionLog, 'id' | 'author'>) => Promise<void>;
   addPayment: (payment: Omit<Payment, 'id'>) => Promise<void>;
+  updatePayment: (id: string, updates: Partial<Payment>) => Promise<void>;
   updateSalesTarget: (target: number) => Promise<void>;
   updateUserTarget: (userId: string, month: string, total: number, privateTarget: number, groupTarget: number) => Promise<void>;
   addPTPackageRecord: (session: Omit<PTPackageRecord, 'id'>) => Promise<void>;
@@ -743,11 +744,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const payment = payments.find(p => p.id === id);
       const clientName = payment ? (clients.find(c => c.id === payment.clientId)?.name || payment.clientId) : id;
       const amount = payment?.amount || 'unknown';
-      
+
       await deleteDoc(doc(db, 'payments', id));
       await addAuditLog('DELETE', 'PAYMENT', id, `Deleted payment of ${amount} LE for ${clientName}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `payments/${id}`);
+    }
+  };
+
+  const updatePayment = async (id: string, updates: Partial<Payment>) => {
+    try {
+      const payment = payments.find(p => p.id === id);
+      const clientName = payment ? (clients.find(c => c.id === payment.clientId)?.name || payment.clientId) : id;
+
+      await updateDoc(doc(db, 'payments', id), cleanData(updates));
+      await addAuditLog('UPDATE', 'PAYMENT', id, `Updated payment for ${clientName}`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `payments/${id}`);
     }
   };
 
@@ -1104,9 +1117,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateUser,
     deleteUser,
     inviteUser,
-    addComment, 
+    addComment,
     addInteraction,
-    addPayment, 
+    addPayment,
+    updatePayment,
     deletePayment,
     updateSalesTarget,
     updateUserTarget,

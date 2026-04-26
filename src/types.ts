@@ -102,6 +102,9 @@ export interface Payment {
   recordedBy?: string; // userId
   sales_rep_id: string;
   salesName?: string;
+  discountType?: 'percentage' | 'amount'; // Type of discount
+  discountValue?: number; // Discount percentage (0-100) or fixed amount
+  discountedAmount?: number; // Final amount after discount
   created_at: string; // ISO string
   deleted_at?: string | null; // ISO string (soft delete)
 }
@@ -139,6 +142,7 @@ export interface Client {
   lastContactDate?: string; // ISO string
   nextReminderDate?: string; // ISO string
   paid?: boolean;
+  hasDiscount?: boolean; // Flag to indicate if member has received a discount
 }
 
 export interface Attendance {

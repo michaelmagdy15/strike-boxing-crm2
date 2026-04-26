@@ -40,6 +40,7 @@ export default function Clients() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBranch, setFilterBranch] = useState('All');
   const [sortBy, setSortBy] = useState('newest');
+  const [filterDiscount, setFilterDiscount] = useState('All');
 
   // Interaction Logging State
   const [interactionType, setInteractionType] = useState<InteractionType>('Call');
@@ -52,6 +53,7 @@ export default function Clients() {
   const deferredFilterBranch = useDeferredValue(filterBranch);
   const deferredActiveTab = useDeferredValue(activeTab);
   const deferredSortBy = useDeferredValue(sortBy);
+  const deferredFilterDiscount = useDeferredValue(filterDiscount);
 
   const handleAddMember = () => {
     if (newMemberName && newMemberPhone) {
@@ -191,6 +193,13 @@ export default function Clients() {
       filtered = filtered.filter(m => m.branch === deferredFilterBranch);
     }
 
+    // Discount filter
+    if (deferredFilterDiscount === 'with-discount') {
+      filtered = filtered.filter(m => m.hasDiscount);
+    } else if (deferredFilterDiscount === 'no-discount') {
+      filtered = filtered.filter(m => !m.hasDiscount);
+    }
+
     // Sort
     filtered = [...filtered].sort((a, b) => {
       if (deferredSortBy === 'id-asc') return (Number(a.memberId) || 0) - (Number(b.memberId) || 0);
@@ -251,7 +260,7 @@ export default function Clients() {
   React.useEffect(() => {
     setCurrentPage(1);
     setSelectedClientIds([]);
-  }, [activeTab, searchTerm, filterBranch, sortBy]);
+  }, [activeTab, searchTerm, filterBranch, sortBy, filterDiscount]);
 
   const exportToCSV = () => {
     const headers = ['Member ID', 'Name', 'Phone', 'Branch', 'Package', 'Packages Rem.', 'Status', 'Expiry Date', 'Total Paid', 'Assigned To'];
@@ -356,10 +365,17 @@ export default function Clients() {
                 {client.memberId ? `#${client.memberId}` : '-'}
               </TableCell>
               <TableCell className="font-medium">
-                {client.name}
-                {upcomingBirthdays.some(b => b.id === client.id) && (
-                  <Gift className="inline-block ml-2 h-4 w-4 text-pink-500" />
-                )}
+                <div className="flex items-center gap-2">
+                  <span>{client.name}</span>
+                  {client.hasDiscount && (
+                    <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 text-[10px] font-bold">
+                      Discount
+                    </Badge>
+                  )}
+                  {upcomingBirthdays.some(b => b.id === client.id) && (
+                    <Gift className="h-4 w-4 text-pink-500" />
+                  )}
+                </div>
               </TableCell>
               <TableCell>
                 <div className="flex items-center">
@@ -400,25 +416,44 @@ export default function Clients() {
                   {totalPaid.toLocaleString()} LE
                 </TableCell>
               )}
-              {canViewGlobalDashboard && (
+              {(canViewGlobalDashboard || ['manager', 'rep'].includes(currentUser?.role || '')) && (
                 <TableCell className="hidden xl:table-cell">
-                  <select 
-                    className="flex h-8 w-[130px] items-center justify-between rounded-md border border-input bg-background px-3 py-1 text-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    value={client.assignedTo || 'unassigned'}
-                    onChange={(e) => updateClient(client.id, { assignedTo: e.target.value === 'unassigned' ? '' : e.target.value })}
-                  >
-                    <option value="unassigned">Unassigned</option>
-                    <optgroup label="System Users">
-                      {users.filter(u => u.role === 'rep').map(rep => (
-                        <option key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Sales Members">
-                      {SALES_MEMBERS.map(name => (
-                        <option key={name} value={name}>{name}</option>
-                      ))}
-                    </optgroup>
-                  </select>
+                  {canViewGlobalDashboard ? (
+                    <select
+                      className="flex h-8 w-[130px] items-center justify-between rounded-md border border-input bg-background px-3 py-1 text-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={client.assignedTo || 'unassigned'}
+                      onChange={(e) => updateClient(client.id, { assignedTo: e.target.value === 'unassigned' ? '' : e.target.value })}
+                    >
+                      <option value="unassigned">Unassigned</option>
+                      <optgroup label="System Users">
+                        {users.filter(u => u.role === 'rep').map(rep => (
+                          <option key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Sales Members">
+                        {SALES_MEMBERS.map(name => (
+                          <option key={name} value={name}>{name}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      {client.assignedTo === currentUser?.id ? (
+                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 text-[10px]">
+                          Assigned to me
+                        </Badge>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => updateClient(client.id, { assignedTo: currentUser?.id })}
+                        >
+                          Assign to Me
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </TableCell>
               )}
               <TableCell>
@@ -593,12 +628,54 @@ export default function Clients() {
                                 </div>
                                 <div className="space-y-2">
                                   <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Date of Birth</Label>
-                                  <Input 
-                                    type="date" 
+                                  <Input
+                                    type="date"
                                     className="h-11 rounded-xl bg-background/50 focus-visible:ring-primary transition-all px-4"
                                     defaultValue={client.dateOfBirth ? format(parseISO(client.dateOfBirth), 'yyyy-MM-dd') : ''}
                                     onChange={(e) => updateClient(client.id, { dateOfBirth: new Date(e.target.value).toISOString() })}
                                   />
+                                </div>
+
+                                <div className="space-y-2 lg:col-span-1">
+                                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Assigned To</Label>
+                                  <div className="flex gap-2 items-center">
+                                    <Select
+                                      value={client.assignedTo || 'unassigned'}
+                                      onValueChange={(val) => updateClient(client.id, { assignedTo: val === 'unassigned' ? '' : val })}
+                                    >
+                                      <SelectTrigger className="h-11 rounded-xl bg-background/50 border-input px-4 flex-1">
+                                        <SelectValue placeholder="Select assignment" />
+                                      </SelectTrigger>
+                                      <SelectContent className="rounded-xl border-none shadow-xl">
+                                        <SelectItem value="unassigned" className="rounded-lg">Unassigned</SelectItem>
+                                        <SelectGroup>
+                                          <SelectLabel className="text-xs font-bold">System Users</SelectLabel>
+                                          {users.filter(u => u.role === 'rep').map(rep => (
+                                            <SelectItem key={rep.id} value={rep.id} className="rounded-lg">
+                                              {rep.name || rep.email || 'Unknown User'}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectGroup>
+                                        <SelectGroup>
+                                          <SelectLabel className="text-xs font-bold">Sales Members</SelectLabel>
+                                          {SALES_MEMBERS.map(name => (
+                                            <SelectItem key={name} value={name} className="rounded-lg">{name}</SelectItem>
+                                          ))}
+                                        </SelectGroup>
+                                      </SelectContent>
+                                    </Select>
+                                    {currentUser?.role && ['manager', 'rep'].includes(currentUser.role) && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-11 px-4 rounded-xl"
+                                        onClick={() => updateClient(client.id, { assignedTo: currentUser.id })}
+                                        title="Assign this member to yourself"
+                                      >
+                                        Assign to Me
+                                      </Button>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -1057,7 +1134,7 @@ export default function Clients() {
             <Label className="text-xs font-semibold text-muted-foreground ml-1">Sort By</Label>
             <div className="relative">
               <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <select 
+              <select
                 className="flex h-11 w-full items-center justify-between rounded-md bg-muted/30 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 border-none appearance-none"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
@@ -1067,6 +1144,19 @@ export default function Clients() {
                 <option value="id-desc">Member ID (High-Low)</option>
               </select>
             </div>
+          </div>
+
+          <div className="w-full md:w-[180px] space-y-1.5">
+            <Label className="text-xs font-semibold text-muted-foreground ml-1">Discount Status</Label>
+            <select
+              className="flex h-11 w-full items-center justify-between rounded-md bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 border-none"
+              value={filterDiscount}
+              onChange={(e) => setFilterDiscount(e.target.value)}
+            >
+              <option value="All">All Members</option>
+              <option value="with-discount">Has Discount</option>
+              <option value="no-discount">No Discount</option>
+            </select>
           </div>
         </div>
 
