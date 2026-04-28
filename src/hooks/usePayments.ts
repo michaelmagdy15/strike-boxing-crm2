@@ -27,7 +27,7 @@ export const usePayments = ({ currentUser, clients, canDeletePayments }: UsePaym
     return () => unsub();
   }, []);
 
-  const addPayment = async (payment: Omit<Payment, 'id' | 'client_name' | 'amount_paid' | 'sales_rep_id' | 'created_at' | 'package_category_type' | 'deleted_at'>) => {
+  const addPayment = async (payment: Omit<Payment, 'id' | 'client_name' | 'amount_paid' | 'created_at' | 'package_category_type' | 'deleted_at'>) => {
     if (!currentUser) return;
     try {
       const client = clients.find(c => c.id === payment.clientId);
@@ -37,7 +37,7 @@ export const usePayments = ({ currentUser, clients, canDeletePayments }: UsePaym
         ...payment,
         client_name: clientName,
         amount_paid: payment.amount,
-        sales_rep_id: payment.recordedBy || currentUser.id,
+        sales_rep_id: payment.sales_rep_id || payment.recordedBy || currentUser.id,
         created_at: new Date().toISOString(),
         package_category_type: payment.packageType.toLowerCase().includes('pt') || payment.packageType.toLowerCase().includes('private')
           ? 'Private Training'
