@@ -90,8 +90,20 @@ export default function Payments() {
   const canDeletePayment = canDeletePayments;
 
   const adminUsers = users.filter(u =>
-    ['admin', 'super_admin', 'crm_admin', 'manager'].includes(u.role)
+    ['admin', 'super_admin', 'crm_admin', 'manager', 'rep', 'sales_rep', 'sales'].includes(u.role?.toLowerCase() || '')
   );
+
+  const uniqueSalesNames = React.useMemo(() => {
+    const names = new Set<string>();
+    adminUsers.forEach(u => names.add(u.name || u.email || u.id));
+    payments.forEach(p => {
+      if (p.salesName) {
+        const resolved = resolveUserDisplay(p.salesName, users, p.salesName);
+        if (resolved) names.add(resolved);
+      }
+    });
+    return Array.from(names).sort();
+  }, [adminUsers, users, payments]);
 
   useEffect(() => {
     if (recordedById === '' && users.length > 0) {
@@ -460,7 +472,10 @@ export default function Payments() {
       if (deferredFilterBranch !== 'All' && client?.branch !== deferredFilterBranch) return false;
 
       // Sales name filter
-      if (filterSalesName !== 'All' && payment.salesName !== filterSalesName) return false;
+      if (filterSalesName !== 'All') {
+        const resolvedSalesName = resolveUserDisplay(payment.salesName, users, payment.salesName || '');
+        if (resolvedSalesName !== filterSalesName) return false;
+      }
 
       // Date filter
       if (deferredFilterDateFrom) {
@@ -782,11 +797,8 @@ export default function Payments() {
                       <SelectValue placeholder="For commission" />
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl border-none shadow-2xl">
-                      {adminUsers.map(u => (
-                        <SelectItem key={u.id} value={u.name || u.id} className="rounded-xl py-3 px-4">{u.name || u.email}</SelectItem>
-                      ))}
-                      {users.filter(u => u.role === 'rep').map(u => (
-                        <SelectItem key={u.id} value={u.name || u.id} className="rounded-xl py-3 px-4">{u.name || u.email}</SelectItem>
+                      {uniqueSalesNames.map((name: string) => (
+                        <SelectItem key={name} value={name} className="rounded-xl py-3 px-4">{name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -891,9 +903,9 @@ export default function Payments() {
             onChange={(e) => setFilterSalesName(e.target.value)}
           >
             <option value="All">All Sales Reps</option>
-            {adminUsers.map(u => (
-              <option key={u.id} value={u.name || u.email || u.id}>
-                {u.name || u.email || 'Unknown User'}
+            {uniqueSalesNames.map((name: string) => (
+              <option key={name} value={name}>
+                {name}
               </option>
             ))}
           </select>
@@ -1092,14 +1104,9 @@ export default function Payments() {
                                           <SelectValue placeholder="Select sales rep" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                          {adminUsers.map(u => (
-                                            <SelectItem key={u.id} value={u.name || u.email || u.id}>
-                                              {u.name || u.email || 'Unknown User'}
-                                            </SelectItem>
-                                          ))}
-                                          {users.filter(u => u.role === 'rep').map(u => (
-                                            <SelectItem key={u.id} value={u.name || u.email || u.id}>
-                                              {u.name || u.email || 'Unknown User'}
+                                          {uniqueSalesNames.map((name: string) => (
+                                            <SelectItem key={name} value={name}>
+                                              {name}
                                             </SelectItem>
                                           ))}
                                         </SelectContent>
