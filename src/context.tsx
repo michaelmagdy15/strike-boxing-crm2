@@ -76,7 +76,7 @@ export interface AppContextType {
   inviteUser: (email: string, role: UserRole) => Promise<void>;
   addComment: (clientId: string, text: string, author?: string) => Promise<void>;
   addInteraction: (clientId: string, interaction: Omit<InteractionLog, 'id' | 'author'>) => Promise<void>;
-  addPayment: (payment: Omit<Payment, 'id' | 'client_name' | 'amount_paid' | 'sales_rep_id' | 'created_at' | 'package_category_type' | 'deleted_at'>) => Promise<void>;
+  addPayment: (payment: Omit<Payment, 'id' | 'client_name' | 'amount_paid' | 'created_at' | 'package_category_type' | 'deleted_at'>) => Promise<void>;
   updateSalesTarget: (target: number) => Promise<void>;
   updateUserTarget: (userId: string, month: string, total: number) => Promise<void>;
   addPTPackageRecord: (session: Omit<PTPackageRecord, 'id'>) => Promise<void>;

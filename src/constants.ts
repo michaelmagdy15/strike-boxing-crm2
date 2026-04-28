@@ -18,6 +18,17 @@ export const SALES_MEMBERS = [
   'Omar Ehab'
 ];
 
+export const ASSIGNABLE_ROLES = [
+  'admin', 
+  'super_admin', 
+  'crm_admin', 
+  'manager', 
+  'sales_manager',
+  'rep', 
+  'sales_rep', 
+  'sales'
+];
+
 export const SALES_NAME_MAPPING: Record<string, string> = {
   'Atef': 'Atef Strike',
   'Atef Strike': 'Atef Strike',

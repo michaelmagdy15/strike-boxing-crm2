@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onClientAssigned = exports.onLeadCreated = exports.metaWebhook = void 0;
+exports.onPaymentUpdated = exports.onClientAssigned = exports.onLeadCreated = exports.metaWebhook = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const params_1 = require("firebase-functions/params");
@@ -174,6 +174,42 @@ exports.onClientAssigned = (0, firestore_1.onDocumentUpdated)("clients/{clientId
         }
         catch (error) {
             logger.error("Error in onClientAssigned trigger:", error);
+        }
+    }
+});
+/**
+ * Trigger: Sync Payment Edits to Client
+ * Keeps the denormalized branch and assigned_sales_rep on the Member perfectly synced
+ * when a payment is modified.
+ */
+exports.onPaymentUpdated = (0, firestore_1.onDocumentUpdated)("payments/{paymentId}", async (event) => {
+    const beforeData = event.data?.before.data();
+    const afterData = event.data?.after.data();
+    if (!beforeData || !afterData)
+        return;
+    const clientId = afterData.clientId;
+    if (!clientId)
+        return;
+    // Check if branch or sales rep changed
+    const branchChanged = beforeData.branch !== afterData.branch;
+    const salesRepChanged = (beforeData.salesName !== afterData.salesName) || (beforeData.sales_rep_id !== afterData.sales_rep_id);
+    if (branchChanged || salesRepChanged) {
+        logger.info(`Payment ${event.params.paymentId} updated. Syncing to Client ${clientId}...`);
+        const clientUpdate = {};
+        if (branchChanged)
+            clientUpdate.branch = afterData.branch;
+        if (salesRepChanged) {
+            clientUpdate.salesName = afterData.salesName || null;
+            if (afterData.sales_rep_id) {
+                clientUpdate.assignedTo = afterData.sales_rep_id;
+            }
+        }
+        try {
+            await db.collection("clients").doc(clientId).update(clientUpdate);
+            logger.info(`Successfully synced Payment updates to Client ${clientId}`);
+        }
+        catch (error) {
+            logger.error(`Error syncing Payment updates to Client ${clientId}:`, error);
         }
     }
 });

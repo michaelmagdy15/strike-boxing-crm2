@@ -106,7 +106,7 @@ export default function Payments() {
       } else {
         const existing = nameMap.get(lowerName)!;
         // Prefer capitalized versions (e.g., 'Youssef' over 'youssef')
-        if (cleanName !== existing && cleanName[0] === cleanName[0].toUpperCase() && existing[0] !== existing[0].toUpperCase()) {
+        if (cleanName.length > 0 && existing.length > 0 && cleanName !== existing && cleanName.charAt(0) === cleanName.charAt(0).toUpperCase() && existing.charAt(0) !== existing.charAt(0).toUpperCase()) {
           nameMap.set(lowerName, cleanName);
         }
       }
@@ -1175,12 +1175,20 @@ export default function Payments() {
                                     </Button>
                                     <Button
                                       onClick={async () => {
+                                        const salesRepUser = users.find(u => 
+                                          u.name === editSalesName || 
+                                          u.id === editSalesName || 
+                                          (u.name && editSalesName && u.name.trim().toLowerCase() === editSalesName.trim().toLowerCase())
+                                        );
+                                        const salesRepId = salesRepUser ? salesRepUser.id : undefined;
+
                                         await updatePayment(payment.id, {
                                           amount: parseFloat(editAmount),
                                           notes: editNotes || undefined,
                                           branch: editBranch || undefined,
                                           method: editMethod,
                                           salesName: editSalesName || undefined,
+                                          sales_rep_id: salesRepId || undefined,
                                           date: editPaymentDate ? new Date(editPaymentDate).toISOString() : payment.date,
                                         });
                                         setEditingPaymentId(null);

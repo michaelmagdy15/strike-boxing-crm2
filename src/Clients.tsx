@@ -1,5 +1,6 @@
 import React, { useState, useDeferredValue } from 'react';
 import { useAppContext } from './context';
+import { ASSIGNABLE_ROLES } from './constants';
 import { usePackages } from './hooks/usePackages';
 import { useClients } from './hooks/useClients';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,6 +23,9 @@ import ImportData from './ImportData';
 import ImportHistory from './ImportHistory';
 import RenewalPipeline from './components/RenewalPipeline';
 import ResyncAssignments from './components/ResyncAssignments';
+import { writeBatch, doc, collection } from 'firebase/firestore';
+import { db } from './firebase';
+import { cleanData } from './utils';
 
 // Migrate legacy packageType to new packages array format
 const migratePackageData = (client: Client, systemPackages: any[]): Partial<Client> => {
@@ -67,6 +71,8 @@ export default function Clients() {
   const [upgradeDialogClientId, setUpgradeDialogClientId] = useState<string | null>(null);
   const [upgradePkgName, setUpgradePkgName] = useState('');
   const [upgradeStartDate, setUpgradeStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [upgradePaymentMethod, setUpgradePaymentMethod] = useState('Cash');
+  const [upgradeSalesRep, setUpgradeSalesRep] = useState('unassigned');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBranch, setFilterBranch] = useState('All');
@@ -134,21 +140,25 @@ export default function Clients() {
     setNextFollowUpDate('');
   };
 
-  const handleUpgradePackage = () => {
+  const handleUpgradePackage = async () => {
     if (!upgradeDialogClientId || !upgradePkgName) return;
     const client = clients.find(c => c.id === upgradeDialogClientId);
     if (!client) return;
     const pkg = packages.find(p => p.name === upgradePkgName);
     if (!pkg) return;
+    
     const startISO = new Date(upgradeStartDate).toISOString();
     const endISO = addDays(new Date(upgradeStartDate), pkg.expiryDays).toISOString();
     const isUnlimited = pkg.sessions === 0;
+    
     const prevActive = (client.packages || []).find(p => p.status === 'Active');
     const prevSysPkg = prevActive ? packages.find(p => p.name === prevActive.packageName) : null;
     const priceDiff = prevSysPkg ? pkg.price - prevSysPkg.price : pkg.price;
+    
     const updatedPkgs = (client.packages || []).map(p =>
       p.status === 'Active' ? { ...p, status: 'Expired' as const } : p
     );
+    
     const newPkg = {
       id: Math.random().toString(36).substr(2, 9),
       packageName: pkg.name,
@@ -158,22 +168,63 @@ export default function Clients() {
       sessionsRemaining: isUnlimited ? ('unlimited' as any) : pkg.sessions,
       status: 'Active' as const
     };
-    updateClient(client.id, {
-      packageType: pkg.name,
-      sessionsRemaining: isUnlimited ? ('unlimited' as any) : pkg.sessions,
-      membershipExpiry: endISO,
-      startDate: startISO,
-      packages: [...updatedPkgs, newPkg]
-    });
-    const prevName = prevActive?.packageName || client.packageType || 'previous package';
-    addComment(
-      client.id,
-      `Package upgraded: "${prevName}" → "${pkg.name}" starting ${format(new Date(upgradeStartDate), 'dd MMM yyyy')}. Amount to collect: ${priceDiff.toLocaleString()} LE.`,
-      currentUser?.name || 'System'
-    );
-    setUpgradeDialogClientId(null);
-    setUpgradePkgName('');
-    setUpgradeStartDate(format(new Date(), 'yyyy-MM-dd'));
+
+    try {
+      const batch = writeBatch(db);
+      
+      // Update Client Document
+      const clientRef = doc(db, 'clients', client.id);
+      batch.update(clientRef, cleanData({
+        packageType: pkg.name,
+        sessionsRemaining: isUnlimited ? 'unlimited' : pkg.sessions,
+        membershipExpiry: endISO,
+        startDate: startISO,
+        packages: [...updatedPkgs, newPkg]
+      }));
+
+      // Create Payment Document (if priceDiff > 0)
+      if (priceDiff > 0) {
+        const paymentRef = doc(collection(db, 'payments'));
+        const repId = upgradeSalesRep !== 'unassigned' ? upgradeSalesRep : currentUser?.id;
+        const repName = users.find(u => u.id === repId)?.name || '';
+
+        batch.set(paymentRef, cleanData({
+          id: paymentRef.id,
+          clientId: client.id,
+          client_name: client.name,
+          amount: priceDiff,
+          amount_paid: priceDiff,
+          method: upgradePaymentMethod,
+          date: new Date(upgradeStartDate).toISOString(),
+          packageType: pkg.name,
+          package_category_type: pkg.name.toLowerCase().includes('pt') || pkg.name.toLowerCase().includes('private') ? 'Private Training' : 'Group Training',
+          sales_rep_id: repId,
+          salesName: repName,
+          recordedBy: currentUser?.id,
+          created_at: new Date().toISOString(),
+          deleted_at: null,
+          branch: client.branch || ''
+        }));
+      }
+
+      await batch.commit();
+
+      const prevName = prevActive?.packageName || client.packageType || 'previous package';
+      await addComment(
+        client.id,
+        `Package upgraded: "${prevName}" → "${pkg.name}" starting ${format(new Date(upgradeStartDate), 'dd MMM yyyy')}. Amount collected: ${priceDiff.toLocaleString()} LE.`,
+        currentUser?.name || 'System'
+      );
+    } catch (error) {
+      console.error("Error during upgrade transaction:", error);
+      alert("Failed to process upgrade. Please try again.");
+    } finally {
+      setUpgradeDialogClientId(null);
+      setUpgradePkgName('');
+      setUpgradeStartDate(format(new Date(), 'yyyy-MM-dd'));
+      setUpgradePaymentMethod('Cash');
+      setUpgradeSalesRep('unassigned');
+    }
   };
 
   const handleAddComment = async (clientId: string) => {
@@ -660,7 +711,7 @@ export default function Clients() {
                     onChange={(e) => updateClient(client.id, { assignedTo: e.target.value === 'unassigned' ? '' : e.target.value })}
                   >
                     <option value="unassigned">Unassigned</option>
-                    {users.filter(u => u.role === 'rep').map(rep => (
+                    {users.filter(u => ASSIGNABLE_ROLES.includes(u.role?.toLowerCase() || '')).map(rep => (
                       <option key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</option>
                     ))}
                   </select>
@@ -763,7 +814,7 @@ export default function Clients() {
                                       onChange={(e) => updateClient(client.id, { assignedTo: e.target.value === 'unassigned' ? '' : e.target.value })}
                                     >
                                       <option value="unassigned">Unassigned</option>
-                                      {users.filter(u => u.role === 'rep').map(rep => (
+                                      {users.filter(u => ASSIGNABLE_ROLES.includes(u.role?.toLowerCase() || '')).map(rep => (
                                         <option key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown'}</option>
                                       ))}
                                     </select>
@@ -1097,7 +1148,7 @@ export default function Clients() {
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl border-none shadow-2xl">
                       <SelectItem value="unassigned" className="rounded-xl py-3 px-4">Unassigned</SelectItem>
-                      {users.filter(u => u.role === 'rep').map(rep => (
+                      {users.filter(u => ASSIGNABLE_ROLES.includes(u.role?.toLowerCase() || '')).map(rep => (
                         <SelectItem key={rep.id} value={rep.id} className="rounded-xl py-3 px-4">{rep.name || rep.email}</SelectItem>
                       ))}
                     </SelectContent>
@@ -1185,7 +1236,7 @@ export default function Clients() {
               >
                 <option value="all">All Reps</option>
                 <option value="unassigned">Unassigned</option>
-                {users.filter(u => u.role === 'rep').map(rep => (
+                {users.filter(u => ASSIGNABLE_ROLES.includes(u.role?.toLowerCase() || '')).map(rep => (
                   <option key={rep.id} value={rep.id}>{rep.name || rep.email}</option>
                 ))}
               </select>
@@ -1354,10 +1405,52 @@ export default function Clients() {
                 </div>
               );
             })()}
+            {upgradePkgName && (() => {
+              const pkg = packages.find(p => p.name === upgradePkgName);
+              const upgradeClient = upgradeDialogClientId ? clients.find(c => c.id === upgradeDialogClientId) : null;
+              const currentActivePkg = upgradeClient?.packages?.find(p => p.status === 'Active');
+              const currentSysPkg = currentActivePkg ? packages.find(p => p.name === currentActivePkg.packageName) : null;
+              const priceDiff = currentSysPkg ? (pkg?.price || 0) - currentSysPkg.price : (pkg?.price || 0);
+
+              if (priceDiff > 0) {
+                return (
+                  <div className="space-y-4 pt-2 border-t">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold">Payment Method</Label>
+                      <Select value={upgradePaymentMethod} onValueChange={(val) => val && setUpgradePaymentMethod(val)}>
+                        <SelectTrigger className="h-11 rounded-xl">
+                          <SelectValue placeholder="Select Method" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Cash">Cash</SelectItem>
+                          <SelectItem value="InstaPay">InstaPay</SelectItem>
+                          <SelectItem value="Credit Card">Credit Card</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold">Sales Representative</Label>
+                      <Select value={upgradeSalesRep} onValueChange={(val) => val && setUpgradeSalesRep(val)}>
+                        <SelectTrigger className="h-11 rounded-xl">
+                          <SelectValue placeholder="Select Sales Rep" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unassigned">Unassigned</SelectItem>
+                          {users.filter(u => ASSIGNABLE_ROLES.includes(u.role?.toLowerCase() || '')).map(rep => (
+                            <SelectItem key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
             <p className="text-xs text-muted-foreground">Current active packages will be marked as Expired. Record the difference amount as a new payment.</p>
           </div>
           <div className="flex gap-3 mt-2">
-            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setUpgradeDialogClientId(null); setUpgradePkgName(''); setUpgradeStartDate(format(new Date(), 'yyyy-MM-dd')); }}>
+            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => { setUpgradeDialogClientId(null); setUpgradePkgName(''); setUpgradeStartDate(format(new Date(), 'yyyy-MM-dd')); setUpgradePaymentMethod('Cash'); setUpgradeSalesRep('unassigned'); }}>
               Cancel
             </Button>
             <Button className="flex-1 rounded-xl font-bold" disabled={!upgradePkgName} onClick={handleUpgradePackage}>

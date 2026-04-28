@@ -134,7 +134,8 @@ export default function RenewalPipeline() {
       coachName: isPT ? coachName : undefined,
       notes,
       recordedBy: currentUser?.id,
-      salesName: selectedClient.assignedTo || undefined
+      salesName: selectedClient.assignedTo || undefined,
+      sales_rep_id: selectedClient.assignedTo || currentUser?.id || ''
     });
 
     // Update client membership — wrapped so a failure here doesn't silently lose the payment

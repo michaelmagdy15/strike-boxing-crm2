@@ -1,6 +1,7 @@
 import { QRCodeSVG } from 'qrcode.react';
 import React, { useState, useDeferredValue, useRef, useEffect } from 'react';
 import { useAppContext } from './context';
+import { ASSIGNABLE_ROLES } from './constants';
 import { useClients } from './hooks/useClients';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -617,7 +618,7 @@ export default function Leads() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="unassigned">Unassigned</SelectItem>
-                      {users.filter(u => u.role === 'rep').map(rep => (
+                      {users.filter(u => ASSIGNABLE_ROLES.includes(u.role?.toLowerCase() || '')).map(rep => (
                         <SelectItem key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</SelectItem>
                       ))}
                     </SelectContent>
@@ -1142,7 +1143,7 @@ export default function Leads() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="unassigned">Unassigned</SelectItem>
-                        {users.filter(u => u.role === 'rep').map(rep => (
+                        {users.filter(u => ASSIGNABLE_ROLES.includes(u.role?.toLowerCase() || '')).map(rep => (
                           <SelectItem key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown'}</SelectItem>
                         ))}
                       </SelectContent>
@@ -1249,7 +1250,7 @@ export default function Leads() {
               <SelectContent>
                 <SelectItem value="All">All Reps</SelectItem>
                 <SelectItem value="unassigned">Unassigned</SelectItem>
-                {users.filter(u => u.role === 'rep').map(rep => (
+                {users.filter(u => ASSIGNABLE_ROLES.includes(u.role?.toLowerCase() || '')).map(rep => (
                   <SelectItem key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</SelectItem>
                 ))}
               </SelectContent>
@@ -1293,7 +1294,7 @@ export default function Leads() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {users.filter(u => u.role === 'rep').map(rep => (
+                    {users.filter(u => ASSIGNABLE_ROLES.includes(u.role?.toLowerCase() || '')).map(rep => (
                       <SelectItem key={rep.id} value={rep.id}>{rep.name || rep.email || 'Unknown User'}</SelectItem>
                     ))}
                   </SelectContent>
