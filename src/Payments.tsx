@@ -1017,10 +1017,8 @@ export default function Payments() {
                                   setEditingPaymentId(null);
                                 }
                               }}>
-                                <DialogTrigger asChild>
-                                  <Button variant="ghost" size="sm" title="Edit Payment">
-                                    <DollarSign className="h-4 w-4" />
-                                  </Button>
+                                <DialogTrigger render={<Button variant="ghost" size="sm" title="Edit Payment" />}>
+                                  <DollarSign className="h-4 w-4" />
                                 </DialogTrigger>
                                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                                   <DialogHeader>
