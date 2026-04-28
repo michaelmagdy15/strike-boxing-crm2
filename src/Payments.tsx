@@ -25,6 +25,7 @@ export default function Payments() {
   const { payments, addPayment, deletePayment, updatePayment } = usePayments({ currentUser, clients, canDeletePayments });
   const [isNewPaymentOpen, setIsNewPaymentOpen] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [editPaymentDate, setEditPaymentDate] = useState('');
   const [editAmount, setEditAmount] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [editBranch, setEditBranch] = useState('');
@@ -94,15 +95,31 @@ export default function Payments() {
   );
 
   const uniqueSalesNames = React.useMemo(() => {
-    const names = new Set<string>();
-    adminUsers.forEach(u => names.add(u.name || u.email || u.id));
+    const nameMap = new Map<string, string>();
+    
+    const addName = (rawName: string) => {
+      if (!rawName) return;
+      const cleanName = rawName.trim();
+      const lowerName = cleanName.toLowerCase();
+      if (!nameMap.has(lowerName)) {
+        nameMap.set(lowerName, cleanName);
+      } else {
+        const existing = nameMap.get(lowerName)!;
+        // Prefer capitalized versions (e.g., 'Youssef' over 'youssef')
+        if (cleanName !== existing && cleanName[0] === cleanName[0].toUpperCase() && existing[0] !== existing[0].toUpperCase()) {
+          nameMap.set(lowerName, cleanName);
+        }
+      }
+    };
+
+    adminUsers.forEach(u => addName(u.name || u.email || u.id));
     payments.forEach(p => {
       if (p.salesName) {
         const resolved = resolveUserDisplay(p.salesName, users, p.salesName);
-        if (resolved) names.add(resolved);
+        if (resolved) addName(resolved);
       }
     });
-    return Array.from(names).sort();
+    return Array.from(nameMap.values()).sort((a, b) => a.localeCompare(b));
   }, [adminUsers, users, payments]);
 
   useEffect(() => {
@@ -234,6 +251,12 @@ export default function Payments() {
 
     const finalAmount = discountedAmount ? parseFloat(discountedAmount) : parseFloat(amount);
 
+    const salesRepUser = users.find(u => {
+      const name = u.name || u.email || u.id;
+      return name.trim().toLowerCase() === salesName.trim().toLowerCase();
+    });
+    const salesRepId = salesRepUser ? salesRepUser.id : undefined;
+
     addPayment({
         clientId,
         amount: finalAmount,
@@ -245,6 +268,7 @@ export default function Payments() {
         notes,
         recordedBy: recordedById || currentUser?.id,
         salesName: salesName || undefined,
+        sales_rep_id: salesRepId || recordedById || currentUser?.id || '',
         branch: newClientBranch || clients.find(c => c.id === clientId)?.branch || undefined,
         discountType: discountType ? (discountType as 'percentage' | 'amount') : undefined,
         discountValue: discountValue ? parseFloat(discountValue) : undefined,
@@ -279,7 +303,8 @@ export default function Payments() {
           membershipExpiry: resolvedEndDate,
           startDate: pkgStartDate.toISOString(),
           status: memberStatus,
-          assignedTo: salesName || undefined,
+          assignedTo: salesRepId || undefined,
+          salesName: salesName || undefined,
           ...(selectedClient?.status === 'Lead' ? { stage: 'Converted' } : {}),
           packages: [...(selectedClient?.packages || []), newClientPackage],
           hasDiscount: discountType ? true : false
@@ -297,7 +322,8 @@ export default function Payments() {
           startDate: pkgStartDate.toISOString(),
           membershipExpiry: resolvedEndDate,
           status: memberStatus,
-          assignedTo: salesName || undefined,
+          assignedTo: salesRepId || undefined,
+          salesName: salesName || undefined,
           ...(selectedClient?.status === 'Lead' ? { stage: 'Converted' } : {}),
           packages: [...(selectedClient?.packages || []), newClientPackage],
           hasDiscount: discountType ? true : false
@@ -474,7 +500,7 @@ export default function Payments() {
       // Sales name filter
       if (filterSalesName !== 'All') {
         const resolvedSalesName = resolveUserDisplay(payment.salesName, users, payment.salesName || '');
-        if (resolvedSalesName !== filterSalesName) return false;
+        if (resolvedSalesName.trim().toLowerCase() !== filterSalesName.trim().toLowerCase()) return false;
       }
 
       // Date filter
@@ -1041,6 +1067,7 @@ export default function Payments() {
                                   setEditSalesName(payment.salesName || '');
                                   setEditClientName(client?.name || '');
                                   setEditClientPhone(client?.phone || client?.memberId || '');
+                                  setEditPaymentDate(payment.date ? payment.date.substring(0, 10) : format(new Date(), 'yyyy-MM-dd'));
                                 } else {
                                   setEditingPaymentId(null);
                                 }
@@ -1053,6 +1080,15 @@ export default function Payments() {
                                     <DialogTitle>Edit Payment - {client?.name}</DialogTitle>
                                   </DialogHeader>
                                   <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <Label className="text-xs font-semibold">Payment Date</Label>
+                                      <Input
+                                        type="date"
+                                        value={editPaymentDate}
+                                        onChange={(e) => setEditPaymentDate(e.target.value)}
+                                        max={format(new Date(), 'yyyy-MM-dd')}
+                                      />
+                                    </div>
                                     <div>
                                       <Label className="text-xs font-semibold">Customer Name</Label>
                                       <Input
@@ -1145,6 +1181,7 @@ export default function Payments() {
                                           branch: editBranch || undefined,
                                           method: editMethod,
                                           salesName: editSalesName || undefined,
+                                          date: editPaymentDate ? new Date(editPaymentDate).toISOString() : payment.date,
                                         });
                                         setEditingPaymentId(null);
                                       }}
