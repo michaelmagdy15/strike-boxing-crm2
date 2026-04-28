@@ -1045,7 +1045,7 @@ export default function Payments() {
                                     </div>
                                     <div>
                                       <Label className="text-xs font-semibold">Branch</Label>
-                                      <Select value={editBranch} onValueChange={setEditBranch}>
+                                      <Select value={editBranch} onValueChange={(val) => setEditBranch(val || '')}>
                                         <SelectTrigger className="h-9">
                                           <SelectValue placeholder="Select branch" />
                                         </SelectTrigger>
@@ -1073,7 +1073,7 @@ export default function Payments() {
                                     </div>
                                     <div>
                                       <Label className="text-xs font-semibold">Sales Name</Label>
-                                      <Select value={editSalesName} onValueChange={setEditSalesName}>
+                                      <Select value={editSalesName} onValueChange={(val) => setEditSalesName(val || '')}>
                                         <SelectTrigger className="h-9">
                                           <SelectValue placeholder="Select sales rep" />
                                         </SelectTrigger>
