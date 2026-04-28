@@ -173,9 +173,11 @@ export const onClientAssigned = onDocumentUpdated("clients/{clientId}", async (e
 });
 
 /**
- * Trigger: Sync Payment Edits to Client
- * Keeps the denormalized branch and assigned_sales_rep on the Member perfectly synced
- * when a payment is modified.
+ * Trigger: Sync Payment Branch Edits to Client
+ * When a payment's branch changes, mirrors that change to the linked client document.
+ * NOTE: Sales rep assignment (Client.assignedTo) is intentionally NOT synced from
+ * payment edits. Client assignment is managed exclusively via the Clients tab to
+ * prevent payment-driven silent reassignments that bypass manager intent.
  */
 export const onPaymentUpdated = onDocumentUpdated("payments/{paymentId}", async (event) => {
   const beforeData = event.data?.before.data();
@@ -186,27 +188,15 @@ export const onPaymentUpdated = onDocumentUpdated("payments/{paymentId}", async 
   const clientId = afterData.clientId;
   if (!clientId) return;
 
-  // Check if branch or sales rep changed
   const branchChanged = beforeData.branch !== afterData.branch;
-  const salesRepChanged = (beforeData.salesName !== afterData.salesName) || (beforeData.sales_rep_id !== afterData.sales_rep_id);
 
-  if (branchChanged || salesRepChanged) {
-    logger.info(`Payment ${event.params.paymentId} updated. Syncing to Client ${clientId}...`);
-    
-    const clientUpdate: any = {};
-    if (branchChanged) clientUpdate.branch = afterData.branch;
-    if (salesRepChanged) {
-      clientUpdate.salesName = afterData.salesName || null;
-      if (afterData.sales_rep_id) {
-        clientUpdate.assignedTo = afterData.sales_rep_id;
-      }
-    }
-
+  if (branchChanged) {
+    logger.info(`Payment ${event.params.paymentId} branch changed. Syncing branch to Client ${clientId}...`);
     try {
-      await db.collection("clients").doc(clientId).update(clientUpdate);
-      logger.info(`Successfully synced Payment updates to Client ${clientId}`);
+      await db.collection("clients").doc(clientId).update({ branch: afterData.branch });
+      logger.info(`Successfully synced branch to Client ${clientId}`);
     } catch (error) {
-      logger.error(`Error syncing Payment updates to Client ${clientId}:`, error);
+      logger.error(`Error syncing branch to Client ${clientId}:`, error);
     }
   }
 });

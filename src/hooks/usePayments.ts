@@ -37,7 +37,7 @@ export const usePayments = ({ currentUser, clients, canDeletePayments }: UsePaym
         ...payment,
         client_name: clientName,
         amount_paid: payment.amount,
-        sales_rep_id: payment.sales_rep_id || payment.recordedBy || currentUser.id,
+        sales_rep_id: payment.sales_rep_id || '',
         created_at: new Date().toISOString(),
         package_category_type: payment.packageType.toLowerCase().includes('pt') || payment.packageType.toLowerCase().includes('private')
           ? 'Private Training'

@@ -102,18 +102,16 @@ export default function Dashboard() {
   }, [getCanonicalName]);
 
   const isPaymentAttributedToRep = React.useCallback((payment: any, repId: string, repName: string) => {
-    // 1. Direct ID match on sales_rep_id or recordedBy
-    if (payment.sales_rep_id === repId || payment.recordedBy === repId) return true;
+    // If the payment has an explicit sales_rep_id it is the single source of truth.
+    // recordedBy is a tracking field only and is excluded from attribution.
+    if (payment.sales_rep_id) {
+      return payment.sales_rep_id === repId;
+    }
 
-    // 2. Client Assignment match
-    const client = allClients.find(c => c.id === payment.clientId);
-    if (client && isClientAssignedToRep(client, repId, repName)) return true;
-
-    // 3. Name-based match: check salesName, assigned_sales_name, AND sales_rep_id (may be a name string from Excel imports)
+    // Legacy imported payments have no sales_rep_id — fall back to name-based match.
     const salesName = (
       payment.salesName ||
       payment.assigned_sales_name ||
-      // Only use sales_rep_id as a name fallback if it doesn't look like a Firebase UID (UIDs are 28 chars, alphanumeric)
       (payment.sales_rep_id && payment.sales_rep_id.length < 25 ? payment.sales_rep_id : '')
     ).trim();
     if (salesName) {
@@ -121,6 +119,10 @@ export default function Dashboard() {
       const canonicalRep = getCanonicalName(repName);
       if (canonicalSalesName === canonicalRep && canonicalSalesName !== '') return true;
     }
+
+    // Transitive: unattributed payment for a client assigned to this rep.
+    const client = allClients.find(c => c.id === payment.clientId);
+    if (client && isClientAssignedToRep(client, repId, repName)) return true;
 
     return false;
   }, [allClients, isClientAssignedToRep, getCanonicalName]);

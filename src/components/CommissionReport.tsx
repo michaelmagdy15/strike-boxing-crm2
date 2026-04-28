@@ -89,12 +89,13 @@ const CommissionReport: React.FC = () => {
     }> = {};
 
     filteredPayments.forEach(p => {
-      // Determine the "Winner" (Rep who gets credit)
-      let winnerId = p.sales_rep_id || p.recordedBy;
+      // Determine the "Winner" (Rep who gets credit).
+      // sales_rep_id is the single source of truth; recordedBy is excluded from commission.
+      let winnerId = p.sales_rep_id || '';
       
       // If no explicit ID, try to match by name alias
       if (!winnerId && p.salesName) {
-        winnerId = nameToRepId[p.salesName.toLowerCase().trim()];
+        winnerId = nameToRepId[p.salesName.toLowerCase().trim()] ?? '';
       }
 
       // If still no ID, use the client assignment

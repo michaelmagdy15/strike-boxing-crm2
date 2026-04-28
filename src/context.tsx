@@ -272,20 +272,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [getCanonicalName]);
 
   const isPaymentAttributedToRep = useCallback((payment: any, repId: string, repName: string, visibleClientIds: Set<string>) => {
-    // 1. Direct ID match
-    if (payment.sales_rep_id === repId || payment.recordedBy === repId) return true;
-    
-    // 2. Client-based match
-    if (visibleClientIds.has(payment.clientId)) return true;
-    
-    // 3. Name-based match on the payment itself
+    // If the payment carries an explicit sales_rep_id it is the single source of truth.
+    // recordedBy (who typed it in) is intentionally excluded — it is a tracking field only.
+    if (payment.sales_rep_id) {
+      return payment.sales_rep_id === repId;
+    }
+
+    // Legacy imported payments have no sales_rep_id — fall back to canonical name match.
     const salesName = (payment.salesName || payment.assigned_sales_name || '').trim();
     if (salesName) {
       const canonicalSalesName = getCanonicalName(salesName);
       const canonicalRep = getCanonicalName(repName);
       if (canonicalSalesName === canonicalRep && canonicalSalesName !== '') return true;
     }
-    
+
+    // Transitive visibility: unattributed payment for a client assigned to this rep.
+    if (visibleClientIds.has(payment.clientId)) return true;
+
     return false;
   }, [getCanonicalName]);
 

@@ -2,7 +2,6 @@ import React, { useState, useDeferredValue } from 'react';
 import { useAppContext } from './context';
 import { ASSIGNABLE_ROLES } from './constants';
 import { usePackages } from './hooks/usePackages';
-import { useClients } from './hooks/useClients';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -50,8 +49,7 @@ const migratePackageData = (client: Client, systemPackages: any[]): Partial<Clie
 };
 
 export default function Clients() {
-  const { currentUser, users, payments, canViewGlobalDashboard, canDeleteRecords, recalculateAllPackages, isManagerOrSama, branches } = useAppContext();
-  const { clients, addClient, updateClient, deleteMultipleClients, deleteClient, addInteraction, addComment } = useClients(currentUser);
+  const { currentUser, users, payments, clients, addClient, updateClient, deleteClient, deleteMultipleClients, addComment, addInteraction, canViewGlobalDashboard, canDeleteRecords, recalculateAllPackages, isManagerOrSama, branches } = useAppContext();
   const { packages } = usePackages();
   const [activeTab, setActiveTab] = useState('active');
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
@@ -288,12 +286,8 @@ export default function Clients() {
 
   const now = new Date();
 
-  // Filter clients
-  const members = clients.filter(c => {
-    if (c.status === 'Lead') return false;
-    if (currentUser?.role === 'rep' && c.assignedTo !== currentUser.id) return false;
-    return true;
-  });
+  // context.clients is already visibleClients (rep-filtered via isClientAssignedToRep).
+  const members = clients.filter(c => c.status !== 'Lead');
   
   const activeMembers = members.filter(c => c.status === 'Active');
   const nearlyExpired = members.filter(c => c.status === 'Nearly Expired');

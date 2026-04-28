@@ -80,7 +80,8 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
 
         // Robust Attribution Logic (Matching Dashboard.tsx)
         const normalizedRepName = (user.name || '').toLowerCase().trim();
-        const isDirectMatch = p.sales_rep_id === user.id || p.recordedBy === user.id;
+        // sales_rep_id is the single source of truth; recordedBy is excluded from attribution.
+        const isDirectMatch = p.sales_rep_id === user.id;
         
         // Client assignedTo may be a UUID or a raw name string from imports
         const assignedTo = client?.assignedTo || '';

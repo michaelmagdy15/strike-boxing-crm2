@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from './context';
+import { SALES_NAME_MAPPING } from './constants';
 import { useCoaches } from './hooks/useCoaches';
 import { usePackages } from './hooks/usePackages';
 import { usePayments } from './hooks/usePayments';
@@ -96,16 +97,24 @@ export default function Payments() {
 
   const uniqueSalesNames = React.useMemo(() => {
     const nameMap = new Map<string, string>();
-    
+
+    const toCanonical = (name: string): string => {
+      const lower = name.trim().toLowerCase();
+      for (const [key, value] of Object.entries(SALES_NAME_MAPPING)) {
+        if (key.toLowerCase() === lower) return value;
+      }
+      return name.trim();
+    };
+
     const addName = (rawName: string) => {
       if (!rawName) return;
-      const cleanName = rawName.trim();
+      // Normalize aliases ("El Goo" → "Youssef Emad") so duplicates collapse.
+      const cleanName = toCanonical(rawName);
       const lowerName = cleanName.toLowerCase();
       if (!nameMap.has(lowerName)) {
         nameMap.set(lowerName, cleanName);
       } else {
         const existing = nameMap.get(lowerName)!;
-        // Prefer capitalized versions (e.g., 'Youssef' over 'youssef')
         if (cleanName.length > 0 && existing.length > 0 && cleanName !== existing && cleanName.charAt(0) === cleanName.charAt(0).toUpperCase() && existing.charAt(0) !== existing.charAt(0).toUpperCase()) {
           nameMap.set(lowerName, cleanName);
         }
@@ -268,7 +277,7 @@ export default function Payments() {
         notes,
         recordedBy: recordedById || currentUser?.id,
         salesName: salesName || undefined,
-        sales_rep_id: salesRepId || recordedById || currentUser?.id || '',
+        sales_rep_id: salesRepId || '',
         branch: newClientBranch || clients.find(c => c.id === clientId)?.branch || undefined,
         discountType: discountType ? (discountType as 'percentage' | 'amount') : undefined,
         discountValue: discountValue ? parseFloat(discountValue) : undefined,
@@ -303,7 +312,9 @@ export default function Payments() {
           membershipExpiry: resolvedEndDate,
           startDate: pkgStartDate.toISOString(),
           status: memberStatus,
-          assignedTo: salesRepId || undefined,
+          // Only overwrite assignedTo when a specific rep was explicitly selected.
+          // Leaving it undefined preserves whatever assignment the manager previously set.
+          ...(salesRepId ? { assignedTo: salesRepId } : {}),
           salesName: salesName || undefined,
           ...(selectedClient?.status === 'Lead' ? { stage: 'Converted' } : {}),
           packages: [...(selectedClient?.packages || []), newClientPackage],
@@ -322,7 +333,7 @@ export default function Payments() {
           startDate: pkgStartDate.toISOString(),
           membershipExpiry: resolvedEndDate,
           status: memberStatus,
-          assignedTo: salesRepId || undefined,
+          ...(salesRepId ? { assignedTo: salesRepId } : {}),
           salesName: salesName || undefined,
           ...(selectedClient?.status === 'Lead' ? { stage: 'Converted' } : {}),
           packages: [...(selectedClient?.packages || []), newClientPackage],
@@ -473,9 +484,13 @@ export default function Payments() {
     let result = payments.filter(payment => {
       const client = clientMap.get(payment.clientId);
 
-      // Sales reps only see their own payments
+      // Sales reps only see payments attributed to them.
+      // If sales_rep_id is set it is authoritative; otherwise fall back to client-based visibility
+      // (payment belongs to a client assigned to this rep) for legacy unattributed records.
       if (isRep && currentUser) {
-        const ownPayment = payment.sales_rep_id === currentUser.id || payment.recordedBy === currentUser.id;
+        const ownPayment = payment.sales_rep_id
+          ? payment.sales_rep_id === currentUser.id
+          : clientMap.has(payment.clientId);
         if (!ownPayment) return false;
       }
 
