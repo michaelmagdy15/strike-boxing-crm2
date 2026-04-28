@@ -839,7 +839,7 @@ export default function Payments() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6 bg-card p-4 rounded-xl border shadow-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4 mb-6 bg-card p-4 rounded-xl border shadow-sm">
         <div className="space-y-1.5 xl:col-span-1">
           <Label className="text-xs font-semibold text-muted-foreground ml-1">Search Payments</Label>
           <div className="relative">
@@ -880,6 +880,22 @@ export default function Payments() {
             <option value="COMPLEX">COMPLEX</option>
             <option value="MIVIDA">MIVIDA</option>
             <option value="Strike IMPACT">Strike IMPACT</option>
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold text-muted-foreground ml-1">Sales Person</Label>
+          <select 
+            className="flex h-11 w-full items-center justify-between rounded-md bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 border-none"
+            value={filterSalesName}
+            onChange={(e) => setFilterSalesName(e.target.value)}
+          >
+            <option value="All">All Sales Reps</option>
+            {adminUsers.map(u => (
+              <option key={u.id} value={u.name || u.email || u.id}>
+                {u.name || u.email || 'Unknown User'}
+              </option>
+            ))}
           </select>
         </div>
 
