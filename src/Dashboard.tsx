@@ -68,18 +68,15 @@ export default function Dashboard() {
   const [selectedMonthOffset, setSelectedMonthOffset] = useState(0);
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
 
-  const clientIdToAssignedRepMap = React.useMemo(() => {
-    const map = new Map<string, string>();
-    allClients.forEach(c => {
-      if (c.assignedTo) map.set(c.id, c.assignedTo);
-    });
+  const clientMap = React.useMemo(() => {
+    const map = new Map<string, any>();
+    allClients.forEach(c => map.set(c.id, c));
     return map;
   }, [allClients]);
 
   const getCanonicalName = React.useCallback((name: string) => {
     if (!name) return '';
     const trimmed = name.trim().toLowerCase();
-    // Check mapping first (case-insensitive), then return normalized name
     for (const [key, value] of Object.entries(SALES_NAME_MAPPING)) {
       if (key.toLowerCase() === trimmed) {
         return value.toLowerCase().trim();
@@ -90,14 +87,9 @@ export default function Dashboard() {
 
   const isClientAssignedToRep = React.useCallback((client: any, repId: string, repName: string) => {
     if (!client.assignedTo) return false;
-    
-    // 1. Direct ID match
     if (client.assignedTo === repId) return true;
-    
-    // 2. Name-based match (comparing canonical forms)
     const canonicalAssigned = getCanonicalName(client.assignedTo);
     const canonicalRep = getCanonicalName(repName);
-    
     return canonicalAssigned === canonicalRep && canonicalAssigned !== '';
   }, [getCanonicalName]);
 
@@ -116,7 +108,7 @@ export default function Dashboard() {
     // 3. Transitive: look up the client and check their salesName/assignedTo.
     // This is the critical path for imported data where sales_rep_id points to the
     // importer (Michael Mitry) but the client record has the correct salesName.
-    const client = allClients.find(c => c.id === payment.clientId);
+    const client = clientMap.get(payment.clientId);
     if (client) {
       // 3a. Direct ID match on client assignedTo
       if (client.assignedTo === repId) return true;
@@ -130,7 +122,7 @@ export default function Dashboard() {
     }
 
     return false;
-  }, [allClients, isClientAssignedToRep, getCanonicalName]);
+  }, [clientMap, getCanonicalName]);
 
   const clients = React.useMemo(() => {
     let filtered = selectedBranch === 'all' ? allClients : allClients.filter(c => c.branch === selectedBranch);
@@ -226,7 +218,7 @@ export default function Dashboard() {
   // Filtered statistics for rep performance view
   const selectedMonth = subMonths(now, selectedMonthOffset);
   const currentMonthStr = format(selectedMonth, 'yyyy-MM');
-  const reps = users.filter(u => u.role === 'rep' || u.role === 'sales_rep' || u.role === 'sales');
+  const reps = users.filter(u => u.role === 'rep' || (u.role as string) === 'sales_rep' || (u.role as string) === 'sales');
 
   
   const filteredSalesData = React.useMemo(() => {

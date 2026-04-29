@@ -19,7 +19,7 @@ import { Phone, Calendar, MessageSquare, Plus, FileSpreadsheet, Download, UserCh
 import ImportData from './ImportData';
 import ImportHistory from './ImportHistory';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Trash2, ChevronLeft, ChevronRight, User, Search, MapPin, Tag, Info, AlertCircle, Activity, QrCode, Copy } from 'lucide-react';
+import { Trash2, ChevronLeft, ChevronRight, User, Search, MapPin, Tag, Info, AlertCircle, Activity, QrCode, Copy, RefreshCw } from 'lucide-react';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { resolveUserDisplay } from './utils/resolveUserDisplay';
 
@@ -28,7 +28,8 @@ export default function Leads() {
     currentUser,
     users,
     canAssignLeads,
-    canDeleteRecords
+    canDeleteRecords,
+    fetchClientDetails
   } = useAppContext();
   const { clients, addClient, updateClient, deleteMultipleClients, deleteClient, addComment, addInteraction } = useClients(currentUser);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
@@ -40,6 +41,17 @@ export default function Leads() {
   const [interactionDate, setInteractionDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [interactionDateError, setInteractionDateError] = useState('');
   const [nextFollowUpDate, setNextFollowUpDate] = useState('');
+  
+  // Lazy Loading Details State
+  const [activeLeadDetails, setActiveLeadDetails] = useState<{leadId: string, comments: any[], interactions: any[]} | null>(null);
+  const [isDetailsLoading, setIsDetailsLoading] = useState(false);
+
+  const loadLeadDetails = async (leadId: string) => {
+    setIsDetailsLoading(true);
+    const details = await fetchClientDetails(leadId);
+    setActiveLeadDetails({ leadId, ...details });
+    setIsDetailsLoading(false);
+  };
   const [isNewLeadOpen, setIsNewLeadOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
   const didSetDefaultTab = useRef(false);
@@ -334,27 +346,51 @@ export default function Leads() {
     document.body.removeChild(link);
   };
   
-  const handleAddComment = () => {
+  const handleAddComment = async () => {
     if (selectedLead && newComment && currentUser) {
-      addComment(selectedLead.id, newComment, currentUser.name);
+      const commentData = {
+        id: 'temp-' + Date.now(),
+        text: newComment,
+        author: currentUser.name || 'Admin',
+        date: new Date().toISOString()
+      };
+      await addComment(selectedLead.id, newComment, currentUser.name);
+      
+      if (activeLeadDetails?.leadId === selectedLead.id) {
+        setActiveLeadDetails(prev => prev ? {
+          ...prev,
+          comments: [commentData, ...prev.comments]
+        } : null);
+      }
       setNewComment('');
     }
   };
 
-  const handleAddInteraction = () => {
+  const handleAddInteraction = async () => {
     if (!interactionDate) {
       setInteractionDateError('Interaction date is required.');
       return;
     }
     setInteractionDateError('');
     if (selectedLead && currentUser) {
-      addInteraction(selectedLead.id, {
+      const newIA = {
         type: interactionType,
         outcome: interactionOutcome,
         notes: interactionNotes,
         date: new Date(interactionDate).toISOString(),
-        nextFollowUp: nextFollowUpDate || undefined
-      });
+        nextFollowUp: nextFollowUpDate || undefined,
+        author: currentUser.name || 'Admin'
+      };
+      
+      await addInteraction(selectedLead.id, newIA);
+
+      if (activeLeadDetails?.leadId === selectedLead.id) {
+        setActiveLeadDetails(prev => prev ? {
+          ...prev,
+          interactions: [{ ...newIA, id: 'temp-' + Date.now() }, ...prev.interactions]
+        } : null);
+      }
+
       setInteractionNotes('');
       setInteractionDate(format(new Date(), 'yyyy-MM-dd'));
       setNextFollowUpDate('');
@@ -484,7 +520,7 @@ export default function Leads() {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 shrink-0"
-                onClick={() => { setSelectedLead(lead); setIsMobileLeadDialogOpen(true); }}
+                onClick={() => { setSelectedLead(lead); setIsMobileLeadDialogOpen(true); loadLeadDetails(lead.id); }}
               >
                 <MessageSquare className="h-4 w-4" />
               </Button>
@@ -626,8 +662,8 @@ export default function Leads() {
                 </TableCell>
               )}
               <TableCell>
-                <Dialog>
-                  <DialogTrigger render={<Button variant="ghost" size="sm" onClick={() => setSelectedLead(lead)} />}>
+                <Dialog onOpenChange={(open) => { if (open) { setSelectedLead(lead); loadLeadDetails(lead.id); } }}>
+                  <DialogTrigger render={<Button variant="ghost" size="sm" />}>
                     <MessageSquare className="h-4 w-4 mr-2" />
                     <span className="hidden sm:inline">Log Activity</span>
                   </DialogTrigger>
@@ -824,8 +860,13 @@ export default function Leads() {
                           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
                             <div className="lg:col-span-7 space-y-6">
                               <div className="h-[400px] overflow-y-auto space-y-4 pr-4 custom-scrollbar bg-muted/10 p-6 rounded-[24px] border border-white/5">
-                                {lead.interactions && lead.interactions.length > 0 ? (
-                                  [...lead.interactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(interaction => (
+                                {isDetailsLoading && activeLeadDetails?.leadId === lead.id ? (
+                                  <div className="h-full flex flex-col items-center justify-center py-10">
+                                    <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground opacity-20" />
+                                    <p className="text-xs text-muted-foreground mt-2">Loading interactions...</p>
+                                  </div>
+                                ) : activeLeadDetails?.leadId === lead.id && activeLeadDetails.interactions.length > 0 ? (
+                                  [...activeLeadDetails.interactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(interaction => (
                                     <div key={interaction.id} className="bg-background/40 p-5 rounded-2xl border border-white/5 shadow-sm space-y-3">
                                       <div className="flex justify-between items-start">
                                         <div className="flex items-center gap-2">
@@ -973,8 +1014,13 @@ export default function Leads() {
                           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
                             <div className="lg:col-span-7 space-y-6">
                               <div className="h-[400px] overflow-y-auto space-y-4 pr-4 custom-scrollbar bg-muted/10 p-6 rounded-[24px] border border-white/5">
-                                {lead.comments && lead.comments.length > 0 ? (
-                                  [...lead.comments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(comment => (
+                                {isDetailsLoading && activeLeadDetails?.leadId === lead.id ? (
+                                  <div className="h-full flex flex-col items-center justify-center py-10">
+                                    <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground opacity-20" />
+                                    <p className="text-xs text-muted-foreground mt-2">Loading notes...</p>
+                                  </div>
+                                ) : activeLeadDetails?.leadId === lead.id && activeLeadDetails.comments.length > 0 ? (
+                                  [...activeLeadDetails.comments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(comment => (
                                     <div key={comment.id} className="bg-background/40 p-4 rounded-2xl text-sm border border-white/5 shadow-sm">
                                       <p className="leading-relaxed text-foreground/90">{comment.text}</p>
                                       <div className="flex justify-between mt-3 text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground/60">

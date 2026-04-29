@@ -50,10 +50,21 @@ const migratePackageData = (client: Client, systemPackages: any[]): Partial<Clie
 };
 
 export default function Clients() {
-  const { currentUser, users, payments, clients, addClient, updateClient, deleteClient, deleteMultipleClients, addComment, addInteraction, canViewGlobalDashboard, canDeleteRecords, recalculateAllPackages, isManagerOrSama, branches, processPaymentTransaction } = useAppContext();
+  const { currentUser, users, payments, clients, addClient, updateClient, deleteClient, deleteMultipleClients, addComment, addInteraction, canViewGlobalDashboard, canDeleteRecords, recalculateAllPackages, isManagerOrSama, branches, processPaymentTransaction, fetchClientDetails } = useAppContext();
   const { packages } = usePackages();
   const [activeTab, setActiveTab] = useState('active');
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+  
+  // Lazy Loading Details State
+  const [activeClientDetails, setActiveClientDetails] = useState<{clientId: string, comments: any[], interactions: any[]} | null>(null);
+  const [isDetailsLoading, setIsDetailsLoading] = useState(false);
+
+  const loadClientDetails = async (clientId: string) => {
+    setIsDetailsLoading(true);
+    const details = await fetchClientDetails(clientId);
+    setActiveClientDetails({ clientId, ...details });
+    setIsDetailsLoading(false);
+  };
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<string | null>(null);
@@ -125,15 +136,23 @@ export default function Clients() {
   };
 
   const handleAddInteraction = async (clientId: string) => {
-    if (!interactionNotes.trim()) return;
-    
-    await addInteraction(clientId, {
+    const newIA = {
       type: interactionType,
       outcome: interactionOutcome,
       notes: interactionNotes,
       date: new Date().toISOString(),
-      nextFollowUp: nextFollowUpDate || undefined
-    });
+      nextFollowUp: nextFollowUpDate || undefined,
+      author: currentUser?.name || 'Admin'
+    };
+    
+    await addInteraction(clientId, newIA);
+
+    if (activeClientDetails?.clientId === clientId) {
+      setActiveClientDetails(prev => prev ? {
+        ...prev,
+        interactions: [{ ...newIA, id: 'temp-'+Date.now() }, ...prev.interactions]
+      } : null);
+    }
 
     setInteractionNotes('');
     setNextFollowUpDate('');
@@ -188,7 +207,21 @@ export default function Clients() {
 
   const handleAddComment = async (clientId: string) => {
     if (!newComment.trim()) return;
+    const commentData = {
+      id: 'temp-' + Date.now(),
+      text: newComment,
+      author: currentUser?.name || 'Admin',
+      date: new Date().toISOString()
+    };
     await addComment(clientId, newComment);
+    
+    if (activeClientDetails?.clientId === clientId) {
+      setActiveClientDetails(prev => prev ? {
+        ...prev,
+        comments: [commentData, ...prev.comments]
+      } : null);
+    }
+    
     setNewComment('');
   };
   const getQRCodeAsBlob = async (memberId: string): Promise<Blob> => {
@@ -492,7 +525,7 @@ export default function Clients() {
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                <Dialog>
+                <Dialog onOpenChange={(open) => open && loadClientDetails(client.id)}>
                   <DialogTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" />}>
                     <User className="h-4 w-4" />
                   </DialogTrigger>
@@ -516,11 +549,13 @@ export default function Clients() {
                         <div><span className="text-[10px] uppercase text-muted-foreground block">Assigned To</span><span className="font-semibold text-xs">{assignedName || 'Unassigned'}</span></div>
                       </div>
                       {/* Interactions */}
-                      {client.interactions && client.interactions.length > 0 && (
+                      {isDetailsLoading && activeClientDetails?.clientId === client.id ? (
+                        <div className="flex justify-center p-4"><RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" /></div>
+                      ) : activeClientDetails?.clientId === client.id && activeClientDetails.interactions.length > 0 ? (
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Recent Interactions</p>
                           <div className="space-y-2">
-                            {[...client.interactions].sort((a,b) => new Date(b.date).getTime()-new Date(a.date).getTime()).slice(0,3).map(ia => (
+                            {[...activeClientDetails.interactions].sort((a,b) => new Date(b.date).getTime()-new Date(a.date).getTime()).slice(0,3).map(ia => (
                               <div key={ia.id} className="text-xs bg-muted/30 rounded-lg p-2.5">
                                 <div className="flex justify-between items-center">
                                   <span className="font-bold">{ia.type} — {ia.outcome}</span>
@@ -531,13 +566,14 @@ export default function Clients() {
                             ))}
                           </div>
                         </div>
-                      )}
+                      ) : null}
                       {/* Comments */}
-                      {client.comments && client.comments.length > 0 && (
+                      {isDetailsLoading && activeClientDetails?.clientId === client.id ? null : 
+                       activeClientDetails?.clientId === client.id && activeClientDetails.comments.length > 0 ? (
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Notes</p>
                           <div className="space-y-2">
-                            {[...client.comments].reverse().slice(0,2).map(c => (
+                            {[...activeClientDetails.comments].sort((a,b) => new Date(b.date).getTime()-new Date(a.date).getTime()).slice(0,2).map(c => (
                               <div key={c.id} className="text-xs bg-muted/30 rounded-lg p-2.5">
                                 <p>{c.text}</p>
                                 <div className="text-[10px] text-muted-foreground mt-1">{c.author} · {format(parseISO(c.date), 'MMM d')}</div>
@@ -545,7 +581,7 @@ export default function Clients() {
                             ))}
                           </div>
                         </div>
-                      )}
+                      ) : null}
                       {/* QR */}
                       {client.memberId && (
                         <div className="flex flex-col items-center gap-3 pt-2">
@@ -676,6 +712,7 @@ export default function Clients() {
                 <div className="flex items-center gap-2">
                   <Dialog onOpenChange={(open) => {
                     if (open) {
+                      loadClientDetails(client.id);
                       const migrationData = migratePackageData(client, packages);
                       if (Object.keys(migrationData).length > 0) {
                         updateClient(client.id, migrationData);
@@ -842,23 +879,25 @@ export default function Clients() {
                               <div className="space-y-3">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Interactions</p>
                                 <div className="h-48 overflow-y-auto space-y-2 custom-scrollbar">
-                                  {client.interactions && client.interactions.length > 0 ? (
-                                    [...client.interactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(interaction => (
-                                      <div key={interaction.id} className="bg-muted/20 p-3 rounded-lg border text-xs space-y-1.5">
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex gap-1.5">
-                                            <Badge className={`text-[9px] px-1.5 py-0 h-5 ${interaction.type === 'Call' ? 'bg-blue-500' : interaction.type === 'WhatsApp' ? 'bg-green-500' : interaction.type === 'Email' ? 'bg-amber-500' : 'bg-purple-500'}`}>{interaction.type}</Badge>
-                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-5">{interaction.outcome}</Badge>
-                                          </div>
-                                          <span className="text-[9px] text-muted-foreground">{format(parseISO(interaction.date), 'MMM d, h:mm a')}</span>
+                                {activeClientDetails?.clientId === client.id && activeClientDetails.interactions.length > 0 ? (
+                                  [...activeClientDetails.interactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(interaction => (
+                                    <div key={interaction.id} className="bg-muted/20 p-3 rounded-lg border text-xs space-y-1.5">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex gap-1.5">
+                                          <Badge className={`text-[9px] px-1.5 py-0 h-5 ${interaction.type === 'Call' ? 'bg-blue-500' : interaction.type === 'WhatsApp' ? 'bg-green-500' : interaction.type === 'Email' ? 'bg-amber-500' : 'bg-purple-500'}`}>{interaction.type}</Badge>
+                                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-5">{interaction.outcome}</Badge>
                                         </div>
-                                        <p className="text-muted-foreground leading-relaxed italic">"{interaction.notes}"</p>
-                                        {interaction.nextFollowUp && <p className="text-amber-600 text-[9px] flex items-center gap-1"><Calendar className="h-3 w-3" />Follow-up: {format(parseISO(interaction.nextFollowUp), 'MMM d')}</p>}
+                                        <span className="text-[9px] text-muted-foreground">{format(parseISO(interaction.date), 'MMM d, h:mm a')}</span>
                                       </div>
-                                    ))
-                                  ) : (
-                                    <div className="h-full flex items-center justify-center text-xs text-muted-foreground italic">No interactions yet.</div>
-                                  )}
+                                      <p className="text-muted-foreground leading-relaxed italic">"{interaction.notes}"</p>
+                                      {interaction.nextFollowUp && <p className="text-amber-600 text-[9px] flex items-center gap-1"><Calendar className="h-3 w-3" />Follow-up: {format(parseISO(interaction.nextFollowUp), 'MMM d')}</p>}
+                                    </div>
+                                  ))
+                                ) : isDetailsLoading && activeClientDetails?.clientId === client.id ? (
+                                  <div className="h-full flex items-center justify-center py-10"><RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                                ) : (
+                                  <div className="h-full flex items-center justify-center text-xs text-muted-foreground italic">No interactions yet.</div>
+                                )}
                                 </div>
                                 <div className="p-3 rounded-xl border bg-muted/10 space-y-2.5">
                                   <div className="grid grid-cols-2 gap-2">
@@ -890,8 +929,8 @@ export default function Clients() {
                               <div className="space-y-3">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Internal Notes</p>
                                 <div className="h-48 overflow-y-auto space-y-2 custom-scrollbar">
-                                  {(client.comments || []).length > 0 ? (
-                                    [...(client.comments || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(comment => (
+                                  {activeClientDetails?.clientId === client.id && activeClientDetails.comments.length > 0 ? (
+                                    [...activeClientDetails.comments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(comment => (
                                       <div key={comment.id} className="bg-muted/20 p-3 rounded-lg border text-xs space-y-1">
                                         <p className="leading-relaxed text-foreground/90">{comment.text}</p>
                                         <div className="flex justify-between text-[9px] text-muted-foreground">
@@ -900,6 +939,8 @@ export default function Clients() {
                                         </div>
                                       </div>
                                     ))
+                                  ) : isDetailsLoading && activeClientDetails?.clientId === client.id ? (
+                                    <div className="h-full flex items-center justify-center py-10"><RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" /></div>
                                   ) : (
                                     <div className="h-full flex items-center justify-center text-xs text-muted-foreground italic">No notes yet.</div>
                                   )}

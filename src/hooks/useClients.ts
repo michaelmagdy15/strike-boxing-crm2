@@ -9,7 +9,7 @@ import {
   setDoc,
   runTransaction,
   writeBatch,
-  collectionGroup,
+  getDocs,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Client, CRMComment, InteractionLog, User } from '../types';
@@ -19,17 +19,15 @@ import { addAuditLog } from '../services/auditService';
 
 export const useClients = (currentUser: User | null) => {
   const [baseClients, setBaseClients] = useState<Omit<Client, 'comments' | 'interactions'>[]>([]);
-  const [allComments, setAllComments] = useState<Record<string, CRMComment[]>>({});
-  const [allInteractions, setAllInteractions] = useState<Record<string, InteractionLog[]>>({});
   const [loading, setLoading] = useState(true);
 
   const clients = useMemo(() => {
     return baseClients.map(c => ({
       ...c,
-      comments: allComments[c.id] || [],
-      interactions: allInteractions[c.id] || [],
+      comments: [],
+      interactions: [],
     })) as Client[];
-  }, [baseClients, allComments, allInteractions]);
+  }, [baseClients]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -48,44 +46,23 @@ export const useClients = (currentUser: User | null) => {
       }
     );
 
-    const unsubComments = onSnapshot(
-      collectionGroup(db, 'comments'),
-      (snapshot) => {
-        const byClient: Record<string, CRMComment[]> = {};
-        snapshot.docs.forEach(d => {
-          const clientId = d.ref.parent.parent?.id;
-          if (clientId) {
-            if (!byClient[clientId]) byClient[clientId] = [];
-            byClient[clientId].push({ ...d.data(), id: d.id } as CRMComment);
-          }
-        });
-        setAllComments(byClient);
-      },
-      (error) => handleFirestoreError(error, OperationType.LIST, 'comments')
-    );
-
-    const unsubInteractions = onSnapshot(
-      collectionGroup(db, 'interactions'),
-      (snapshot) => {
-        const byClient: Record<string, InteractionLog[]> = {};
-        snapshot.docs.forEach(d => {
-          const clientId = d.ref.parent.parent?.id;
-          if (clientId) {
-            if (!byClient[clientId]) byClient[clientId] = [];
-            byClient[clientId].push({ ...d.data(), id: d.id } as InteractionLog);
-          }
-        });
-        setAllInteractions(byClient);
-      },
-      (error) => handleFirestoreError(error, OperationType.LIST, 'interactions')
-    );
-
-    return () => {
-      unsubClients();
-      unsubComments();
-      unsubInteractions();
-    };
+    return () => unsubClients();
   }, [currentUser]);
+
+  const fetchClientDetails = async (clientId: string) => {
+    try {
+      const commentsSnap = await getDocs(collection(db, 'clients', clientId, 'comments'));
+      const interactionsSnap = await getDocs(collection(db, 'clients', clientId, 'interactions'));
+      
+      const comments = commentsSnap.docs.map(d => ({ ...d.data(), id: d.id } as CRMComment));
+      const interactions = interactionsSnap.docs.map(d => ({ ...d.data(), id: d.id } as InteractionLog));
+      
+      return { comments, interactions };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, `clients/${clientId}/details`);
+      return { comments: [], interactions: [] };
+    }
+  };
 
   const generateMemberId = async (): Promise<string> => {
     const counterRef = doc(db, 'counters', 'clients');
@@ -323,5 +300,6 @@ export const useClients = (currentUser: User | null) => {
     deleteMultipleClients,
     addComment,
     addInteraction,
+    fetchClientDetails,
   };
 };
