@@ -18,18 +18,6 @@
     {
       "database": "(default)",
       "rules": "firestore.rules"
-    },
-    {
-      "database": "ai-studio-3bf9459f-b695-4194-82c1-3b715e42610f",
-      "rules": "firestore.rules"
-    },
-    {
-      "database": "ai-studio-50efc792-6d0a-49d1-b186-10d68475341d",
-      "rules": "firestore.rules"
-    },
-    {
-      "database": "ai-studio-808c18e7-e53d-4e6d-b763-87a4fe565041",
-      "rules": "firestore.rules"
     }
   ]
 }
