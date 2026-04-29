@@ -146,10 +146,16 @@ export default function Reports() {
 
   // --- Lead Source chart data ---
   const sourceROI = useMemo(() => {
-    const sources = Array.from(new Set(clients.map(c => c.source).filter(Boolean))) as string[];
+    const getDisplaySource = (c: any) => {
+      // Differentiate between intentional 'Other' and unmapped imported data
+      if (c.source === 'Other' && c.importBatchId) return 'Imported (Unknown)';
+      return c.source;
+    };
+
+    const sources = Array.from(new Set(clients.map(getDisplaySource).filter(Boolean))) as string[];
     return sources
       .map(source => {
-        const leads = clients.filter(c => c.source === source);
+        const leads = clients.filter(c => getDisplaySource(c) === source);
         const converted = leads.filter(c => c.status !== 'Lead');
         const revenue = payments
           .filter(p => !p.deleted_at && leads.some(c => c.id === p.clientId))

@@ -23,7 +23,7 @@ export const deleteUser = async (id: UserId, userName?: string) => {
   await addAuditLog('DELETE', 'CLIENT', id as any, `Deleted user account: ${userName || id}`);
 };
 
-export const inviteUser = async (email: string, role: UserRole) => {
+export const inviteUser = async (email: string, role: UserRole, displayName?: string) => {
   // Check for existing user or invite
   const q = query(collection(db, 'users'), where('email', '==', email));
   const querySnapshot = await getDocs(q);
@@ -32,10 +32,13 @@ export const inviteUser = async (email: string, role: UserRole) => {
     throw new Error('A user with this email already exists or is already invited.');
   }
 
+  // Use provided display name, falling back to email prefix
+  const name = (displayName || '').trim() || email.split('@')[0];
+
   const docRef = await addDoc(collection(db, 'users'), {
     email,
     role,
-    name: email.split('@')[0],
+    name,
   });
   await addAuditLog('CREATE', 'CLIENT', docRef.id as any, `Invited user: ${email} as ${role}`);
   return docRef.id as UserId;

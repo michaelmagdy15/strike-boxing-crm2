@@ -30,21 +30,47 @@ export const ASSIGNABLE_ROLES = [
 ];
 
 export const SALES_NAME_MAPPING: Record<string, string> = {
+  // ---- Atef Strike ----
   'Atef': 'Atef Strike',
   'Atef Strike': 'Atef Strike',
-  'EL GOO': 'Yousssef Emad',
-  'El Goo': 'Yousssef Emad',
-  'el goo': 'Yousssef Emad',
+  'atefstrike': 'Atef Strike',
+
+  // ---- Youssef Emad (EL GOO) ----
+  'EL GOO': 'Youssef Emad',
+  'El Goo': 'Youssef Emad',
+  'el goo': 'Youssef Emad',
+  'Youssef': 'Youssef Emad',
+  'Youssef Emad': 'Youssef Emad',
+  'Yousssef Emad': 'Youssef Emad',   // typo variant
+  'youssef emad': 'Youssef Emad',
+
+  // ---- Maison Mohamed ----
   'Maisoon': 'Maison Mohamed',
   'Maison': 'Maison Mohamed',
-  'Maison Mohmed': 'Maison Mohamed',
+  'Maison Mohmed': 'Maison Mohamed',  // typo in user profile
+  'Maison Mohamed': 'Maison Mohamed',
+  'maisoon': 'Maison Mohamed',
+  'maisonmohmed6': 'Maison Mohamed',  // email prefix
+
+  // ---- Mustafa Mahmoud ----
   'Mustafa': 'Mustafa Mahmoud',
   'Mustafa Mahmoud': 'Mustafa Mahmoud',
+  'mostafa Mahmoud': 'Mustafa Mahmoud',  // actual user name variant
+  'Mostafa': 'Mustafa Mahmoud',
+  'Mostafa Mahmoud': 'Mustafa Mahmoud',
+  'mostafamahmoud688': 'Mustafa Mahmoud',  // email prefix
+
+  // ---- Hassan Tarek ----
   'Hassan Tarek': 'Hassan Tarek',
+  'Hassan': 'Hassan Tarek',
+  'hassantarek104': 'Hassan Tarek',  // email prefix
+
+  // ---- Omar Ehab ----
   'Omar Ehab': 'Omar Ehab',
-  'Youssef': 'Yousssef Emad',
-  'Youssef Emad': 'Yousssef Emad',
-  'Yousssef Emad': 'Yousssef Emad',
+  'Omar': 'Omar Ehab',
+  'omarehab98765': 'Omar Ehab',  // email prefix
+
+  // ---- Legacy / other names ----
   'Abdallah Atef': 'Abdallah Atef',
   'Omar Sherif': 'Omar Sherif',
   'Salma Ahmed': 'Salma Ahmed',

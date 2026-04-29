@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { UserRole, User } from './types';
-import { Shield, User as UserIcon, Plus, Trash2, Edit, BarChart } from 'lucide-react';
+import { Shield, User as UserIcon, Plus, Trash2, Edit, BarChart, Clock } from 'lucide-react';
 import { UserPerformanceDialog } from './components/UserPerformanceDialog';
 
 export default function Users() {
@@ -19,6 +19,7 @@ export default function Users() {
   const { branches } = useSettings();
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('rep');
   
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -92,9 +93,10 @@ export default function Users() {
 
   const handleInvite = async () => {
     if (inviteEmail) {
-      await inviteUser(inviteEmail, inviteRole);
+      await inviteUser(inviteEmail, inviteRole, inviteName || undefined);
       setIsInviteOpen(false);
       setInviteEmail('');
+      setInviteName('');
       setInviteRole('rep');
     }
   };
@@ -113,6 +115,14 @@ export default function Users() {
                 <DialogTitle>Invite New User</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Full Name</Label>
+                  <Input 
+                    placeholder="e.g. Maison Mohamed" 
+                    value={inviteName} 
+                    onChange={(e) => setInviteName(e.target.value)} 
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label>Email Address</Label>
                   <Input 
@@ -170,10 +180,15 @@ export default function Users() {
               {users.map(user => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium">
-                    <div className="flex items-center">
-                      <UserIcon className="h-4 w-4 mr-2 text-muted-foreground" />
-                      {user.name}
-                      {user.id === currentUser.id && <Badge variant="outline" className="ml-2">You</Badge>}
+                    <div className="flex items-center gap-2">
+                      <UserIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span>{user.name}</span>
+                      {user.id === currentUser.id && <Badge variant="outline" className="ml-1">You</Badge>}
+                      {user.isPending && (
+                        <Badge variant="outline" className="ml-1 text-amber-600 border-amber-400 bg-amber-50 gap-1">
+                          <Clock className="h-3 w-3" /> Pending Invite
+                        </Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>{user.email}</TableCell>

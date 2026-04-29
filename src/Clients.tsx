@@ -22,6 +22,7 @@ import ImportData from './ImportData';
 import ImportHistory from './ImportHistory';
 import RenewalPipeline from './components/RenewalPipeline';
 import ResyncAssignments from './components/ResyncAssignments';
+import ResyncPayments from './components/ResyncPayments';
 import { writeBatch, doc, collection } from 'firebase/firestore';
 import { db } from './firebase';
 import { cleanData } from './utils';
@@ -49,7 +50,7 @@ const migratePackageData = (client: Client, systemPackages: any[]): Partial<Clie
 };
 
 export default function Clients() {
-  const { currentUser, users, payments, clients, addClient, updateClient, deleteClient, deleteMultipleClients, addComment, addInteraction, canViewGlobalDashboard, canDeleteRecords, recalculateAllPackages, isManagerOrSama, branches } = useAppContext();
+  const { currentUser, users, payments, clients, addClient, updateClient, deleteClient, deleteMultipleClients, addComment, addInteraction, canViewGlobalDashboard, canDeleteRecords, recalculateAllPackages, isManagerOrSama, branches, processPaymentTransaction } = useAppContext();
   const { packages } = usePackages();
   const [activeTab, setActiveTab] = useState('active');
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
@@ -145,74 +146,34 @@ export default function Clients() {
     const pkg = packages.find(p => p.name === upgradePkgName);
     if (!pkg) return;
     
-    const startISO = new Date(upgradeStartDate).toISOString();
-    const endISO = addDays(new Date(upgradeStartDate), pkg.expiryDays).toISOString();
-    const isUnlimited = pkg.sessions === 0;
-    
     const prevActive = (client.packages || []).find(p => p.status === 'Active');
     const prevSysPkg = prevActive ? packages.find(p => p.name === prevActive.packageName) : null;
     const priceDiff = prevSysPkg ? pkg.price - prevSysPkg.price : pkg.price;
-    
-    const updatedPkgs = (client.packages || []).map(p =>
-      p.status === 'Active' ? { ...p, status: 'Expired' as const } : p
-    );
-    
-    const newPkg = {
-      id: Math.random().toString(36).substr(2, 9),
-      packageName: pkg.name,
-      startDate: startISO,
-      endDate: endISO,
-      sessionsTotal: isUnlimited ? ('unlimited' as any) : pkg.sessions,
-      sessionsRemaining: isUnlimited ? ('unlimited' as any) : pkg.sessions,
-      status: 'Active' as const
-    };
+    const amountToPay = Math.max(0, priceDiff);
+
+    const repId = upgradeSalesRep !== 'unassigned' ? upgradeSalesRep : (currentUser?.id || '');
+    const repName = users.find(u => u.id === repId)?.name || '';
 
     try {
-      const batch = writeBatch(db);
-      
-      // Update Client Document
-      const clientRef = doc(db, 'clients', client.id);
-      batch.update(clientRef, cleanData({
+      await processPaymentTransaction({
+        clientId: client.id,
+        clientName: client.name,
+        clientBranch: client.branch,
+        clientStatus: client.status,
+        clientPackages: client.packages,
+        amount: amountToPay,
+        method: upgradePaymentMethod as any,
         packageType: pkg.name,
-        sessionsRemaining: isUnlimited ? 'unlimited' : pkg.sessions,
-        membershipExpiry: endISO,
-        startDate: startISO,
-        packages: [...updatedPkgs, newPkg]
-      }));
-
-      // Create Payment Document (if priceDiff > 0)
-      if (priceDiff > 0) {
-        const paymentRef = doc(collection(db, 'payments'));
-        const repId = upgradeSalesRep !== 'unassigned' ? upgradeSalesRep : currentUser?.id;
-        const repName = users.find(u => u.id === repId)?.name || '';
-
-        batch.set(paymentRef, cleanData({
-          id: paymentRef.id,
-          clientId: client.id,
-          client_name: client.name,
-          amount: priceDiff,
-          amount_paid: priceDiff,
-          method: upgradePaymentMethod,
-          date: new Date(upgradeStartDate).toISOString(),
-          packageType: pkg.name,
-          package_category_type: pkg.name.toLowerCase().includes('pt') || pkg.name.toLowerCase().includes('private') ? 'Private Training' : 'Group Training',
-          sales_rep_id: repId,
-          salesName: repName,
-          recordedBy: currentUser?.id,
-          created_at: new Date().toISOString(),
-          deleted_at: null,
-          branch: client.branch || ''
-        }));
-      }
-
-      await batch.commit();
-
-      const prevName = prevActive?.packageName || client.packageType || 'previous package';
-      await addComment(
-        client.id,
-        `Package upgraded: "${prevName}" → "${pkg.name}" starting ${format(new Date(upgradeStartDate), 'dd MMM yyyy')}. Amount collected: ${priceDiff.toLocaleString()} LE.`,
-        currentUser?.name || 'System'
-      );
+        packageCategory: pkg.name.toLowerCase().includes('pt') || pkg.name.toLowerCase().includes('private') ? 'Private Training' : 'Group Training',
+        sales_rep_id: repId,
+        salesName: repName,
+        recordedBy: currentUser?.id || '',
+        recordedByName: currentUser?.name || '',
+        paymentDate: new Date(upgradeStartDate).toISOString(),
+        startDate: new Date(upgradeStartDate).toISOString(),
+        systemPackage: pkg,
+        previousPackageName: prevActive?.packageName || client.packageType
+      });
     } catch (error) {
       console.error("Error during upgrade transaction:", error);
       alert("Failed to process upgrade. Please try again.");
@@ -1088,7 +1049,10 @@ export default function Clients() {
           <ImportData type="Active" />
           <ImportHistory />
           {isManagerOrSama && (
-            <ResyncAssignments clients={clients} users={users} currentUser={currentUser} />
+            <>
+              <ResyncAssignments clients={clients} users={users} currentUser={currentUser} />
+              <ResyncPayments clients={clients} users={users} />
+            </>
           )}
           <Dialog open={isNewMemberOpen} onOpenChange={setIsNewMemberOpen}>
             <DialogTrigger render={<Button size="sm" />}>

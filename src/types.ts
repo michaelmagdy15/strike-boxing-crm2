@@ -49,6 +49,7 @@ export interface User {
   can_delete_records?: boolean;
   can_assign_leads?: boolean;
   lastSeen?: string;
+  isPending?: boolean; // true = invited but hasn't logged in yet
 }
 
 export interface PTPackageRecord {

@@ -24,7 +24,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   updateUser: (id: UserId, updates: Partial<User>) => Promise<void>;
   deleteUser: (id: UserId) => Promise<void>;
-  inviteUser: (email: string, role: UserRole) => Promise<void>;
+  inviteUser: (email: string, role: UserRole, displayName?: string) => Promise<void>;
   isAuthReady: boolean;
   isSuperUser: boolean;
   effectiveRole: UserRole | undefined;
@@ -162,13 +162,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!currentUser) return;
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      const allUsers = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as User));
+      const allUsers = snapshot.docs.map(d => {
+        const data = d.data();
+        const hasStoredId = 'id' in data;
+        const user = { ...data, id: d.id } as User;
+        // Mark as pending if this is an invite placeholder (no stored 'id' field = never logged in)
+        user.isPending = !hasStoredId;
+        return { user, hasStoredId };
+      });
       // Deduplicate by email: prefer real auth-keyed docs (those that have an 'id'
       // field stored in Firestore data) over invite placeholders (only email/role/name).
       const emailMap = new Map<string, { user: User; hasStoredId: boolean }>();
-      snapshot.docs.forEach((d, i) => {
-        const user = allUsers[i]!;
-        const hasStoredId = 'id' in d.data();
+      allUsers.forEach(({ user, hasStoredId }) => {
         const emailKey = (user.email || '').toLowerCase();
         const existing = emailMap.get(emailKey);
         if (!existing || (hasStoredId && !existing.hasStoredId)) {
@@ -197,8 +202,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await userService.deleteUser(id, user?.name);
   };
 
-  const inviteUser = async (email: string, role: UserRole) => {
-    await userService.inviteUser(email, role);
+  const inviteUser = async (email: string, role: UserRole, displayName?: string) => {
+    await userService.inviteUser(email, role, displayName);
   };
 
   const value = useMemo(() => ({

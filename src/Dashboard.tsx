@@ -102,27 +102,32 @@ export default function Dashboard() {
   }, [getCanonicalName]);
 
   const isPaymentAttributedToRep = React.useCallback((payment: any, repId: string, repName: string) => {
-    // If the payment has an explicit sales_rep_id it is the single source of truth.
-    // recordedBy is a tracking field only and is excluded from attribution.
-    if (payment.sales_rep_id) {
-      return payment.sales_rep_id === repId;
-    }
+    // 1. Direct ID match (new payments created through the CRM)
+    if (payment.sales_rep_id && payment.sales_rep_id === repId) return true;
 
-    // Legacy imported payments have no sales_rep_id — fall back to name-based match.
-    const salesName = (
-      payment.salesName ||
-      payment.assigned_sales_name ||
-      (payment.sales_rep_id && payment.sales_rep_id.length < 25 ? payment.sales_rep_id : '')
-    ).trim();
+    // 2. Canonical name match on payment fields (some legacy data)
+    const salesName = (payment.salesName || payment.assigned_sales_name || '').trim();
     if (salesName) {
       const canonicalSalesName = getCanonicalName(salesName);
       const canonicalRep = getCanonicalName(repName);
       if (canonicalSalesName === canonicalRep && canonicalSalesName !== '') return true;
     }
 
-    // Transitive: unattributed payment for a client assigned to this rep.
+    // 3. Transitive: look up the client and check their salesName/assignedTo.
+    // This is the critical path for imported data where sales_rep_id points to the
+    // importer (Michael Mitry) but the client record has the correct salesName.
     const client = allClients.find(c => c.id === payment.clientId);
-    if (client && isClientAssignedToRep(client, repId, repName)) return true;
+    if (client) {
+      // 3a. Direct ID match on client assignedTo
+      if (client.assignedTo === repId) return true;
+      // 3b. Canonical name match on client salesName
+      const clientSalesName = (client.salesName || client.assignedTo || '').trim();
+      if (clientSalesName) {
+        const canonicalClientSales = getCanonicalName(clientSalesName);
+        const canonicalRep = getCanonicalName(repName);
+        if (canonicalClientSales === canonicalRep && canonicalClientSales !== '') return true;
+      }
+    }
 
     return false;
   }, [allClients, isClientAssignedToRep, getCanonicalName]);
@@ -221,7 +226,7 @@ export default function Dashboard() {
   // Filtered statistics for rep performance view
   const selectedMonth = subMonths(now, selectedMonthOffset);
   const currentMonthStr = format(selectedMonth, 'yyyy-MM');
-  const reps = users.filter(u => u.role === 'rep');
+  const reps = users.filter(u => u.role === 'rep' || u.role === 'sales_rep' || u.role === 'sales');
 
   
   const filteredSalesData = React.useMemo(() => {

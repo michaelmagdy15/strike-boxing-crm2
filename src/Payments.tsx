@@ -19,8 +19,22 @@ import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, 
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog } from './components/AlertDialog';
 
+/**
+ * Canonicalise any sales name variant (alias, typo, email prefix) to its
+ * clean canonical form using SALES_NAME_MAPPING.
+ * Unknown names are returned as-is, so new reps work automatically.
+ */
+function toCanonical(name: string): string {
+  if (!name) return '';
+  const lower = name.trim().toLowerCase();
+  for (const [key, value] of Object.entries(SALES_NAME_MAPPING)) {
+    if (key.toLowerCase() === lower) return value;
+  }
+  return name.trim();
+}
+
 export default function Payments() {
-  const { clients, users, updateClient, addClient, currentUser, branding, canDeletePayments, branches } = useAppContext();
+  const { clients, users, updateClient, addClient, currentUser, branding, canDeletePayments, branches, processPaymentTransaction } = useAppContext();
   const { coaches } = useCoaches();
   const { packages } = usePackages();
   const { payments, addPayment, deletePayment, updatePayment } = usePayments({ currentUser, clients, canDeletePayments });
@@ -97,14 +111,6 @@ export default function Payments() {
 
   const uniqueSalesNames = React.useMemo(() => {
     const nameMap = new Map<string, string>();
-
-    const toCanonical = (name: string): string => {
-      const lower = name.trim().toLowerCase();
-      for (const [key, value] of Object.entries(SALES_NAME_MAPPING)) {
-        if (key.toLowerCase() === lower) return value;
-      }
-      return name.trim();
-    };
 
     const addName = (rawName: string) => {
       if (!rawName) return;
@@ -224,7 +230,7 @@ export default function Payments() {
     }
   };
 
-  const handleAddPayment = () => {
+  const handleAddPayment = async () => {
     const finalPackageType = packageType === 'Custom' ? customPackage : packageType;
     
     if (!clientId || !amount || !finalPackageType) {
@@ -266,80 +272,44 @@ export default function Payments() {
     });
     const salesRepId = salesRepUser ? salesRepUser.id : undefined;
 
-    addPayment({
+    try {
+      const pkg = packages.find(p => p.name === packageType);
+      const selectedClient = clients.find(c => c.id === clientId);
+      const clientBranch = newClientBranch || selectedClient?.branch || '';
+
+      await processPaymentTransaction({
         clientId,
+        clientName: selectedClient?.name || '',
+        clientBranch,
+        clientStatus: selectedClient?.status,
+        clientPackages: selectedClient?.packages,
         amount: finalAmount,
-        date: new Date(paymentDate).toISOString(),
         method,
         instapayRef: method === 'Instapay' ? instapayRef : undefined,
         packageType: finalPackageType,
+        packageCategory: isPT ? 'Private Training' : 'Group Training',
         coachName: isPT ? resolvedCoachName : undefined,
         notes,
-        recordedBy: recordedById || currentUser?.id,
-        salesName: salesName || undefined,
         sales_rep_id: salesRepId || '',
-        branch: newClientBranch || clients.find(c => c.id === clientId)?.branch || undefined,
+        salesName: salesName || '',
+        recordedBy: recordedById || currentUser?.id || '',
+        recordedByName: users.find(u => u.id === (recordedById || currentUser?.id))?.name || '',
+        paymentDate: new Date(paymentDate).toISOString(),
+        startDate: new Date(startDate).toISOString(),
+        endDate: endDate ? new Date(endDate).toISOString() : undefined,
         discountType: discountType ? (discountType as 'percentage' | 'amount') : undefined,
         discountValue: discountValue ? parseFloat(discountValue) : undefined,
-        discountedAmount: discountedAmount ? parseFloat(discountedAmount) : undefined
+        discountedAmount: discountedAmount ? parseFloat(discountedAmount) : undefined,
+        isMemberOnHold,
+        systemPackage: pkg
       });
-
-      // Update client with new package info
-      const pkg = packages.find(p => p.name === packageType);
-      const selectedClient = clients.find(c => c.id === clientId);
-      const pkgStartDate = new Date(startDate);
-      const resolvedEndDate = endDate
-        ? new Date(endDate).toISOString()
-        : pkg ? addDays(pkgStartDate, pkg.expiryDays).toISOString() : undefined;
-
-      // Determine member status (on hold if checkbox is checked, otherwise active)
-      const memberStatus = isMemberOnHold ? 'Hold' : 'Active';
-
-      if (pkg) {
-        const isUnlimited = pkg.sessions === 0;
-        const newClientPackage = {
-          id: Math.random().toString(36).substr(2, 9),
-          packageName: pkg.name,
-          startDate: pkgStartDate.toISOString(),
-          endDate: resolvedEndDate,
-          sessionsTotal: isUnlimited ? ('unlimited' as any) : pkg.sessions,
-          sessionsRemaining: isUnlimited ? ('unlimited' as any) : pkg.sessions,
-          status: 'Active' as const
-        };
-        updateClient(clientId, {
-          packageType: pkg.name,
-          sessionsRemaining: isUnlimited ? ('unlimited' as any) : pkg.sessions,
-          membershipExpiry: resolvedEndDate,
-          startDate: pkgStartDate.toISOString(),
-          status: memberStatus,
-          // Only overwrite assignedTo when a specific rep was explicitly selected.
-          // Leaving it undefined preserves whatever assignment the manager previously set.
-          ...(salesRepId ? { assignedTo: salesRepId } : {}),
-          salesName: salesName || undefined,
-          ...(selectedClient?.status === 'Lead' ? { stage: 'Converted' } : {}),
-          packages: [...(selectedClient?.packages || []), newClientPackage],
-          hasDiscount: discountType ? true : false
-        });
-      } else {
-        const newClientPackage = {
-          id: Math.random().toString(36).substr(2, 9),
-          packageName: finalPackageType,
-          startDate: pkgStartDate.toISOString(),
-          endDate: resolvedEndDate,
-          status: 'Active' as const
-        };
-        updateClient(clientId, {
-          packageType: finalPackageType,
-          startDate: pkgStartDate.toISOString(),
-          membershipExpiry: resolvedEndDate,
-          status: memberStatus,
-          ...(salesRepId ? { assignedTo: salesRepId } : {}),
-          salesName: salesName || undefined,
-          ...(selectedClient?.status === 'Lead' ? { stage: 'Converted' } : {}),
-          packages: [...(selectedClient?.packages || []), newClientPackage],
-          hasDiscount: discountType ? true : false
-        });
-      }
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      setAlertTitle('Error');
+      setAlertDescription('Failed to record payment. Please try again.');
+      setAlertOpen(true);
+      return;
+    }
 
       setIsNewPaymentOpen(false);
       setIsCreatingNew(false);
@@ -512,10 +482,12 @@ export default function Payments() {
       // Branch filter (via client)
       if (deferredFilterBranch !== 'All' && client?.branch !== deferredFilterBranch) return false;
 
-      // Sales name filter
+      // Sales name filter — canonicalize both sides so variants like "Maison Mohmed" match "Maison Mohamed"
       if (filterSalesName !== 'All') {
         const resolvedSalesName = resolveUserDisplay(payment.salesName, users, payment.salesName || '');
-        if (resolvedSalesName.trim().toLowerCase() !== filterSalesName.trim().toLowerCase()) return false;
+        const canonicalResolved = toCanonical(resolvedSalesName).toLowerCase();
+        const canonicalFilter = toCanonical(filterSalesName).toLowerCase();
+        if (canonicalResolved !== canonicalFilter) return false;
       }
 
       // Date filter
@@ -1011,6 +983,10 @@ export default function Payments() {
                   paginatedPayments.map(payment => {
                     const client = clients.find(c => c.id === payment.clientId);
                     const recordedByUser = users.find(u => u.id === payment.recordedBy);
+                    // Fallback: use stored name, then default to Atef Strike for imported/unknown records
+                    const recordedByLabel = recordedByUser?.name
+                      || (payment as any).recordedByName
+                      || (users.find(u => u.name?.toLowerCase().includes('atef') && u.name?.toLowerCase().includes('strike'))?.name ?? 'Atef Strike');
                     return (
                       <TableRow key={payment.id}>
                         <TableCell className="text-xs sm:text-sm">
@@ -1055,7 +1031,7 @@ export default function Payments() {
                           </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground text-xs sm:text-sm hidden lg:table-cell">
-                          {recordedByUser?.name || 'Unknown'}
+                          {recordedByLabel}
                         </TableCell>
                         <TableCell className="hidden xl:table-cell">
                           {payment.salesName ? (

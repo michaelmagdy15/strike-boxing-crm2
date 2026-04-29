@@ -44,6 +44,7 @@ import {
   CommissionRates
 } from './types';
 import { cleanData } from './utils';
+import { processPaymentTransaction, PaymentTransactionParams } from './services/transactionService';
 
 export interface AppContextType {
   currentUser: User | null;
@@ -114,6 +115,7 @@ export interface AppContextType {
   isManagerOrSama: boolean;
   branches: Branch[];
   updateBranches: (branches: Branch[]) => Promise<void>;
+  processPaymentTransaction: (params: PaymentTransactionParams) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -272,13 +274,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [getCanonicalName]);
 
   const isPaymentAttributedToRep = useCallback((payment: any, repId: string, repName: string, visibleClientIds: Set<string>) => {
-    // If the payment carries an explicit sales_rep_id it is the single source of truth.
-    // recordedBy (who typed it in) is intentionally excluded — it is a tracking field only.
-    if (payment.sales_rep_id) {
-      return payment.sales_rep_id === repId;
-    }
+    // 1. Direct ID match (new payments created through the CRM)
+    if (payment.sales_rep_id && payment.sales_rep_id === repId) return true;
 
-    // Legacy imported payments have no sales_rep_id — fall back to canonical name match.
+    // 2. Canonical name match on payment fields (legacy data)
     const salesName = (payment.salesName || payment.assigned_sales_name || '').trim();
     if (salesName) {
       const canonicalSalesName = getCanonicalName(salesName);
@@ -286,11 +285,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (canonicalSalesName === canonicalRep && canonicalSalesName !== '') return true;
     }
 
-    // Transitive visibility: unattributed payment for a client assigned to this rep.
-    if (visibleClientIds.has(payment.clientId)) return true;
+    // 3. Transitive: look up the client and check their salesName/assignedTo.
+    // Critical for imported data where sales_rep_id points to the importer,
+    // but the client record has the correct salesName (e.g. "Maisoon").
+    const client = clients.find(c => c.id === payment.clientId);
+    if (client) {
+      if (client.assignedTo === repId) return true;
+      const clientSalesName = (client.salesName || client.assignedTo || '').trim();
+      if (clientSalesName) {
+        const canonicalClientSales = getCanonicalName(clientSalesName);
+        const canonicalRep = getCanonicalName(repName);
+        if (canonicalClientSales === canonicalRep && canonicalClientSales !== '') return true;
+      }
+    }
 
     return false;
-  }, [getCanonicalName]);
+  }, [clients, getCanonicalName]);
 
   const visibleClients = useMemo(() => {
     if (!currentUser) return [];
@@ -524,7 +534,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateCommissionRates,
     isManagerOrSama,
     branches,
-    updateBranches
+    updateBranches,
+    processPaymentTransaction
   }), [
     currentUser, effectiveRole, users, visibleClients, loadingClients,
     salesStats, visiblePayments, loadingPayments, ptPackageRecords,
