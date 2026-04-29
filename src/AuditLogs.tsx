@@ -36,7 +36,7 @@ function getEntityBadge(entity: AuditLog['entityType']) {
 const selectClass = "flex h-10 w-full rounded-md border border-muted bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring appearance-none";
 
 export default function AuditLogs() {
-  const { currentUser, users } = useAuth();
+  const { currentUser, users, allUsers } = useAuth();
   const canAccess =
     currentUser?.role === 'manager' ||
     currentUser?.role === 'admin' ||
@@ -262,7 +262,14 @@ export default function AuditLogs() {
                   </TableRow>
                 ) : paginated.length > 0 ? (
                   paginated.map(log => {
-                    const user = users.find(u => u.id === log.userId);
+                    // Resolution hierarchy: 
+                    // 1. Static name stored in the log (new format)
+                    // 2. Lookup in allUsers (including non-deduplicated/backup records)
+                    // 3. Lookup in deduplicated users (fallback)
+                    const resolvedName = log.userName || 
+                                       allUsers.find(u => u.id === log.userId)?.name || 
+                                       users.find(u => u.id === log.userId)?.name || 
+                                       'Unknown';
                     return (
                       <TableRow key={log.id} className="hover:bg-muted/20 transition-colors">
                         <TableCell className="whitespace-nowrap text-[11px] text-muted-foreground">
@@ -272,7 +279,7 @@ export default function AuditLogs() {
                           <div>{format(parseISO(log.timestamp), 'h:mm:ss a')}</div>
                         </TableCell>
                         <TableCell className="font-semibold text-sm">
-                          {user?.name || 'Unknown'}
+                          {resolvedName}
                         </TableCell>
                         <TableCell>{getActionBadge(log.action)}</TableCell>
                         <TableCell>{getEntityBadge(log.entityType)}</TableCell>

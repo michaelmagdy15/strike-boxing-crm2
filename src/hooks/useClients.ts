@@ -111,7 +111,8 @@ export const useClients = (currentUser: User | null) => {
         'CREATE',
         client.status === 'Lead' ? 'LEAD' : 'CLIENT',
         docRef.id,
-        `Added new ${client.status === 'Lead' ? 'lead' : 'client'}: ${client.name}`
+        `Added new ${client.status === 'Lead' ? 'lead' : 'client'}: ${client.name}`,
+        currentUser?.name
       );
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'clients');
@@ -201,7 +202,7 @@ export const useClients = (currentUser: User | null) => {
       await batch.commit();
     }
 
-    await addAuditLog('CREATE', 'CLIENT', 'bulk', `Bulk imported ${successCount} clients/leads`);
+    await addAuditLog('CREATE', 'CLIENT', 'bulk', `Bulk imported ${successCount} clients/leads`, currentUser?.name);
     return { success: successCount, failed: failedCount, errors };
   };
 
@@ -216,7 +217,7 @@ export const useClients = (currentUser: User | null) => {
       }
       await updateDoc(doc(db, 'clients', id), cleanData(updateData));
       const clientName = baseClients.find(c => c.id === id)?.name || id;
-      addAuditLog('UPDATE', 'CLIENT', id, `Updated client/lead: ${clientName}`);
+      addAuditLog('UPDATE', 'CLIENT', id, `Updated client/lead: ${clientName}`, currentUser?.name);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `clients/${id}`);
     }
@@ -226,7 +227,7 @@ export const useClients = (currentUser: User | null) => {
     try {
       const clientName = clients.find(c => c.id === id)?.name || id;
       await deleteDoc(doc(db, 'clients', id));
-      await addAuditLog('DELETE', 'CLIENT', id, `Deleted client/lead: ${clientName}`);
+      await addAuditLog('DELETE', 'CLIENT', id, `Deleted client/lead: ${clientName}`, currentUser?.name);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `clients/${id}`);
     }
@@ -246,7 +247,7 @@ export const useClients = (currentUser: User | null) => {
         }
       }
       if (count > 0) await batch.commit();
-      await addAuditLog('DELETE', 'CLIENT', 'bulk', `Deleted ${ids.length} clients/leads`);
+      await addAuditLog('DELETE', 'CLIENT', 'bulk', `Deleted ${ids.length} clients/leads`, currentUser?.name);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, 'clients/bulk');
     }

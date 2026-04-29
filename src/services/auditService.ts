@@ -9,7 +9,8 @@ export const addAuditLog = async (
   action: AuditLog['action'], 
   entityType: AuditLog['entityType'], 
   entityId: string, 
-  details: string
+  details: string,
+  userName?: string
 ): Promise<void> => {
   const currentUser = auth.currentUser;
   if (!currentUser) return;
@@ -17,6 +18,7 @@ export const addAuditLog = async (
   try {
     await addDoc(collection(db, 'auditLogs'), {
       userId: currentUser.uid as UserId,
+      userName: userName || currentUser.displayName || undefined,
       action,
       entityType,
       entityId,

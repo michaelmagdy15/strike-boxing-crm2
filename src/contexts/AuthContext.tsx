@@ -20,9 +20,12 @@ import * as userService from '../services/userService';
 interface AuthContextType {
   currentUser: User | null;
   users: User[];
+  allUsers: User[];
   login: () => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (id: UserId, updates: Partial<User>) => Promise<void>;
+  refreshUserData: () => Promise<void>;
+  updateBranding: (updates: Partial<BrandingSettings>) => Promise<void>;
   deleteUser: (id: UserId) => Promise<void>;
   inviteUser: (email: string, role: UserRole, displayName?: string) => Promise<void>;
   isAuthReady: boolean;
@@ -37,6 +40,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [branding, setBranding] = useState<BrandingSettings>({ logoUrl: '', primaryColor: '#000000' });
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [previewRole, setPreviewRole] = useState<UserRole | null>(null);
 
@@ -180,6 +185,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           emailMap.set(emailKey, { user, hasStoredId });
         }
       });
+      setAllUsers(allUsers.map(e => e.user));
       setUsers(Array.from(emailMap.values()).map(e => e.user));
     }, (error) => console.error('Firestore Error (users):', error));
     return () => unsubUsers();
@@ -187,6 +193,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async () => { await signInWithGoogle(); };
   const logout = async () => { await logOut(); };
+  const refreshUserData = async () => {};
+  const updateBranding = async (updates: Partial<BrandingSettings>) => {};
 
   const updateUser = async (id: UserId, updates: Partial<User>) => {
     const currentName = users.find(u => u.id === id)?.name;
@@ -209,9 +217,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const value = useMemo(() => ({
     currentUser: currentUser ? { ...currentUser, role: effectiveRole || currentUser.role } : null,
     users,
+    allUsers,
     login,
     logout,
     updateUser,
+    refreshUserData,
+    updateBranding,
     deleteUser,
     inviteUser,
     isAuthReady,

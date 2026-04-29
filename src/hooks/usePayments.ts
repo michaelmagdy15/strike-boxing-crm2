@@ -46,7 +46,7 @@ export const usePayments = ({ currentUser, clients, canDeletePayments }: UsePaym
       };
 
       const docRef = await addDoc(collection(db, 'payments'), cleanData(paymentData));
-      await addAuditLog('CREATE', 'PAYMENT', docRef.id, `Recorded payment of ${payment.amount} LE for ${clientName}`);
+      await addAuditLog('CREATE', 'PAYMENT', docRef.id, `Recorded payment of ${payment.amount} LE for ${clientName}`, currentUser?.name);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'payments');
     }
@@ -64,7 +64,7 @@ export const usePayments = ({ currentUser, clients, canDeletePayments }: UsePaym
       const amount = payment?.amount || 'unknown';
 
       await deleteDoc(doc(db, 'payments', id));
-      await addAuditLog('DELETE', 'PAYMENT', id, `Deleted payment of ${amount} LE for ${clientName}`);
+      await addAuditLog('DELETE', 'PAYMENT', id, `Deleted payment of ${amount} LE for ${clientName}`, currentUser?.name);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `payments/${id}`);
     }
@@ -79,7 +79,7 @@ export const usePayments = ({ currentUser, clients, canDeletePayments }: UsePaym
         : id;
 
       await updateDoc(doc(db, 'payments', id), cleanData(updates));
-      await addAuditLog('UPDATE', 'PAYMENT', id, `Updated payment for ${clientName}`);
+      await addAuditLog('UPDATE', 'PAYMENT', id, `Updated payment for ${clientName}`, currentUser?.name);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `payments/${id}`);
     }

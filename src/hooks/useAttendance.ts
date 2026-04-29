@@ -58,7 +58,7 @@ export const useAttendance = (currentUser: User | null, clients: Client[]) => {
         });
       }
 
-      await addAuditLog('CREATE', 'ATTENDANCE', clientId, `Attendance: ${client.name} at ${branch}`);
+      await addAuditLog('CREATE', 'ATTENDANCE', clientId, `Attendance: ${client.name} at ${branch}`, currentUser?.name);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'attendance');
     }

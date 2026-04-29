@@ -82,6 +82,7 @@ export interface InteractionLog {
 export interface AuditLog {
   id: string;
   userId: string;
+  userName?: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE';
   entityType: 'CLIENT' | 'PAYMENT' | 'PACKAGE_RECORD' | 'LEAD' | 'TARGET' | 'ATTENDANCE' | 'COACH' | 'SYSTEM' | 'BRANCH' | 'SESSION';
   entityId: string;
