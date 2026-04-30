@@ -2,7 +2,7 @@ import { PDFDocument } from 'pdf-lib';
 import { Client } from '../types';
 import { format } from 'date-fns';
 
-export const generateClientContract = async (client: Client) => {
+export const generateClientContract = async (client: Client, paymentAmount?: number, paymentMethod?: string) => {
   try {
     // 1. Fetch the existing PDF from the public folder
     const url = '/STRIKE Client Contract form.pdf';
@@ -35,11 +35,14 @@ export const generateClientContract = async (client: Client) => {
     setFieldSafely('text_2dukr', client.phone || '');
     
     // text_3pbmr -> Amount
-    // We don't have the exact transaction amount here, but we can leave it blank for them to write, 
-    // or calculate total paid. We'll leave it blank or put a placeholder if we don't have it.
-    // For now, we'll try to find active package price if needed, but it's better to let them fill it or leave blank
+    if (paymentAmount !== undefined) {
+      setFieldSafely('text_3pbmr', paymentAmount.toString());
+    }
     
-    // text_4venp -> Type of payment (Leave blank for manual fill)
+    // text_4venp -> Type of payment
+    if (paymentMethod) {
+      setFieldSafely('text_4venp', paymentMethod);
+    }
     
     // text_5inc -> Start Date
     setFieldSafely('text_5inc', client.startDate ? format(new Date(client.startDate), 'dd/MM/yyyy') : format(new Date(), 'dd/MM/yyyy'));

@@ -592,7 +592,13 @@ export default function Clients() {
                           <Button variant="outline" size="sm" className="w-full" onClick={() => downloadQRCode(client.memberId || client.id, client.name)}>
                             <Download className="mr-2 h-4 w-4" />Download QR
                           </Button>
-                          <Button variant="outline" size="sm" className="w-full text-blue-600 border-blue-200 hover:bg-blue-50" onClick={() => generateClientContract(client)}>
+                          <Button variant="outline" size="sm" className="w-full text-blue-600 border-blue-200 hover:bg-blue-50" onClick={() => {
+                            const clientPayments = payments.filter(p => p.clientId === client.id);
+                            const latestPayment = clientPayments.length > 0 
+                              ? clientPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+                              : null;
+                            generateClientContract(client, latestPayment?.amount, latestPayment?.method);
+                          }}>
                             <FileText className="mr-2 h-4 w-4" />Generate Contract
                           </Button>
                         </div>
@@ -714,7 +720,13 @@ export default function Clients() {
               )}
               <TableCell>
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700" title="Generate Contract" onClick={() => generateClientContract(client)}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700" title="Generate Contract" onClick={() => {
+                    const clientPayments = payments.filter(p => p.clientId === client.id);
+                    const latestPayment = clientPayments.length > 0 
+                      ? clientPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+                      : null;
+                    generateClientContract(client, latestPayment?.amount, latestPayment?.method);
+                  }}>
                     <FileText className="h-4 w-4" />
                   </Button>
                   <Dialog onOpenChange={(open) => {
