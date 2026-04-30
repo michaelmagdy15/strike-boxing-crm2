@@ -9,7 +9,39 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAppContext } from './context';
 import { SALES_NAME_MAPPING } from './constants';
+import { resolveUserDisplay } from './utils/resolveUserDisplay';
 import { differenceInDays, isSameDay, parseISO, isAfter, isBefore, addDays, subDays, subMonths, startOfMonth, endOfMonth, isWithinInterval, format } from 'date-fns';
+
+const PRIVATE_PACKAGES = [
+  'drop session pt', 
+  '30 s pt',
+  '20 s pt',
+  '10 s pt'
+];
+
+const GROUP_PACKAGES = [
+  '6 month',
+  '10s gt (adult)',
+  '10s gt (kids/juniors)',
+  '20s gt (adult)',
+  '20s gt (kids/juniors)',
+  '30 s gt (adult)',
+  '30 s gt (kids/juniors)',
+  '5 s gt (adult)',
+  'drop session gt'
+];
+
+export const isPrivatePackage = (pkg: string) => {
+  if (!pkg) return false;
+  const lower = pkg.toLowerCase().trim();
+  return PRIVATE_PACKAGES.includes(lower) || /\bpt\b/i.test(pkg) || lower.includes('private');
+};
+
+export const isGroupPackage = (pkg: string) => {
+  if (!pkg) return false;
+  const lower = pkg.toLowerCase().trim();
+  return GROUP_PACKAGES.includes(lower) || lower.includes('group') || lower.includes('gt');
+};
 import { Target, Users, CalendarDays, AlertTriangle, Gift, Settings, ChevronLeft, ChevronRight, Trophy, Download, ArrowUpDown, UserCheck } from 'lucide-react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import OnlineUsers from './components/OnlineUsers';
@@ -98,31 +130,34 @@ export default function Dashboard() {
     if (payment.sales_rep_id && payment.sales_rep_id === repId) return true;
 
     // 2. Canonical name match on payment fields (some legacy data)
-    const salesName = (payment.salesName || payment.assigned_sales_name || '').trim();
+    const resolvedSalesName = resolveUserDisplay(payment.salesName, users, payment.salesName || '');
+    const salesName = (resolvedSalesName || payment.assigned_sales_name || '').trim();
     if (salesName) {
       const canonicalSalesName = getCanonicalName(salesName);
       const canonicalRep = getCanonicalName(repName);
       if (canonicalSalesName === canonicalRep && canonicalSalesName !== '') return true;
     }
 
-    // 3. Transitive: look up the client and check their salesName/assignedTo.
-    // This is the critical path for imported data where sales_rep_id points to the
-    // importer (Michael Mitry) but the client record has the correct salesName.
-    const client = clientMap.get(payment.clientId);
-    if (client) {
-      // 3a. Direct ID match on client assignedTo
-      if (client.assignedTo === repId) return true;
-      // 3b. Canonical name match on client salesName
-      const clientSalesName = (client.salesName || client.assignedTo || '').trim();
-      if (clientSalesName) {
-        const canonicalClientSales = getCanonicalName(clientSalesName);
-        const canonicalRep = getCanonicalName(repName);
-        if (canonicalClientSales === canonicalRep && canonicalClientSales !== '') return true;
+    // 3. Transitive fallback ONLY if payment has no explicit sales attribution.
+    // If it DOES have attribution but it didn't match the rep above, we must return false
+    // to prevent double counting (e.g. rep A recorded payment but rep B owns client).
+    if (!payment.sales_rep_id && !payment.salesName && !payment.assigned_sales_name) {
+      const client = clientMap.get(payment.clientId);
+      if (client) {
+        // 3a. Direct ID match on client assignedTo
+        if (client.assignedTo === repId) return true;
+        // 3b. Canonical name match on client salesName
+        const clientSalesName = (client.salesName || client.assignedTo || '').trim();
+        if (clientSalesName) {
+          const canonicalClientSales = getCanonicalName(clientSalesName);
+          const canonicalRep = getCanonicalName(repName);
+          if (canonicalClientSales === canonicalRep && canonicalClientSales !== '') return true;
+        }
       }
     }
 
     return false;
-  }, [clientMap, getCanonicalName]);
+  }, [clientMap, getCanonicalName, users]);
 
   const clients = React.useMemo(() => {
     let filtered = selectedBranch === 'all' ? allClients : allClients.filter(c => c.branch === selectedBranch);
@@ -268,14 +303,8 @@ export default function Dashboard() {
     }
 
     const currentAmount = relevantPayments.reduce((acc, p) => acc + p.amount, 0);
-    const privatePayments = relevantPayments.filter(p => 
-      /\bpt\b/i.test(p.packageType) || 
-      p.packageType.toLowerCase().includes('private')
-    );
-    const groupPayments = relevantPayments.filter(p => 
-      p.packageType.toLowerCase().includes('group') || 
-      p.packageType.toLowerCase().includes('gt')
-    );
+    const privatePayments = relevantPayments.filter(p => isPrivatePackage(p.packageType));
+    const groupPayments = relevantPayments.filter(p => isGroupPackage(p.packageType));
 
     const privateSessionsSold = privatePayments.length;
     const groupSessionsSold = groupPayments.length;
@@ -335,8 +364,8 @@ export default function Dashboard() {
       });
 
       const achievedAmount = monthPayments.reduce((sum, p) => sum + p.amount, 0);
-      const privateRevenue = monthPayments.filter(p => /private|pt/i.test(p.packageType)).reduce((s, p) => s + p.amount, 0);
-      const groupRevenue = monthPayments.filter(p => /group|gt/i.test(p.packageType)).reduce((s, p) => s + p.amount, 0);
+      const privateRevenue = monthPayments.filter(p => isPrivatePackage(p.packageType)).reduce((s, p) => s + p.amount, 0);
+      const groupRevenue = monthPayments.filter(p => isGroupPackage(p.packageType)).reduce((s, p) => s + p.amount, 0);
 
       return {
         month: format(date, 'MMM yy'),
@@ -403,8 +432,8 @@ export default function Dashboard() {
       const mp = payments.filter(p => isWithinInterval(parseISO(p.date), { start, end }));
       return {
         month: format(date, 'MMM yy'),
-        Private: mp.filter(p => /\bpt\b/i.test(p.packageType) || p.packageType.toLowerCase().includes('private')).length,
-        Group: mp.filter(p => p.packageType.toLowerCase().includes('group') || p.packageType.toLowerCase().includes('gt')).length,
+        Private: mp.filter(p => isPrivatePackage(p.packageType)).length,
+        Group: mp.filter(p => isGroupPackage(p.packageType)).length,
       };
     });
   }, [payments]);
