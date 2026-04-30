@@ -35,12 +35,14 @@ export const GROUP_PACKAGES = [
 
 export const isPrivatePackage = (packageType: string) => {
   if (!packageType) return false;
-  return PRIVATE_PACKAGES.includes(packageType.toLowerCase().trim());
+  const lower = packageType.toLowerCase().trim();
+  return PRIVATE_PACKAGES.includes(lower) || /\bpt\b/i.test(packageType) || lower.includes('private');
 };
 
 export const isGroupPackage = (packageType: string) => {
   if (!packageType) return false;
-  return GROUP_PACKAGES.includes(packageType.toLowerCase().trim());
+  const lower = packageType.toLowerCase().trim();
+  return GROUP_PACKAGES.includes(lower) || lower.includes('group') || lower.includes('gt');
 };
 
 interface UserPerformanceDialogProps {
@@ -231,32 +233,32 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
                 </div>
                 
                 <div className="border-t pt-2 mt-2 space-y-3">
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground block">Sessions Breakdown</span>
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground block">Packages Breakdown</span>
                   
                   <div className="flex justify-between items-start">
                     <div>
-                      <span className="text-xs text-muted-foreground block">Private Training</span>
+                      <span className="text-xs text-muted-foreground block">PT Packages</span>
                       <span className="text-base font-bold">
                         {selectedMonthData?.privateRevenue.toLocaleString()} <span className="text-[10px] font-normal">LE</span>
                       </span>
                     </div>
                     <div className="text-right">
                       <span className="text-xs font-semibold bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded">
-                        {selectedMonthData?.privateSessionsSold} sessions
+                        {selectedMonthData?.privateSessionsSold} packages
                       </span>
                     </div>
                   </div>
 
                   <div className="flex justify-between items-start">
                     <div>
-                      <span className="text-xs text-muted-foreground block">Group Training</span>
+                      <span className="text-xs text-muted-foreground block">Group Packages</span>
                       <span className="text-base font-bold">
                         {selectedMonthData?.groupRevenue.toLocaleString()} <span className="text-[10px] font-normal">LE</span>
                       </span>
                     </div>
                     <div className="text-right">
                       <span className="text-xs font-semibold bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded">
-                        {selectedMonthData?.groupSessionsSold} sessions
+                        {selectedMonthData?.groupSessionsSold} packages
                       </span>
                     </div>
                   </div>
