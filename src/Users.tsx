@@ -224,7 +224,7 @@ export default function Users() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      {user.role === 'rep' && (
+                      {(user.role === 'rep' || user.role === 'manager') && (
                         <Button
                           variant="ghost"
                           size="icon"

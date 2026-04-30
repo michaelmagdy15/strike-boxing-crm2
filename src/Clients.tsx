@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, Gift, Phone, Calendar, Download, Plus, Search, ArrowUpDown, QrCode, RefreshCw, User, Users, UserPlus, Copy, MessageSquare, Activity } from 'lucide-react';
+import { FileText, Trash2, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, Gift, Phone, Calendar, Download, Plus, Search, ArrowUpDown, QrCode, RefreshCw, User, Users, UserPlus, Copy, MessageSquare, Activity } from 'lucide-react';
 import { Client, InteractionType, InteractionOutcome } from './types';
 import { format, parseISO, isAfter, isBefore, addDays, subDays, differenceInDays } from 'date-fns';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -26,6 +26,7 @@ import ResyncPayments from './components/ResyncPayments';
 import { writeBatch, doc, collection } from 'firebase/firestore';
 import { db } from './firebase';
 import { cleanData } from './utils';
+import { generateClientContract } from './utils/pdfGenerator';
 
 // Migrate legacy packageType to new packages array format
 const migratePackageData = (client: Client, systemPackages: any[]): Partial<Client> => {
@@ -591,6 +592,9 @@ export default function Clients() {
                           <Button variant="outline" size="sm" className="w-full" onClick={() => downloadQRCode(client.memberId || client.id, client.name)}>
                             <Download className="mr-2 h-4 w-4" />Download QR
                           </Button>
+                          <Button variant="outline" size="sm" className="w-full text-blue-600 border-blue-200 hover:bg-blue-50" onClick={() => generateClientContract(client)}>
+                            <FileText className="mr-2 h-4 w-4" />Generate Contract
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -710,6 +714,9 @@ export default function Clients() {
               )}
               <TableCell>
                 <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700" title="Generate Contract" onClick={() => generateClientContract(client)}>
+                    <FileText className="h-4 w-4" />
+                  </Button>
                   <Dialog onOpenChange={(open) => {
                     if (open) {
                       loadClientDetails(client.id);

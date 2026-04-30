@@ -2,7 +2,6 @@ import { QRCodeSVG } from 'qrcode.react';
 import React, { useState, useDeferredValue, useRef, useEffect } from 'react';
 import { useAppContext } from './context';
 import { ASSIGNABLE_ROLES } from './constants';
-import { useClients } from './hooks/useClients';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -29,9 +28,9 @@ export default function Leads() {
     users,
     canAssignLeads,
     canDeleteRecords,
-    fetchClientDetails
+    fetchClientDetails,
+    clients, addClient, updateClient, deleteMultipleClients, deleteClient, addComment, addInteraction
   } = useAppContext();
-  const { clients, addClient, updateClient, deleteMultipleClients, deleteClient, addComment, addInteraction } = useClients(currentUser);
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [selectedLead, setSelectedLead] = useState<Client | null>(null);
   const [newComment, setNewComment] = useState('');

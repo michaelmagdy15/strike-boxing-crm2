@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { User, UserId, UserRole, isSuperAdmin, isAdmin } from '../types';
+import { User, UserId, UserRole, isSuperAdmin, isAdmin, BrandingSettings } from '../types';
 import { auth, db, signInWithGoogle, logOut } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { 
@@ -41,7 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [branding, setBranding] = useState<BrandingSettings>({ logoUrl: '', primaryColor: '#000000' });
+  const [branding, setBranding] = useState<BrandingSettings>({ companyName: '', logoUrl: '' });
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [previewRole, setPreviewRole] = useState<UserRole | null>(null);
 

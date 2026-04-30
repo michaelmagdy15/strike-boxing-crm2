@@ -32,7 +32,6 @@ function toCanonical(name: string): string {
   }
   return name.trim();
 }
-
 export default function Payments() {
   const { clients, users, updateClient, addClient, currentUser, branding, canDeletePayments, branches, processPaymentTransaction } = useAppContext();
   const { coaches } = useCoaches();
@@ -718,6 +717,44 @@ export default function Payments() {
                     />
                     <DollarSign className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                   </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Discount (Optional)</Label>
+                  <div className="flex gap-2">
+                    <Select value={discountType || 'none'} onValueChange={(v) => {
+                      if (v === 'none') {
+                        setDiscountType('');
+                        setDiscountValue('');
+                        setDiscountedAmount('');
+                      } else {
+                        setDiscountType(v as 'percentage' | 'amount');
+                      }
+                    }}>
+                      <SelectTrigger className="h-14 w-[140px] rounded-2xl bg-background/50 border-white/10 px-4 text-sm font-medium">
+                        <SelectValue placeholder="No Discount" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-2xl border-none shadow-2xl">
+                        <SelectItem value="none" className="rounded-xl py-3 px-4 italic">No Discount</SelectItem>
+                        <SelectItem value="percentage" className="rounded-xl py-3 px-4">Percent (%)</SelectItem>
+                        <SelectItem value="amount" className="rounded-xl py-3 px-4">Fixed (LE)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {discountType && (
+                      <div className="relative flex-1">
+                        <Input 
+                          type="number" 
+                          placeholder={discountType === 'percentage' ? "e.g. 15" : "e.g. 500"} 
+                          className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg font-bold text-amber-500"
+                          value={discountValue} 
+                          onChange={(e) => setDiscountValue(e.target.value)} 
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {discountedAmount && (
+                    <p className="text-xs font-semibold text-emerald-500 ml-1">Final Total: {discountedAmount} LE</p>
+                  )}
                 </div>
 
                 <div className="space-y-3">

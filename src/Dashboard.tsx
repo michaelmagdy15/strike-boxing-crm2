@@ -253,7 +253,7 @@ export default function Dashboard() {
   // Filtered statistics for rep performance view
   const selectedMonth = subMonths(now, selectedMonthOffset);
   const currentMonthStr = format(selectedMonth, 'yyyy-MM');
-  const reps = users.filter(u => u.role === 'rep' || (u.role as string) === 'sales_rep' || (u.role as string) === 'sales');
+  const reps = users.filter(u => u.role === 'rep' || (u.role as string) === 'sales_rep' || (u.role as string) === 'sales' || u.role === 'manager');
 
   
   const filteredSalesData = React.useMemo(() => {

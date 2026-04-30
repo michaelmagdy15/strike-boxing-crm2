@@ -1,7 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from './context';
-import { useClients } from './hooks/useClients';
-import { usePTSessions } from './hooks/usePTSessions';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
@@ -28,9 +26,7 @@ import {
 } from 'lucide-react';
 
 export default function PTPackages() {
-  const { currentUser, users } = useAppContext();
-  const { clients, updateClient } = useClients(currentUser);
-  const { ptPackageRecords, addPTPackageRecord, updatePTPackageRecord } = usePTSessions(currentUser, clients);
+  const { currentUser, users, clients, updateClient, ptPackageRecords, addPTPackageRecord, updatePTPackageRecord } = useAppContext();
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [isNewPackageOpen, setIsNewPackageOpen] = useState(false);
   const [newPackageClientId, setNewPackageClientId] = useState('');

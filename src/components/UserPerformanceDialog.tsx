@@ -12,7 +12,36 @@ import { Label } from '@/components/ui/label';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import { SALES_NAME_MAPPING } from '../constants';
+import { resolveUserDisplay } from '../utils/resolveUserDisplay';
 
+export const PRIVATE_PACKAGES = [
+  'drop session pt',
+  '30 s pt',
+  '20 s pt',
+  '10 s pt'
+];
+
+export const GROUP_PACKAGES = [
+  '6 month',
+  '10s gt (adult)',
+  '10s gt (kids/juniors)',
+  '20s gt (adult)',
+  '20s gt (kids/juniors)',
+  '30 s gt (adult)',
+  '30 s gt (kids/juniors)',
+  '5 s gt (adult)',
+  'drop session gt'
+];
+
+export const isPrivatePackage = (packageType: string) => {
+  if (!packageType) return false;
+  return PRIVATE_PACKAGES.includes(packageType.toLowerCase().trim());
+};
+
+export const isGroupPackage = (packageType: string) => {
+  if (!packageType) return false;
+  return GROUP_PACKAGES.includes(packageType.toLowerCase().trim());
+};
 
 interface UserPerformanceDialogProps {
   user: User;
@@ -21,7 +50,7 @@ interface UserPerformanceDialogProps {
 }
 
 export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformanceDialogProps) {
-  const { userTargets, updateUserTarget } = useAppContext();
+  const { userTargets, updateUserTarget, users } = useAppContext();
   const { currentUser } = useAuth();
   const { clients } = useClients(currentUser);
   const { payments } = usePayments({ currentUser, clients, canDeletePayments: false });
@@ -79,29 +108,41 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
         }
 
         // Robust Attribution Logic (Matching Dashboard.tsx)
-        const normalizedRepName = (user.name || '').toLowerCase().trim();
-        // sales_rep_id is the single source of truth; recordedBy is excluded from attribution.
-        const isDirectMatch = p.sales_rep_id === user.id;
-        
-        // Client assignedTo may be a UUID or a raw name string from imports
-        const assignedTo = client?.assignedTo || '';
-        const resolvedAssignedName = (SALES_NAME_MAPPING[assignedTo] || assignedTo).toLowerCase().trim();
-        const isAssignedClient = assignedTo === user.id ||
-          resolvedAssignedName === normalizedRepName ||
-          assignedTo.toLowerCase().trim() === normalizedRepName;
-        
-        // salesName field match
-        const paymentSalesName = (p.salesName || '').trim();
-        const mappedName = paymentSalesName ? (SALES_NAME_MAPPING[paymentSalesName]?.toLowerCase() || paymentSalesName.toLowerCase()) : '';
-        const isNameMatch = paymentSalesName.length > 0 && (paymentSalesName.toLowerCase() === normalizedRepName || mappedName === normalizedRepName);
+        const getCanonicalName = (name: string) => {
+          if (!name) return '';
+          const trimmed = name.trim();
+          return (SALES_NAME_MAPPING[trimmed] || trimmed).toLowerCase();
+        };
 
-        return isDirectMatch || isAssignedClient || isNameMatch;
+        const canonicalRepName = getCanonicalName(user.name || '');
+
+        // 1. Direct ID match
+        if (p.sales_rep_id && p.sales_rep_id === user.id) return true;
+
+        // 2. Canonical name match on payment fields
+        const resolvedSalesName = resolveUserDisplay(p.salesName, users, p.salesName || '');
+        const salesName = (resolvedSalesName || '').trim();
+        if (salesName) {
+          const canonicalSalesName = getCanonicalName(salesName);
+          if (canonicalSalesName === canonicalRepName && canonicalSalesName !== '') return true;
+        }
+
+        // 3. Transitive fallback ONLY if payment has no explicit sales attribution
+        if (!p.sales_rep_id && !p.salesName) {
+          if (client) {
+            if (client.assignedTo === user.id) return true;
+            const canonicalAssigned = getCanonicalName(client.assignedTo || '');
+            if (canonicalAssigned === canonicalRepName && canonicalAssigned !== '') return true;
+          }
+        }
+
+        return false;
       });
 
 
       // Breakdown by session type
-      const privatePayments = monthPayments.filter(p => p.packageType.toLowerCase().includes('private') || p.packageType.toLowerCase().includes('pt'));
-      const groupPayments = monthPayments.filter(p => p.packageType.toLowerCase().includes('group') || p.packageType.toLowerCase().includes('gt'));
+      const privatePayments = monthPayments.filter(p => isPrivatePackage(p.packageType));
+      const groupPayments = monthPayments.filter(p => isGroupPackage(p.packageType));
 
       const privateRevenue = privatePayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
       const groupRevenue = groupPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
@@ -166,9 +207,9 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
                 <h4 className="font-semibold text-sm">Selected Month Status</h4>
                 {selectedMonthData && selectedMonthData.targetAmount > 0 && (
                   selectedMonthData.isTargetMet ? (
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Γ£ô Target Met</span>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">✓ Target Met</span>
                   ) : (
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Γ£ù Below Target</span>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">✕ Below Target</span>
                   )
                 )}
               </div>

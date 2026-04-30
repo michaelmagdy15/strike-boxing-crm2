@@ -1,10 +1,7 @@
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useAuth } from './contexts/AuthContext';
-import { useClients } from './hooks/useClients';
-import { usePayments } from './hooks/usePayments';
-import { useAttendance } from './hooks/useAttendance';
+import { useAppContext } from './context';
 import {
   format,
   parseISO,
@@ -95,10 +92,7 @@ const CustomTooltipRetention = ({ active, payload, label }: any) => {
 };
 
 export default function Reports() {
-  const { currentUser } = useAuth();
-  const { clients } = useClients(currentUser);
-  const { payments } = usePayments({ currentUser, clients, canDeletePayments: false });
-  const { attendances } = useAttendance(currentUser, clients);
+  const { clients, payments, attendances } = useAppContext();
   const now = new Date();
 
   const exportToCSV = (data: any[], filename: string) => {

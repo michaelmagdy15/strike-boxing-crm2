@@ -1,8 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useAppContext } from './context';
 import { usePackages } from './hooks/usePackages';
-import { useClients } from './hooks/useClients';
-import { useImportBatches } from './hooks/useImportBatches';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -21,9 +19,7 @@ interface ImportDataProps {
 }
 
 export default function ImportData({ type }: ImportDataProps) {
-  const { bulkAddPayments, currentUser, users } = useAppContext();
-  const { addClient, bulkAddClients } = useClients(currentUser);
-  const { addImportBatch } = useImportBatches(currentUser, [], []);
+  const { bulkAddPayments, currentUser, users, addClient, bulkAddClients, addImportBatch } = useAppContext();
   const { packages } = usePackages();
   const [isOpen, setIsOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
