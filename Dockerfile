@@ -8,7 +8,8 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install all dependencies (including devDependencies needed for build)
-RUN npm install
+# Using npm ci with retries to mitigate ECONNRESET network issues in Cloud Build
+RUN npm config set fetch-retry-maxtimeout 6000000 && npm config set fetch-retry-mintimeout 10000 && npm ci || npm ci
 
 # Copy the rest of the application code
 COPY . .
