@@ -110,8 +110,13 @@ export function UserPerformanceDialog({ user, isOpen, onClose }: UserPerformance
         // Robust Attribution Logic (Matching Dashboard.tsx)
         const getCanonicalName = (name: string) => {
           if (!name) return '';
-          const trimmed = name.trim();
-          return (SALES_NAME_MAPPING[trimmed] || trimmed).toLowerCase();
+          const trimmed = name.trim().toLowerCase();
+          for (const [key, value] of Object.entries(SALES_NAME_MAPPING)) {
+            if (key.toLowerCase() === trimmed) {
+              return value.toLowerCase().trim();
+            }
+          }
+          return trimmed;
         };
 
         const canonicalRepName = getCanonicalName(user.name || '');
