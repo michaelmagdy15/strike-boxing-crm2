@@ -995,13 +995,13 @@ export default function Leads() {
                                 <div className="grid grid-cols-2 gap-4 w-full">
                                   <div className="p-4 bg-background/50 rounded-2xl border border-white/5">
                                     <div className="text-2xl font-black text-primary">{lead.interactions?.length || 0}</div>
-                                    <div className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Total Logs</div>
+                                    <div className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Interactions</div>
                                   </div>
                                   <div className="p-4 bg-background/50 rounded-2xl border border-white/5">
                                     <div className="text-2xl font-black text-primary">
                                       {lead.lastContactDate ? differenceInDays(new Date(), parseISO(lead.lastContactDate)) : '∞'}
                                     </div>
-                                    <div className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Days Since</div>
+                                    <div className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Last Interacted</div>
                                   </div>
                                 </div>
                               </div>
@@ -1524,6 +1524,8 @@ export default function Leads() {
                   </Select>
                   <Label className="text-xs">Date <span className="text-destructive">*</span></Label>
                   <Input type="date" value={interactionDate} onChange={e => setInteractionDate(e.target.value)} className="h-9" />
+                  <Label className="text-xs">Follow-up Reminder (Optional)</Label>
+                  <Input type="date" value={nextFollowUpDate} onChange={e => setNextFollowUpDate(e.target.value)} className="h-9" />
                   <Label className="text-xs">Notes</Label>
                   <Textarea placeholder="Notes..." value={interactionNotes} onChange={e => setInteractionNotes(e.target.value)} className="min-h-[80px]" />
                   <Button className="w-full" onClick={handleAddInteraction}>Log Interaction</Button>
