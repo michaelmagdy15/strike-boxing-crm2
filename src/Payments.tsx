@@ -272,8 +272,20 @@ export default function Payments() {
     const salesRepId = salesRepUser ? salesRepUser.id : undefined;
 
     try {
-      const pkg = packages.find(p => p.name === packageType);
       const selectedClient = clients.find(c => c.id === clientId);
+
+      // Validation: Check for existing active packages with same type to prevent duplicates
+      const existingActivePackage = (selectedClient?.packages || []).find(
+        p => p.status === 'Active' && p.packageName === finalPackageType
+      );
+      if (existingActivePackage) {
+        setAlertTitle('Active Package Exists');
+        setAlertDescription(`Member "${selectedClient?.name}" already has an active "${finalPackageType}" package. Please upgrade from the Members tab or expire the existing package first.`);
+        setAlertOpen(true);
+        return;
+      }
+
+      const pkg = packages.find(p => p.name === packageType);
       const clientBranch = newClientBranch || selectedClient?.branch || '';
 
       await processPaymentTransaction({
@@ -305,7 +317,7 @@ export default function Payments() {
     } catch (error) {
       console.error('Error processing payment:', error);
       setAlertTitle('Error');
-      setAlertDescription('Failed to record payment. Please try again.');
+      setAlertDescription(error instanceof Error ? error.message : 'Failed to record payment. Please try again.');
       setAlertOpen(true);
       return;
     }

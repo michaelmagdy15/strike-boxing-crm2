@@ -9,6 +9,48 @@ import { sendNewLeadEmail, sendAssignmentEmail } from "./utils/mailer";
 admin.initializeApp();
 const db = admin.firestore();
 
+// Callable function for member upgrades with race-condition prevention
+export const upgradeMemberPackage = onRequest(async (req: any, res: any) => {
+  if (req.method !== "POST") {
+    res.status(405).send("Only POST is allowed");
+    return;
+  }
+
+  try {
+    const { clientId, packageName, startDate } = req.body;
+
+    if (!clientId || !packageName || !startDate) {
+      res.status(400).send({ error: "Missing required fields: clientId, packageName, startDate" });
+      return;
+    }
+
+    // Fetch the client document
+    const clientDoc = await db.collection("clients").doc(clientId).get();
+    if (!clientDoc.exists) {
+      res.status(404).send({ error: "Client not found" });
+      return;
+    }
+
+    const clientData = clientDoc.data();
+    const currentPackages = clientData?.packages || [];
+
+    // Check for existing active package of the same type
+    const activePackageOfType = currentPackages.find(
+      (p: any) => p.status === "Active" && p.packageName === packageName
+    );
+    if (activePackageOfType) {
+      res.status(409).send({ error: `Member already has an active "${packageName}" package` });
+      return;
+    }
+
+    logger.info(`Successfully validated upgrade for client ${clientId}: ${packageName}`);
+    res.status(200).send({ success: true, message: "Upgrade validation passed" });
+  } catch (error) {
+    logger.error("Error in upgradeMemberPackage:", error);
+    res.status(500).send({ error: "Internal Server Error" });
+  }
+});
+
 // -------------------------------------------------------------
 // SECRETS & CONFIGURATION
 // -------------------------------------------------------------

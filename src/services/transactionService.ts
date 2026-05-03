@@ -3,36 +3,62 @@ import { db } from '../firebase';
 import { cleanData } from '../utils';
 import { Payment, Package } from '../types';
 
+/**
+ * Transaction Service: Handles member package upgrades and payments
+ *
+ * UPGRADE FLOW (Option A - Preferred):
+ * 1. Member upgrade initiated from Members tab (Clients.tsx)
+ * 2. Calls processPaymentTransaction with isUpgradePayment: true
+ * 3. Creates payment record with isUpgradePayment flag
+ * 4. Expires previous active package and creates new active package
+ * 5. Uses batch write for atomicity to prevent race conditions
+ *
+ * MANUAL PAYMENT FLOW:
+ * 1. Payment manually added from Payments tab (Payments.tsx)
+ * 2. Calls processPaymentTransaction with isUpgradePayment: false (default)
+ * 3. Validates that no active package exists for the same type (prevents duplicates)
+ * 4. If validation fails, throws error - user must upgrade from Members tab or expire existing package
+ *
+ * KEY DIFFERENCES:
+ * - isUpgradePayment=true: Skips duplicate validation (replaces existing package)
+ * - isUpgradePayment=false: Validates no existing active package of same type
+ *
+ * PAYMENT FIELDS TRACKING:
+ * - isUpgradePayment: Indicates if payment resulted from Members tab upgrade
+ * - previousPackageName: Package being upgraded FROM (only set if isUpgradePayment=true)
+ */
+
 export interface PaymentTransactionParams {
   clientId: string;
   clientName: string;
   clientBranch?: string;
   clientStatus?: string;
   clientPackages?: any[];
-  
+
   amount: number;
   method: Payment['method'];
   instapayRef?: string;
-  
+
   packageType: string;
   packageCategory: 'Private Training' | 'Group Training';
   coachName?: string;
   notes?: string;
-  
+
   sales_rep_id: string;
   salesName: string;
   recordedBy: string;
   recordedByName: string; // for the comment author
-  
+
   paymentDate: string; // ISO
   startDate: string; // ISO
   endDate?: string; // ISO
-  
+
   discountType?: 'percentage' | 'amount';
   discountValue?: number;
   discountedAmount?: number;
 
   isMemberOnHold?: boolean;
+  isUpgradePayment?: boolean; // True when payment is from Members tab upgrade (not manual Payments entry)
   systemPackage?: Package; // The matched package configuration, if any
   previousPackageName?: string;
 }
@@ -40,7 +66,15 @@ export interface PaymentTransactionParams {
 export const processPaymentTransaction = async (params: PaymentTransactionParams): Promise<void> => {
   const batch = writeBatch(db);
 
-  // 1. Payment Document
+  // 1. Validation: Prevent duplicate active packages if not an upgrade payment
+  if (!params.isUpgradePayment) {
+    const existingActivePackage = (params.clientPackages || []).find(p => p.status === 'Active' && p.packageName === params.packageType);
+    if (existingActivePackage) {
+      throw new Error(`Member already has an active "${params.packageType}" package. Please expire or replace the existing package first.`);
+    }
+  }
+
+  // 2. Payment Document
   const paymentRef = doc(collection(db, 'payments'));
   const paymentData: Partial<Payment> = {
     id: paymentRef.id,
@@ -62,6 +96,8 @@ export const processPaymentTransaction = async (params: PaymentTransactionParams
     discountType: params.discountType,
     discountValue: params.discountValue,
     discountedAmount: params.discountedAmount,
+    isUpgradePayment: params.isUpgradePayment || false,
+    previousPackageName: params.previousPackageName,
     created_at: new Date().toISOString(),
     deleted_at: null
   };

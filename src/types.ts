@@ -112,6 +112,8 @@ export interface Payment {
   discountType?: 'percentage' | 'amount'; // Type of discount
   discountValue?: number; // Discount percentage (0-100) or fixed amount
   discountedAmount?: number; // Final amount after discount
+  isUpgradePayment?: boolean; // True if this payment resulted from member upgrade (not manual entry)
+  previousPackageName?: string; // Package name before upgrade
   created_at: string; // ISO string
   deleted_at?: string | null; // ISO string (soft delete)
 }

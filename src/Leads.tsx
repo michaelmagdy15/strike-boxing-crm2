@@ -372,14 +372,17 @@ export default function Leads() {
     }
     setInteractionDateError('');
     if (selectedLead && currentUser) {
-      const newIA = {
+      const newIA: any = {
         type: interactionType,
         outcome: interactionOutcome,
         notes: interactionNotes,
         date: new Date(interactionDate).toISOString(),
-        nextFollowUp: nextFollowUpDate || undefined,
         author: currentUser.name || 'Admin'
       };
+
+      if (nextFollowUpDate) {
+        newIA.nextFollowUp = nextFollowUpDate;
+      }
       
       await addInteraction(selectedLead.id, newIA);
 
@@ -722,7 +725,30 @@ export default function Leads() {
                               <User className="h-4 w-4 text-primary" />
                               Lead Details
                             </h3>
-                            
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-8">
+                              <div className="space-y-2">
+                                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Name</Label>
+                                <Input
+                                  type="text"
+                                  className="w-full bg-background/50 border-white/5 rounded-xl h-12"
+                                  defaultValue={lead.name}
+                                  onChange={(e) => updateClient(lead.id, { name: e.target.value })}
+                                  placeholder="Lead name"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Phone</Label>
+                                <Input
+                                  type="text"
+                                  className="w-full bg-background/50 border-white/5 rounded-xl h-12"
+                                  defaultValue={lead.phone}
+                                  onChange={(e) => updateClient(lead.id, { phone: e.target.value })}
+                                  placeholder="Phone number"
+                                />
+                              </div>
+                            </div>
+
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                               <div className="space-y-4">
                                 <div className="space-y-2">

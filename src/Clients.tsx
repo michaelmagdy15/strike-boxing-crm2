@@ -192,11 +192,12 @@ export default function Clients() {
         paymentDate: new Date(upgradeStartDate).toISOString(),
         startDate: new Date(upgradeStartDate).toISOString(),
         systemPackage: pkg,
-        previousPackageName: prevActive?.packageName || client.packageType
+        previousPackageName: prevActive?.packageName || client.packageType,
+        isUpgradePayment: true
       });
     } catch (error) {
       console.error("Error during upgrade transaction:", error);
-      alert("Failed to process upgrade. Please try again.");
+      alert(error instanceof Error ? error.message : "Failed to process upgrade. Please try again.");
     } finally {
       setUpgradeDialogClientId(null);
       setUpgradePkgName('');
