@@ -30,6 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { NotificationCenter } from './components/NotificationCenter';
+import BuildVersionFooter from './components/BuildVersionFooter';
 
 function AppContent() {
   const { currentUser, logout, isAuthReady, previewRole, setPreviewRole, searchQuery, setSearchQuery, branding, canAccessSettings, canViewGlobalDashboard, canDeletePayments, isManagerOrSama } = useAppContext();
@@ -524,6 +525,7 @@ export default function App() {
           <SettingsProvider>
             <AppProvider>
               <AppContent />
+              <BuildVersionFooter />
             </AppProvider>
           </SettingsProvider>
         </AuthProvider>
