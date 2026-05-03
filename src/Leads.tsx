@@ -31,6 +31,9 @@ export default function Leads() {
     fetchClientDetails,
     clients, addClient, updateClient, deleteMultipleClients, deleteClient, addComment, addInteraction
   } = useAppContext();
+
+  // Debounce timers for lead name/phone edits
+  const debounceTimers = useRef<{ [key: string]: NodeJS.Timeout }>({});
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [selectedLead, setSelectedLead] = useState<Client | null>(null);
   const [newComment, setNewComment] = useState('');
@@ -50,6 +53,22 @@ export default function Leads() {
     const details = await fetchClientDetails(leadId);
     setActiveLeadDetails({ leadId, ...details });
     setIsDetailsLoading(false);
+  };
+
+  // Debounced update handler to prevent excessive Firestore writes
+  const debouncedUpdate = (leadId: string, updates: any, delayMs = 500) => {
+    const key = `${leadId}-${Object.keys(updates)[0]}`;
+
+    // Clear existing timer
+    if (debounceTimers.current[key]) {
+      clearTimeout(debounceTimers.current[key]);
+    }
+
+    // Set new timer
+    debounceTimers.current[key] = setTimeout(() => {
+      updateClient(leadId, updates);
+      delete debounceTimers.current[key];
+    }, delayMs);
   };
   const [isNewLeadOpen, setIsNewLeadOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
@@ -733,7 +752,7 @@ export default function Leads() {
                                   type="text"
                                   className="w-full bg-background/50 border-white/5 rounded-xl h-12"
                                   defaultValue={lead.name}
-                                  onChange={(e) => updateClient(lead.id, { name: e.target.value })}
+                                  onChange={(e) => debouncedUpdate(lead.id, { name: e.target.value })}
                                   placeholder="Lead name"
                                 />
                               </div>
@@ -743,7 +762,7 @@ export default function Leads() {
                                   type="text"
                                   className="w-full bg-background/50 border-white/5 rounded-xl h-12"
                                   defaultValue={lead.phone}
-                                  onChange={(e) => updateClient(lead.id, { phone: e.target.value })}
+                                  onChange={(e) => debouncedUpdate(lead.id, { phone: e.target.value })}
                                   placeholder="Phone number"
                                 />
                               </div>
