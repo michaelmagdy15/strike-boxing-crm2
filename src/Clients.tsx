@@ -1,4 +1,4 @@
-import React, { useState, useDeferredValue } from 'react';
+import React, { useState, useDeferredValue, useRef } from 'react';
 import { useAppContext } from './context';
 import { ASSIGNABLE_ROLES } from './constants';
 import { usePackages } from './hooks/usePackages';
@@ -100,6 +100,19 @@ export default function Clients() {
 
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const deferredFilterBranch = useDeferredValue(filterBranch);
+
+  // Debounce timers for member name/phone updates
+  const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
+  const debouncedUpdate = (clientId: string, updates: any, delayMs = 500) => {
+    const key = `${clientId}-${Object.keys(updates)[0]}`;
+    if (debounceTimers.current[key]) {
+      clearTimeout(debounceTimers.current[key]);
+    }
+    debounceTimers.current[key] = setTimeout(() => {
+      updateClient(clientId, updates);
+      delete debounceTimers.current[key];
+    }, delayMs);
+  };
   const deferredFilterRep = useDeferredValue(filterRep);
   const deferredActiveTab = useDeferredValue(activeTab);
   const deferredSortBy = useDeferredValue(sortBy);
@@ -785,6 +798,26 @@ export default function Clients() {
                               <div className="space-y-4 p-4 rounded-xl border bg-muted/20">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Member Details</p>
                                 <div className="grid grid-cols-2 gap-3">
+                                  <div className="space-y-1 col-span-2">
+                                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Name</Label>
+                                    <Input
+                                      type="text"
+                                      className="h-9 text-sm bg-background rounded-lg"
+                                      defaultValue={client.name}
+                                      onChange={(e) => debouncedUpdate(client.id, { name: e.target.value })}
+                                      placeholder="Member name"
+                                    />
+                                  </div>
+                                  <div className="space-y-1 col-span-2">
+                                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Phone</Label>
+                                    <Input
+                                      type="text"
+                                      className="h-9 text-sm bg-background rounded-lg"
+                                      defaultValue={client.phone}
+                                      onChange={(e) => debouncedUpdate(client.id, { phone: e.target.value })}
+                                      placeholder="Phone number"
+                                    />
+                                  </div>
                                   <div className="space-y-1">
                                     <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Status</Label>
                                     <select
