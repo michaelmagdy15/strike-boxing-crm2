@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { format, parseISO, addDays } from 'date-fns';
 import { Payment } from './types';
 import { resolveUserDisplay } from './utils/resolveUserDisplay';
+import { toEgyptTime } from './utils';
 import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search, Trash2, ChevronLeft, ChevronRight, User, UserPlus } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog } from './components/AlertDialog';
@@ -422,7 +423,7 @@ export default function Payments() {
               <div class="label">Receipt No.</div>
               <div class="value">${payment.id.substring(0, 8).toUpperCase()}</div>
               <div class="label">Date</div>
-              <div class="value">${format(parseISO(payment.date), 'MMMM d, yyyy')}</div>
+              <div class="value">${format(toEgyptTime(payment.date), 'MMMM d, yyyy h:mm a')}</div>
               <div class="label">Payment Method</div>
               <div class="value">${payment.method} ${payment.instapayRef ? '(Ref: ' + payment.instapayRef + ')' : ''}</div>
             </div>
@@ -1067,14 +1068,14 @@ export default function Payments() {
                       <TableRow key={payment.id}>
                         <TableCell className="text-xs sm:text-sm">
                           <div className="font-medium">
-                            {format(parseISO(payment.date), 'MMM d')}
-                            {parseISO(payment.date).getFullYear() !== new Date().getFullYear() && (
+                            {format(toEgyptTime(payment.date), 'MMM d')}
+                            {toEgyptTime(payment.date).getFullYear() !== new Date().getFullYear() && (
                               <span className="text-[10px] text-amber-600 font-semibold ml-1">
-                                {parseISO(payment.date).getFullYear()}
+                                {toEgyptTime(payment.date).getFullYear()}
                               </span>
                             )}
                           </div>
-                          <div className="text-[10px] text-muted-foreground">{format(parseISO(payment.date), 'h:mm a')}</div>
+                          <div className="text-[10px] text-muted-foreground">{format(toEgyptTime(payment.date), 'h:mm a')}</div>
                         </TableCell>
                         <TableCell className="font-medium text-xs sm:text-sm">{client?.name || 'Unknown Client'}</TableCell>
                         <TableCell className="font-bold text-green-600 text-xs sm:text-sm">{payment.amount.toLocaleString()} LE</TableCell>
