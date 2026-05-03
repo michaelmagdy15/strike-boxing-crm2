@@ -2,6 +2,7 @@ import { writeBatch, doc, collection } from 'firebase/firestore';
 import { db } from '../firebase';
 import { cleanData } from '../utils';
 import { Payment, Package } from '../types';
+import { addAuditLog } from './auditService';
 
 /**
  * Transaction Service: Handles member package upgrades and payments
@@ -175,4 +176,12 @@ export const processPaymentTransaction = async (params: PaymentTransactionParams
   });
 
   await batch.commit();
+
+  // Log audit entry for payment creation/upgrade
+  const logAction = params.isUpgradePayment ? 'UPGRADE' : 'CREATE';
+  const logDetails = params.isUpgradePayment
+    ? `Upgraded "${params.previousPackageName}" → "${params.packageType}" for ${params.clientName} (+${params.amount.toLocaleString()} LE)`
+    : `Recorded payment of ${params.amount.toLocaleString()} LE for ${params.clientName} (${params.packageType})`;
+
+  await addAuditLog('CREATE', 'PAYMENT', params.clientId, logDetails, params.recordedByName);
 };
