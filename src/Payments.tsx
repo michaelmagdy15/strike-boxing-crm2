@@ -15,9 +15,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { format, parseISO, addDays } from 'date-fns';
 import { Payment } from './types';
 import { resolveUserDisplay } from './utils/resolveUserDisplay';
-import { toEgyptTime } from './utils';
+import { toEgyptTime, getEgyptDate } from './utils';
 import { holdPayment, releasePayment, getHoldStatusInfo } from './utils/holdUtils';
-import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search, Trash2, ChevronLeft, ChevronRight, User, UserPlus, Pause, Play } from 'lucide-react';
+import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search, Trash2, ChevronLeft, ChevronRight, User, UserPlus, Pause, Play, TrendingUp } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog } from './components/AlertDialog';
 
@@ -106,6 +106,14 @@ export default function Payments() {
   const [holdPaymentId, setHoldPaymentId] = useState<string | null>(null);
   const [holdReason, setHoldReason] = useState('');
   const [filterShowOnlyHeld, setFilterShowOnlyHeld] = useState(false);
+
+  // Upgrade feature state
+  const [isUpgradeDialogOpen, setIsUpgradeDialogOpen] = useState(false);
+  const [upgradePaymentId, setUpgradePaymentId] = useState<string | null>(null);
+  const [upgradePackageType, setUpgradePackageType] = useState('');
+  const [upgradeMethod, setUpgradeMethod] = useState<Payment['method']>('Cash');
+  const [upgradeInstapayRef, setUpgradeInstapayRef] = useState('');
+  const [upgradeStartDate, setUpgradeStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
@@ -396,6 +404,7 @@ export default function Payments() {
 
       await holdPayment(
         holdPaymentId,
+        payment.clientId,
         payment.client_name,
         holdReason,
         currentUser?.id || '',
@@ -407,7 +416,7 @@ export default function Payments() {
       setHoldReason('');
 
       setAlertTitle('Success');
-      setAlertDescription(`Payment for ${payment.client_name} has been placed on hold.`);
+      setAlertDescription(`Payment for ${payment.client_name} has been placed on hold. Member status updated to Hold.`);
       setAlertOpen(true);
     } catch (error) {
       console.error('Error holding payment:', error);
@@ -424,18 +433,80 @@ export default function Payments() {
 
       await releasePayment(
         paymentId,
+        payment.clientId,
         payment.client_name,
         currentUser?.id || '',
         currentUser?.name || ''
       );
 
       setAlertTitle('Success');
-      setAlertDescription(`Payment for ${payment.client_name} has been released from hold.`);
+      setAlertDescription(`Payment for ${payment.client_name} has been released from hold. Member status updated to Active.`);
       setAlertOpen(true);
     } catch (error) {
       console.error('Error releasing payment:', error);
       setAlertTitle('Error');
       setAlertDescription('Failed to release payment from hold.');
+      setAlertOpen(true);
+    }
+  };
+
+  const handleUpgradePackage = async () => {
+    if (!upgradePaymentId || !upgradePackageType) {
+      setAlertTitle('Missing Information');
+      setAlertDescription('Please select a package and date.');
+      setAlertOpen(true);
+      return;
+    }
+
+    try {
+      const payment = payments.find(p => p.id === upgradePaymentId);
+      const client = clients.find(c => c.id === payment?.clientId);
+      if (!payment || !client) return;
+
+      const pkg = packages.find(p => p.name === upgradePackageType);
+      if (!pkg) return;
+
+      const prevActive = (client.packages || []).find(p => p.status === 'Active');
+      const prevSysPkg = prevActive ? packages.find(p => p.name === prevActive.packageName) : null;
+      const priceDiff = prevSysPkg ? pkg.price - prevSysPkg.price : pkg.price;
+      const amountToPay = Math.max(0, priceDiff);
+
+      await processPaymentTransaction({
+        clientId: client.id,
+        clientName: client.name,
+        clientBranch: client.branch,
+        clientStatus: client.status,
+        clientPackages: client.packages,
+        amount: amountToPay,
+        method: upgradeMethod,
+        instapayRef: upgradeMethod === 'Instapay' ? upgradeInstapayRef : undefined,
+        packageType: pkg.name,
+        packageCategory: pkg.name.toLowerCase().includes('pt') || pkg.name.toLowerCase().includes('private') ? 'Private Training' : 'Group Training',
+        sales_rep_id: payment.sales_rep_id,
+        salesName: payment.salesName,
+        recordedBy: currentUser?.id || '',
+        recordedByName: currentUser?.name || '',
+        paymentDate: new Date(upgradeStartDate).toISOString(),
+        startDate: new Date(upgradeStartDate).toISOString(),
+        systemPackage: pkg,
+        previousPackageName: prevActive?.packageName || payment.packageType,
+        isUpgradePayment: true
+      });
+
+      setIsUpgradeDialogOpen(false);
+      setUpgradePaymentId(null);
+      setUpgradePackageType('');
+      setUpgradeMethod('Cash');
+      setUpgradeInstapayRef('');
+      setUpgradeStartDate(format(new Date(), 'yyyy-MM-dd'));
+
+      setAlertTitle('Success');
+      setAlertDescription(`${client.name} has been upgraded to ${pkg.name}. Payment of ${amountToPay} LE has been recorded.`);
+      setAlertOpen(true);
+    } catch (error) {
+      console.error('Error upgrading package:', error);
+      setAlertTitle('Error');
+      setAlertDescription(error instanceof Error ? error.message : 'Failed to upgrade package. Please try again.');
       setAlertOpen(true);
     }
   };
@@ -489,7 +560,7 @@ export default function Payments() {
               <div class="label">Receipt No.</div>
               <div class="value">${payment.id.substring(0, 8).toUpperCase()}</div>
               <div class="label">Date</div>
-              <div class="value">${format(toEgyptTime(payment.date), 'MMMM d, yyyy h:mm a')}</div>
+              <div class="value">${format(getEgyptDate(payment.date), 'MMMM d, yyyy h:mm a')}</div>
               <div class="label">Payment Method</div>
               <div class="value">${payment.method} ${payment.instapayRef ? '(Ref: ' + payment.instapayRef + ')' : ''}</div>
             </div>
@@ -1149,14 +1220,14 @@ export default function Payments() {
                       <TableRow key={payment.id}>
                         <TableCell className="text-xs sm:text-sm">
                           <div className="font-medium">
-                            {format(toEgyptTime(payment.date), 'MMM d')}
+                            {format(getEgyptDate(payment.date), 'MMM d')}
                             {toEgyptTime(payment.date).getFullYear() !== new Date().getFullYear() && (
                               <span className="text-[10px] text-amber-600 font-semibold ml-1">
                                 {toEgyptTime(payment.date).getFullYear()}
                               </span>
                             )}
                           </div>
-                          <div className="text-[10px] text-muted-foreground">{format(toEgyptTime(payment.date), 'h:mm a')}</div>
+                          <div className="text-[10px] text-muted-foreground">{format(getEgyptDate(payment.date), 'h:mm a')}</div>
                         </TableCell>
                         <TableCell className="font-medium text-xs sm:text-sm">
                           <div className="flex flex-col gap-1">
@@ -1219,6 +1290,93 @@ export default function Payments() {
                             <Button variant="ghost" size="sm" onClick={() => printInvoice(payment, client)} title="Print Invoice">
                               <Printer className="h-4 w-4" />
                             </Button>
+                            <Dialog open={isUpgradeDialogOpen && upgradePaymentId === payment.id} onOpenChange={(open) => {
+                              if (open) {
+                                setUpgradePaymentId(payment.id);
+                                setIsUpgradeDialogOpen(true);
+                                setUpgradePackageType('');
+                                setUpgradeMethod(payment.method || 'Cash');
+                                setUpgradeStartDate(format(new Date(), 'yyyy-MM-dd'));
+                              } else {
+                                setIsUpgradeDialogOpen(false);
+                                setUpgradePaymentId(null);
+                              }
+                            }}>
+                              <DialogTrigger render={<Button variant="ghost" size="sm" title="Upgrade Package" className="text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20" />}>
+                                <TrendingUp className="h-4 w-4" />
+                              </DialogTrigger>
+                              <DialogContent className="max-w-md">
+                                <DialogHeader>
+                                  <DialogTitle>Upgrade Package</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <p className="text-sm text-muted-foreground">
+                                    Upgrade <strong>{client?.name}</strong> from <strong>{payment.packageType}</strong> to a new package.
+                                  </p>
+                                  <div className="space-y-2">
+                                    <Label htmlFor="upgradePackage" className="text-sm font-semibold">New Package</Label>
+                                    <Select value={upgradePackageType} onValueChange={(v) => v && setUpgradePackageType(v)}>
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Select package" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {packages.map(pkg => (
+                                          <SelectItem key={pkg.id} value={pkg.name}>
+                                            {pkg.name} ({pkg.price} LE)
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-2">
+                                      <Label htmlFor="upgradeDate" className="text-sm font-semibold">Upgrade Date</Label>
+                                      <Input
+                                        id="upgradeDate"
+                                        type="date"
+                                        value={upgradeStartDate}
+                                        onChange={(e) => setUpgradeStartDate(e.target.value)}
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label htmlFor="upgradeMethod" className="text-sm font-semibold">Method</Label>
+                                      <Select value={upgradeMethod} onValueChange={(v) => v && setUpgradeMethod(v as Payment['method'])}>
+                                        <SelectTrigger>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="Cash">Cash</SelectItem>
+                                          <SelectItem value="Credit Card">Credit Card</SelectItem>
+                                          <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                                          <SelectItem value="Instapay">Instapay</SelectItem>
+                                          <SelectItem value="Other">Other</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
+                                  {upgradeMethod === 'Instapay' && (
+                                    <div className="space-y-2">
+                                      <Label htmlFor="upgradeInstapay" className="text-sm font-semibold">Instapay Ref (12 digits)</Label>
+                                      <Input
+                                        id="upgradeInstapay"
+                                        placeholder="123456789012"
+                                        maxLength={12}
+                                        value={upgradeInstapayRef}
+                                        onChange={(e) => setUpgradeInstapayRef(e.target.value.replace(/\D/g, ''))}
+                                      />
+                                    </div>
+                                  )}
+                                  <div className="flex gap-2 justify-end pt-4">
+                                    <Button variant="outline" onClick={() => setIsUpgradeDialogOpen(false)}>
+                                      Cancel
+                                    </Button>
+                                    <Button onClick={handleUpgradePackage} className="bg-blue-600 hover:bg-blue-700">
+                                      Process Upgrade
+                                    </Button>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
                             {['manager', 'super_admin', 'crm_admin'].includes(currentUser?.role || '') && (
                               <Dialog open={editingPaymentId === payment.id} onOpenChange={(open) => {
                                 if (open) {
