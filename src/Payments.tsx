@@ -16,7 +16,8 @@ import { format, parseISO, addDays } from 'date-fns';
 import { Payment } from './types';
 import { resolveUserDisplay } from './utils/resolveUserDisplay';
 import { toEgyptTime } from './utils';
-import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search, Trash2, ChevronLeft, ChevronRight, User, UserPlus } from 'lucide-react';
+import { holdPayment, releasePayment, getHoldStatusInfo } from './utils/holdUtils';
+import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search, Trash2, ChevronLeft, ChevronRight, User, UserPlus, Pause, Play } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog } from './components/AlertDialog';
 
@@ -99,6 +100,12 @@ export default function Payments() {
   const [discountValue, setDiscountValue] = useState('');
   const [discountedAmount, setDiscountedAmount] = useState('');
   const [isMemberOnHold, setIsMemberOnHold] = useState(false);
+
+  // Hold feature state
+  const [isHoldDialogOpen, setIsHoldDialogOpen] = useState(false);
+  const [holdPaymentId, setHoldPaymentId] = useState<string | null>(null);
+  const [holdReason, setHoldReason] = useState('');
+  const [filterShowOnlyHeld, setFilterShowOnlyHeld] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
@@ -374,6 +381,65 @@ export default function Payments() {
       setDiscountedAmount('');
       setIsMemberOnHold(false);
   };
+
+  const handleHoldPayment = async () => {
+    if (!holdPaymentId || !holdReason.trim()) {
+      setAlertTitle('Missing Information');
+      setAlertDescription('Please provide a reason for holding the payment.');
+      setAlertOpen(true);
+      return;
+    }
+
+    try {
+      const payment = payments.find(p => p.id === holdPaymentId);
+      if (!payment) return;
+
+      await holdPayment(
+        holdPaymentId,
+        payment.client_name,
+        holdReason,
+        currentUser?.id || '',
+        currentUser?.name || ''
+      );
+
+      setIsHoldDialogOpen(false);
+      setHoldPaymentId(null);
+      setHoldReason('');
+
+      setAlertTitle('Success');
+      setAlertDescription(`Payment for ${payment.client_name} has been placed on hold.`);
+      setAlertOpen(true);
+    } catch (error) {
+      console.error('Error holding payment:', error);
+      setAlertTitle('Error');
+      setAlertDescription('Failed to place payment on hold.');
+      setAlertOpen(true);
+    }
+  };
+
+  const handleReleasePayment = async (paymentId: string) => {
+    try {
+      const payment = payments.find(p => p.id === paymentId);
+      if (!payment) return;
+
+      await releasePayment(
+        paymentId,
+        payment.client_name,
+        currentUser?.id || '',
+        currentUser?.name || ''
+      );
+
+      setAlertTitle('Success');
+      setAlertDescription(`Payment for ${payment.client_name} has been released from hold.`);
+      setAlertOpen(true);
+    } catch (error) {
+      console.error('Error releasing payment:', error);
+      setAlertTitle('Error');
+      setAlertDescription('Failed to release payment from hold.');
+      setAlertOpen(true);
+    }
+  };
+
   const printInvoice = (payment: Payment, client: any) => {
     const win = window.open('', '_blank');
     if (!win) {
@@ -483,6 +549,7 @@ export default function Payments() {
   const deferredFilterDateFrom = React.useDeferredValue(filterDateFrom);
   const deferredFilterDateTo = React.useDeferredValue(filterDateTo);
   const deferredSortConfig = React.useDeferredValue(sortConfig);
+  const deferredFilterShowOnlyHeld = React.useDeferredValue(filterShowOnlyHeld);
 
   const filteredPayments = React.useMemo(() => {
     const clientMap = new Map();
@@ -537,6 +604,9 @@ export default function Payments() {
         if (payment.date.substring(0, 10) > deferredFilterDateTo) return false;
       }
 
+      // Hold filter
+      if (deferredFilterShowOnlyHeld && !payment.isOnHold) return false;
+
       return true;
     });
 
@@ -554,7 +624,7 @@ export default function Payments() {
     });
 
     return result;
-  }, [payments, clients, deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, deferredFilterDateFrom, deferredFilterDateTo, deferredSortConfig, isRep, currentUser, filterSalesName]);
+  }, [payments, clients, deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, deferredFilterDateFrom, deferredFilterDateTo, deferredSortConfig, isRep, currentUser, filterSalesName, deferredFilterShowOnlyHeld]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1021,7 +1091,7 @@ export default function Payments() {
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs font-semibold text-muted-foreground ml-1">Sort By</Label>
-          <select 
+          <select
             className="flex h-11 w-full items-center justify-between rounded-md bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 border-none"
             value={`${sortConfig.key}-${sortConfig.direction}`}
             onChange={(e) => {
@@ -1034,6 +1104,17 @@ export default function Payments() {
             <option value="amount-desc">Amount (High to Low)</option>
             <option value="amount-asc">Amount (Low to High)</option>
           </select>
+        </div>
+
+        <div className="flex items-center gap-3 xl:col-span-1">
+          <Checkbox
+            id="filterHeld"
+            checked={filterShowOnlyHeld}
+            onCheckedChange={(checked) => setFilterShowOnlyHeld(checked as boolean)}
+          />
+          <Label htmlFor="filterHeld" className="text-xs font-semibold text-muted-foreground cursor-pointer">
+            Show Only Held
+          </Label>
         </div>
       </div>
 
@@ -1077,7 +1158,21 @@ export default function Payments() {
                           </div>
                           <div className="text-[10px] text-muted-foreground">{format(toEgyptTime(payment.date), 'h:mm a')}</div>
                         </TableCell>
-                        <TableCell className="font-medium text-xs sm:text-sm">{client?.name || 'Unknown Client'}</TableCell>
+                        <TableCell className="font-medium text-xs sm:text-sm">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <span>{client?.name || 'Unknown Client'}</span>
+                              {payment.isOnHold && (
+                                <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white text-[10px]" title={payment.holdReason || 'On hold'}>
+                                  HOLD
+                                </Badge>
+                              )}
+                            </div>
+                            {payment.isOnHold && payment.holdReason && (
+                              <span className="text-[10px] text-amber-600 dark:text-amber-400">{payment.holdReason}</span>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="font-bold text-green-600 text-xs sm:text-sm">{payment.amount.toLocaleString()} LE</TableCell>
                         <TableCell className="hidden sm:table-cell">
                           <Badge variant="secondary" className="text-[10px]">
@@ -1267,6 +1362,61 @@ export default function Payments() {
                                   </div>
                                 </DialogContent>
                               </Dialog>
+                            )}
+                            {!payment.isOnHold ? (
+                              <Dialog open={isHoldDialogOpen && holdPaymentId === payment.id} onOpenChange={(open) => {
+                                if (open) {
+                                  setHoldPaymentId(payment.id);
+                                  setIsHoldDialogOpen(true);
+                                  setHoldReason('');
+                                } else {
+                                  setIsHoldDialogOpen(false);
+                                  setHoldPaymentId(null);
+                                  setHoldReason('');
+                                }
+                              }}>
+                                <DialogTrigger render={<Button variant="ghost" size="sm" title="Hold Payment" className="text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" />}>
+                                  <Pause className="h-4 w-4" />
+                                </DialogTrigger>
+                                <DialogContent className="max-w-md">
+                                  <DialogHeader>
+                                    <DialogTitle>Hold Payment</DialogTitle>
+                                  </DialogHeader>
+                                  <div className="space-y-4">
+                                    <p className="text-sm text-muted-foreground">
+                                      Place payment for <strong>{client?.name}</strong> on hold.
+                                    </p>
+                                    <div className="space-y-2">
+                                      <Label htmlFor="holdReason" className="text-sm font-semibold">Reason for Hold</Label>
+                                      <Input
+                                        id="holdReason"
+                                        placeholder="e.g., Pending verification, Customer requested..."
+                                        value={holdReason}
+                                        onChange={(e) => setHoldReason(e.target.value)}
+                                        className="rounded-lg"
+                                      />
+                                    </div>
+                                    <div className="flex gap-2 justify-end pt-4">
+                                      <Button variant="outline" onClick={() => setIsHoldDialogOpen(false)}>
+                                        Cancel
+                                      </Button>
+                                      <Button onClick={handleHoldPayment} className="bg-amber-600 hover:bg-amber-700">
+                                        Confirm Hold
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                                onClick={() => handleReleasePayment(payment.id)}
+                                title="Release Payment from Hold"
+                              >
+                                <Play className="h-4 w-4" />
+                              </Button>
                             )}
                             {canDeletePayment && (
                               <Button

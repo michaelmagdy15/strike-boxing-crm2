@@ -114,6 +114,10 @@ export interface Payment {
   discountedAmount?: number; // Final amount after discount
   isUpgradePayment?: boolean; // True if this payment resulted from member upgrade (not manual entry)
   previousPackageName?: string; // Package name before upgrade
+  isOnHold?: boolean; // True if payment/package is temporarily paused
+  holdReason?: string; // Reason for holding the payment/package
+  holdDate?: string; // ISO string - when the hold was placed
+  heldBy?: string; // userId - who placed the hold
   created_at: string; // ISO string
   deleted_at?: string | null; // ISO string (soft delete)
 }
@@ -165,6 +169,9 @@ export interface ClientPackage {
   sessionsTotal?: number;
   sessionsRemaining?: number;
   status: 'Active' | 'Expired' | 'Cancelled' | 'Pending';
+  isOnHold?: boolean; // True if package is temporarily paused
+  holdReason?: string; // Reason for holding the package
+  holdDate?: string; // ISO string - when the hold was placed
 }
 
 export interface Attendance {
