@@ -231,12 +231,39 @@ export default function Payments() {
 
   const handleAddPayment = async () => {
     const finalPackageType = packageType === 'Custom' ? customPackage : packageType;
-    
+
     if (!clientId || !amount || !finalPackageType) {
       setAlertTitle('Missing Information');
       setAlertDescription('Please select a client, enter an amount, and select a package type.');
       setAlertOpen(true);
       return;
+    }
+
+    if (!paymentDate || !startDate) {
+      setAlertTitle('Missing Information');
+      setAlertDescription('Please select both payment date and start date.');
+      setAlertOpen(true);
+      return;
+    }
+
+    // Validate dates can be parsed
+    const paymentDateObj = new Date(paymentDate);
+    const startDateObj = new Date(startDate);
+    if (isNaN(paymentDateObj.getTime()) || isNaN(startDateObj.getTime())) {
+      setAlertTitle('Invalid Date');
+      setAlertDescription('Please enter valid dates for payment and start dates.');
+      setAlertOpen(true);
+      return;
+    }
+
+    if (endDate) {
+      const endDateObj = new Date(endDate);
+      if (isNaN(endDateObj.getTime())) {
+        setAlertTitle('Invalid Date');
+        setAlertDescription('Please enter a valid end date.');
+        setAlertOpen(true);
+        return;
+      }
     }
 
     const parsedAmount = parseFloat(amount);
