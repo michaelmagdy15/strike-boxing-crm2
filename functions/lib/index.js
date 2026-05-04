@@ -33,20 +33,78 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onPaymentUpdated = exports.onClientAssigned = exports.onLeadCreated = exports.metaWebhook = void 0;
+exports.onPaymentUpdated = exports.onClientAssigned = exports.onLeadCreated = exports.metaWebhook = exports.sendTestSms = exports.upgradeMemberPackage = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const params_1 = require("firebase-functions/params");
 const logger = __importStar(require("firebase-functions/logger"));
 const admin = __importStar(require("firebase-admin"));
 const mailer_1 = require("./utils/mailer");
+const smsService_1 = require("./utils/smsService");
 // Initialize Firebase Admin for Firestore access
 admin.initializeApp();
 const db = admin.firestore();
+// Callable function for member upgrades with race-condition prevention
+exports.upgradeMemberPackage = (0, https_1.onRequest)(async (req, res) => {
+    if (req.method !== "POST") {
+        res.status(405).send("Only POST is allowed");
+        return;
+    }
+    try {
+        const { clientId, packageName, startDate } = req.body;
+        if (!clientId || !packageName || !startDate) {
+            res.status(400).send({ error: "Missing required fields: clientId, packageName, startDate" });
+            return;
+        }
+        // Fetch the client document
+        const clientDoc = await db.collection("clients").doc(clientId).get();
+        if (!clientDoc.exists) {
+            res.status(404).send({ error: "Client not found" });
+            return;
+        }
+        const clientData = clientDoc.data();
+        const currentPackages = clientData?.packages || [];
+        // Check for existing active package of the same type
+        const activePackageOfType = currentPackages.find((p) => p.status === "Active" && p.packageName === packageName);
+        if (activePackageOfType) {
+            res.status(409).send({ error: `Member already has an active "${packageName}" package` });
+            return;
+        }
+        logger.info(`Successfully validated upgrade for client ${clientId}: ${packageName}`);
+        res.status(200).send({ success: true, message: "Upgrade validation passed" });
+    }
+    catch (error) {
+        logger.error("Error in upgradeMemberPackage:", error);
+        res.status(500).send({ error: "Internal Server Error" });
+    }
+});
 // -------------------------------------------------------------
 // SECRETS & CONFIGURATION
 // -------------------------------------------------------------
 const STRIKE_WEBHOOK_SECRET = (0, params_1.defineSecret)("STRIKE_WEBHOOK_SECRET");
+/**
+ * HTTP Endpoint: Send a test SMS via Twilio
+ * Accepts POST { to: string, message: string }
+ */
+exports.sendTestSms = (0, https_1.onRequest)({ cors: true, secrets: smsService_1.SMS_SECRETS }, async (req, res) => {
+    if (req.method !== "POST") {
+        res.status(405).send("Only POST is allowed");
+        return;
+    }
+    const { to, message } = req.body;
+    if (!to || !message) {
+        res.status(400).json({ error: "Missing required fields: to, message" });
+        return;
+    }
+    try {
+        await (0, smsService_1.sendSms)(to, message);
+        res.json({ success: true, to });
+    }
+    catch (err) {
+        logger.error("Error sending test SMS:", err);
+        res.status(500).json({ error: err.message || "Failed to send SMS" });
+    }
+});
 /**
  * Generic Webhook Endpoint for Zapier / Make.com
  * Accepts a POST request with name, phone, email, and source.
@@ -133,13 +191,17 @@ exports.onLeadCreated = (0, firestore_1.onDocumentCreated)("clients/{clientId}",
             logger.warn("No recipient emails found for lead notification.");
             return;
         }
-        // 2. Send emails
+        // 2. Send emails + SMS to reps/managers who have a phone number
+        const users = usersSnapshot.docs.map(doc => doc.data());
         const emailPromises = recipientEmails.map(email => (0, mailer_1.sendNewLeadEmail)(email, {
             name: leadData.name,
             phone: leadData.phone,
             source: leadData.source || "Unknown"
         }));
-        await Promise.all(emailPromises);
+        const smsPromises = users
+            .filter(u => !!u.phone)
+            .map(u => (0, smsService_1.sendLeadAssignedNotification)(u.phone, u.name || u.email, leadData.name));
+        await Promise.all([...emailPromises, ...smsPromises]);
         logger.info(`Lead notifications sent to ${recipientEmails.length} users.`);
     }
     catch (error) {
@@ -166,7 +228,12 @@ exports.onClientAssigned = (0, firestore_1.onDocumentUpdated)("clients/{clientId
                 await (0, mailer_1.sendAssignmentEmail)(userEmail, afterData.name);
                 logger.info(`Assignment notification sent to ${userEmail}`);
             }
-            else {
+            const userPhone = userDoc.data()?.phone;
+            if (userPhone) {
+                await (0, smsService_1.sendLeadAssignedNotification)(userPhone, userDoc.data()?.name || userEmail || afterData.assignedTo, afterData.name);
+                logger.info(`Assignment SMS sent to ${userPhone}`);
+            }
+            if (!userEmail && !userPhone) {
                 // Check if assignedTo is a name (for sales members without accounts)
                 // In that case, we can't send an email unless we have a mapping.
                 logger.warn(`Could not find email for assigned user: ${afterData.assignedTo}`);

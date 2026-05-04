@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Save, Building2, Users, Package, AlertTriangle, ShieldAlert, Trash2, Dumbbell, Lock, Download, Upload } from 'lucide-react';
+import { Save, Building2, Users, Package, AlertTriangle, ShieldAlert, Trash2, Dumbbell, Lock, Download, Upload, MessageSquare, Send } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import UsersManagement from './Users';
 import Packages from './Packages';
@@ -35,6 +35,11 @@ export default function Settings() {
   const [isRestoring, setIsRestoring] = useState(false);
   const [restoreStatus, setRestoreStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [testSmsPhone, setTestSmsPhone] = useState('+201000680580');
+  const [testSmsMessage, setTestSmsMessage] = useState('Test SMS from Strike CRM');
+  const [isSendingSms, setIsSendingSms] = useState(false);
+  const [smsStatus, setSmsStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const canWipe = canAccessSettings || currentUser?.email === 'michaelmitry13@gmail.com';
 
@@ -109,6 +114,29 @@ export default function Settings() {
     const confirm = window.confirm(`Are you sure you want to remove ${branchToRemove}?`);
     if (!confirm) return;
     await updateBranches(branches.filter(b => b !== branchToRemove));
+  };
+
+  const handleSendTestSms = async () => {
+    setSmsStatus(null);
+    setIsSendingSms(true);
+    try {
+      const fnUrl = 'https://sendtestsms-rqxxytxffq-uc.a.run.app';
+      const response = await fetch(fnUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: testSmsPhone, message: testSmsMessage })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSmsStatus({ type: 'success', message: `SMS sent successfully to ${testSmsPhone}` });
+      } else {
+        setSmsStatus({ type: 'error', message: `Failed: ${data.error}` });
+      }
+    } catch (err) {
+      setSmsStatus({ type: 'error', message: `Error: ${(err as Error).message}` });
+    } finally {
+      setIsSendingSms(false);
+    }
   };
 
   const handlePrintQR = (branch: string) => {
@@ -197,6 +225,10 @@ export default function Settings() {
           <TabsTrigger value="backup" className="flex items-center gap-2">
             <Download className="h-4 w-4" />
             Backup
+          </TabsTrigger>
+          <TabsTrigger value="sms" className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" />
+            SMS
           </TabsTrigger>
           {canWipe && (
             <TabsTrigger value="danger" className="flex items-center gap-2 text-destructive data-[state=active]:bg-destructive data-[state=active]:text-destructive-foreground">
@@ -464,6 +496,64 @@ export default function Settings() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* ── SMS ── */}
+        <TabsContent value="sms" className="animate-in fade-in-50 duration-500">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5 text-primary" />
+                SMS Notifications (Twilio)
+              </CardTitle>
+              <CardDescription>
+                Test sending SMS notifications to verify Twilio is configured correctly.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 border rounded-lg bg-muted/30 space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  <strong>Note:</strong> Twilio trial accounts can only send SMS to verified phone numbers. Add your phone number to "Verified Caller IDs" in your Twilio Console before testing.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  <strong>Egyptian numbers:</strong> Enter as +201XXXXXXXXX (with +20 country code), or 01XXXXXXXXX (local format, will auto-convert).
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="testSmsPhone">Phone Number</Label>
+                <Input
+                  id="testSmsPhone"
+                  type="tel"
+                  value={testSmsPhone}
+                  onChange={(e) => setTestSmsPhone(e.target.value)}
+                  placeholder="+201000000000"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter a phone number in E.164 format (e.g., +201000680580 for Egypt).
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="testSmsMessage">Message</Label>
+                <textarea
+                  id="testSmsMessage"
+                  value={testSmsMessage}
+                  onChange={(e) => setTestSmsMessage(e.target.value)}
+                  placeholder="Test SMS from Strike CRM"
+                  className="w-full px-3 py-2 border rounded-md text-sm resize-none"
+                  rows={3}
+                />
+              </div>
+              <Button className="w-full" onClick={handleSendTestSms} disabled={isSendingSms}>
+                <Send className="mr-2 h-4 w-4" />
+                {isSendingSms ? 'Sending...' : 'Send Test SMS'}
+              </Button>
+              {smsStatus && (
+                <p className={`text-sm font-medium ${smsStatus.type === 'success' ? 'text-green-600' : 'text-destructive'}`}>
+                  {smsStatus.message}
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ── Danger Zone ── */}
