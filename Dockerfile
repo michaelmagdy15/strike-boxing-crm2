@@ -18,9 +18,15 @@ COPY . .
 ARG GEMINI_API_KEY
 ENV GEMINI_API_KEY=$GEMINI_API_KEY
 
+# Build arguments for version tracking
+ARG VITE_BUILD_COMMIT=unknown
+ARG VITE_BUILD_TIMESTAMP
+ENV VITE_BUILD_COMMIT=$VITE_BUILD_COMMIT
+ENV VITE_BUILD_TIMESTAMP=$VITE_BUILD_TIMESTAMP
+
 # Run the build script
 # This produces dist/assets (frontend) and dist/server.cjs (backend)
-RUN npm run build
+RUN VITE_BUILD_TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ") npm run build
 
 # Stage 2: Runtime stage
 FROM node:20-slim
