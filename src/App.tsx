@@ -7,6 +7,7 @@ import React from 'react';
 import { AppProvider, useAppContext } from './context';
 import { AuthProvider } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
+import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -24,7 +25,7 @@ import Login from './Login';
 import Reports from './Reports';
 import MemberCheckin from './MemberCheckin';
 import HelpPage from './HelpPage';
-import { Activity, Users, UserPlus, CreditCard, LogOut, Calendar as CalendarIcon, ShieldAlert, Settings as SettingsIcon, Eye, EyeOff, CheckSquare, Package, Search, Scan, History, BarChart3, LayoutDashboard, MoreHorizontal, X } from 'lucide-react';
+import { Activity, Users, UserPlus, CreditCard, LogOut, Calendar as CalendarIcon, ShieldAlert, Settings as SettingsIcon, Eye, EyeOff, CheckSquare, Package, Search, Scan, History, BarChart3, LayoutDashboard, MoreHorizontal, X, Sun, Moon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,6 +35,7 @@ import BuildVersionFooter from './components/BuildVersionFooter';
 
 function AppContent() {
   const { currentUser, logout, isAuthReady, previewRole, setPreviewRole, searchQuery, setSearchQuery, branding, canAccessSettings, canViewGlobalDashboard, canDeletePayments, isManagerOrSama } = useAppContext();
+  const { theme, toggleTheme } = useTheme();
   const [isKioskMode, setIsKioskMode] = React.useState(window.location.pathname === '/kiosk');
   const [isCheckinMode, setIsCheckinMode] = React.useState(window.location.pathname === '/checkin');
   const [isHelpMode, setIsHelpMode] = React.useState(window.location.pathname === '/help');
@@ -241,6 +243,9 @@ function AppContent() {
                 <Search className="h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
             </div>
+            <Button variant="ghost" size="icon" onClick={toggleTheme} title="Toggle dark mode" className="h-8 w-8 sm:h-10 sm:w-10">
+              {theme === 'dark' ? <Sun className="h-4 w-4 sm:h-5 sm:w-5" /> : <Moon className="h-4 w-4 sm:h-5 sm:w-5" />}
+            </Button>
             <NotificationCenter />
             <div className="text-xs sm:text-sm font-medium text-muted-foreground flex flex-col items-end">
               <span className="font-bold text-foreground truncate max-w-[120px] sm:max-w-none">{currentUser.name}</span>
@@ -524,8 +529,10 @@ export default function App() {
         <AuthProvider>
           <SettingsProvider>
             <AppProvider>
-              <AppContent />
-              <BuildVersionFooter />
+              <ThemeProvider>
+                <AppContent />
+                <BuildVersionFooter />
+              </ThemeProvider>
             </AppProvider>
           </SettingsProvider>
         </AuthProvider>
