@@ -329,9 +329,10 @@ export default function Dashboard() {
     };
   }, [payments, effectiveRepId, canViewGlobalDashboard, salesTarget, userTargets, currentMonthStr, clients]);
 
-  const totalCash = canViewGlobalDashboard && effectiveRepId !== 'all' ? filteredSalesData.cash : (payments ? payments.filter(p => p.method === 'Cash').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0);
-  const totalVisa = canViewGlobalDashboard && effectiveRepId !== 'all' ? filteredSalesData.visa : (payments ? payments.filter(p => p.method === 'Credit Card').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0);
-  const totalInstapay = canViewGlobalDashboard && effectiveRepId !== 'all' ? filteredSalesData.instapay : (payments ? payments.filter(p => p.method === 'Instapay').reduce((acc, p) => acc + (Number(p.amount) || 0), 0) : 0);
+  // Always use filteredSalesData which has correct month + rep filtering applied
+  const totalCash = filteredSalesData.cash;
+  const totalVisa = filteredSalesData.visa;
+  const totalInstapay = filteredSalesData.instapay;
 
   const totalPackagesSold = filteredSalesData.privateSessionsSold + filteredSalesData.groupSessionsSold;
   const privatePercentage = totalPackagesSold > 0 ? Math.round((filteredSalesData.privateSessionsSold / totalPackagesSold) * 100) : 0;
