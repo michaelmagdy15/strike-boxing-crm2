@@ -18,7 +18,11 @@ export const usePayments = ({ currentUser, clients, canDeletePayments }: UsePaym
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'payments'), (snapshot) => {
-      setPayments(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Payment)));
+      // Filter out soft-deleted payments (where deleted_at is not null)
+      setPayments(snapshot.docs
+        .map(d => ({ ...d.data(), id: d.id } as Payment))
+        .filter(p => !p.deleted_at)
+      );
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'payments');

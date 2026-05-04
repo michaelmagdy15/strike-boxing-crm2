@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { format, parseISO, addDays } from 'date-fns';
 import { Payment } from './types';
 import { resolveUserDisplay } from './utils/resolveUserDisplay';
-import { toEgyptTime, getEgyptDate } from './utils';
+import { getEgyptDate } from './utils';
 import { holdPayment, releasePayment, getHoldStatusInfo } from './utils/holdUtils';
 import { Plus, DollarSign, CreditCard, Banknote, FileText, Smartphone, Printer, Search, Trash2, ChevronLeft, ChevronRight, User, UserPlus, Pause, Play, TrendingUp } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -172,6 +172,13 @@ export default function Payments() {
   }, [clientId, clients]);
 
   const handleDeletePayment = async (id: string) => {
+    const payment = payments.find(p => p.id === id);
+    if (payment?.isOnHold) {
+      setAlertTitle('Cannot Delete');
+      setAlertDescription('This payment is on hold and cannot be deleted. Release the hold first.');
+      setAlertOpen(true);
+      return;
+    }
     if (window.confirm('Are you sure you want to delete this payment record? This action cannot be undone.')) {
       await deletePayment(id);
     }
@@ -483,7 +490,7 @@ export default function Payments() {
         packageType: pkg.name,
         packageCategory: pkg.name.toLowerCase().includes('pt') || pkg.name.toLowerCase().includes('private') ? 'Private Training' : 'Group Training',
         sales_rep_id: payment.sales_rep_id,
-        salesName: payment.salesName,
+        salesName: payment.salesName || '',
         recordedBy: currentUser?.id || '',
         recordedByName: currentUser?.name || '',
         paymentDate: new Date(upgradeStartDate).toISOString(),
@@ -699,7 +706,7 @@ export default function Payments() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, deferredFilterDateFrom, deferredFilterDateTo, deferredSortConfig]);
+  }, [deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, deferredFilterDateFrom, deferredFilterDateTo, deferredSortConfig, deferredFilterShowOnlyHeld]);
 
   const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
   const paginatedPayments = filteredPayments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -1219,15 +1226,25 @@ export default function Payments() {
                     return (
                       <TableRow key={payment.id}>
                         <TableCell className="text-xs sm:text-sm">
-                          <div className="font-medium">
-                            {format(getEgyptDate(payment.date), 'MMM d')}
-                            {toEgyptTime(payment.date).getFullYear() !== new Date().getFullYear() && (
-                              <span className="text-[10px] text-amber-600 font-semibold ml-1">
-                                {toEgyptTime(payment.date).getFullYear()}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[10px] text-muted-foreground">{format(getEgyptDate(payment.date), 'h:mm a')}</div>
+                          {payment.date ? (() => {
+                            const egyptDate = getEgyptDate(payment.date);
+                            const paymentYear = egyptDate.getFullYear();
+                            return (
+                              <>
+                                <div className="font-medium">
+                                  {format(egyptDate, 'MMM d')}
+                                  {paymentYear !== new Date().getFullYear() && (
+                                    <span className="text-[10px] text-amber-600 font-semibold ml-1">
+                                      {paymentYear}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground">{format(egyptDate, 'h:mm a')}</div>
+                              </>
+                            );
+                          })() : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="font-medium text-xs sm:text-sm">
                           <div className="flex flex-col gap-1">
@@ -1580,9 +1597,10 @@ export default function Payments() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="text-destructive hover:bg-destructive/10"
+                                className={`${payment.isOnHold ? 'opacity-50 cursor-not-allowed' : 'text-destructive hover:bg-destructive/10'}`}
                                 onClick={() => handleDeletePayment(payment.id)}
-                                title="Delete Payment"
+                                title={payment.isOnHold ? 'Cannot delete held payments' : 'Delete Payment'}
+                                disabled={payment.isOnHold}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
