@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { useAppContext } from './context';
 import { useClients } from './hooks/useClients';
@@ -16,7 +16,6 @@ export default function Attendance({ isKiosk = false }: { isKiosk?: boolean }) {
   const { currentUser, users } = useAppContext();
   const { clients } = useClients(currentUser);
   const { attendances, recordAttendance } = useAttendance(currentUser, clients);
-  const [scannedId, setScannedId] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -31,63 +30,107 @@ export default function Attendance({ isKiosk = false }: { isKiosk?: boolean }) {
   const [isRecording, setIsRecording] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(console.error);
-      }
-    };
-  }, []);
-
-  const startScanner = async () => {
-    setError(null);
-    setSuccessMessage(null);
-    setIsScanning(true);
-    
-    try {
-      const scanner = new Html5Qrcode("qr-reader");
-      scannerRef.current = scanner;
-      
-      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-      
-      await scanner.start(
-        { facingMode: "environment" }, 
-        config,
-        (decodedText) => {
-          handleScanSuccess(decodedText);
-        },
-        undefined
-      );
-    } catch (err) {
-      console.error(err);
-      setError("Could not access camera. Please ensure you have granted permission.");
-      setIsScanning(false);
-    }
-  };
-
-  const stopScanner = async () => {
-    if (scannerRef.current) {
-      try {
-        await scannerRef.current.stop();
-        scannerRef.current = null;
-      } catch (err) {
-        console.error(err);
-      }
-    }
-    setIsScanning(false);
-  };
-
   const handleScanSuccess = (decodedId: string) => {
     const member = clients.find(c => c.id === decodedId || c.memberId === decodedId);
     if (member) {
       setLastScannedMember(member);
-      setScannedId(member.id);
-      stopScanner();
+      setIsScanning(false);
       setError(null);
     } else {
       setError("No member found with that ID or QR Code.");
     }
   };
+
+  const handleScanSuccessRef = useRef(handleScanSuccess);
+  useEffect(() => {
+    handleScanSuccessRef.current = handleScanSuccess;
+  }, [handleScanSuccess]);
+
+  useEffect(() => {
+    if (!isScanning) return;
+
+    let isComponentMounted = true;
+    let scannerStarted = false; // only true after .start() resolves — guards cleanup
+    let scanner: Html5Qrcode | null = null;
+
+    const config = {
+      fps: 10,
+      qrbox: (w: number, h: number) => {
+        const side = Math.min(Math.floor(Math.min(w, h) * 0.7), 280);
+        return { width: side, height: side };
+      },
+    };
+
+    const onScan = (decodedText: string) => {
+      if (isComponentMounted) handleScanSuccessRef.current(decodedText);
+    };
+
+    const safeDestroy = (s: Html5Qrcode | null) => {
+      if (!s) return;
+      // clear() removes internal DOM + cancels polling timers even when start() failed
+      try { s.clear(); } catch { /* ignore if already destroyed */ }
+    };
+
+    // Delay 50 ms so React has committed #qr-reader to the DOM
+    const timer = setTimeout(async () => {
+      try {
+        scanner = new Html5Qrcode('qr-reader', { verbose: false });
+        scannerRef.current = scanner;
+
+        try {
+          // Prefer rear camera
+          await scanner.start({ facingMode: 'environment' }, config, onScan, undefined);
+        } catch (envErr: unknown) {
+          const errName = (envErr as { name?: string })?.name ?? '';
+          // Only retry on constraint errors (no rear cam). NotReadableError = hardware busy,
+          // retrying won't help and reusing the same instance breaks internal state.
+          if (errName === 'OverconstrainedError' || errName === 'NotFoundError') {
+            safeDestroy(scanner);
+            scanner = new Html5Qrcode('qr-reader', { verbose: false });
+            scannerRef.current = scanner;
+            await scanner.start({ facingMode: 'user' }, config, onScan, undefined);
+          } else {
+            throw envErr;
+          }
+        }
+
+        scannerStarted = true;
+      } catch (err: unknown) {
+        console.error(err);
+        // Always destroy to stop internal polling timers
+        safeDestroy(scanner);
+        scannerRef.current = null;
+        scanner = null;
+
+        if (!isComponentMounted) return;
+        const name = (err as { name?: string })?.name ?? '';
+        const msg  = (err as { message?: string })?.message ?? '';
+        if (name === 'NotReadableError' || msg.includes('Could not start')) {
+          setError('Camera is in use by another app or browser tab. Close it and try again.');
+        } else if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+          setError('Camera permission denied. Allow camera access in your browser settings and try again.');
+        } else if (name === 'NotFoundError') {
+          setError('No camera found on this device.');
+        } else {
+          setError('Could not start camera. Please try again.');
+        }
+        setIsScanning(false);
+      }
+    }, 50);
+
+    return () => {
+      isComponentMounted = false;
+      clearTimeout(timer);
+      if (scanner && scannerStarted) {
+        // stop() then clear() for a clean teardown
+        scanner.stop().catch(console.error).finally(() => safeDestroy(scanner));
+      } else {
+        // start() never succeeded — just destroy to cancel any stray timers
+        safeDestroy(scanner);
+      }
+      scannerRef.current = null;
+    };
+  }, [isScanning]);
 
   const handleRecordAttendance = async () => {
     if (!lastScannedMember || isRecording) return;
@@ -98,7 +141,6 @@ export default function Attendance({ isKiosk = false }: { isKiosk?: boolean }) {
       setSuccessMessage(`Attendance recorded for ${lastScannedMember.name}!`);
       setTimeout(() => {
         setLastScannedMember(null);
-        setScannedId(null);
         setSuccessMessage(null);
       }, 3000);
     } catch (err) {
@@ -109,8 +151,8 @@ export default function Attendance({ isKiosk = false }: { isKiosk?: boolean }) {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="space-y-4 max-w-4xl mx-auto px-1 sm:px-0">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Attendance Scanner</h2>
           <p className="text-muted-foreground">Scan member QR codes to record attendance and manage packages.</p>
@@ -136,7 +178,7 @@ export default function Attendance({ isKiosk = false }: { isKiosk?: boolean }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
         {/* Scanner Section */}
         <Card className="lg:col-span-7 overflow-hidden border-2 border-primary/10 shadow-lg">
           <CardHeader className="bg-primary/5 border-b">
@@ -145,39 +187,41 @@ export default function Attendance({ isKiosk = false }: { isKiosk?: boolean }) {
               Live Scanner
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-0 relative bg-black aspect-video flex items-center justify-center">
+          <CardContent className="p-0 relative bg-black min-h-[300px] sm:min-h-[380px] flex items-center justify-center overflow-hidden">
             {isScanning ? (
-              <div id="qr-reader" className="w-full h-full"></div>
+              <>
+                <div
+                  id="qr-reader"
+                  className="w-full min-h-[300px] sm:min-h-[380px]"
+                />
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="absolute bottom-4 right-4 z-10 shadow-lg"
+                  onClick={() => setIsScanning(false)}
+                >
+                  Cancel
+                </Button>
+              </>
             ) : (
-              <div className="flex flex-col items-center justify-center text-white space-y-4 p-8 text-center">
-                <div className="bg-white/10 p-6 rounded-full animate-pulse">
-                  <Camera className="h-12 w-12" />
+              <div className="flex flex-col items-center justify-center text-white space-y-4 p-6 sm:p-8 text-center w-full h-full min-h-[300px] sm:min-h-[380px]">
+                <div className="bg-white/10 p-5 sm:p-6 rounded-full animate-pulse">
+                  <Camera className="h-10 w-10 sm:h-12 sm:w-12" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold">Ready to Scan</h3>
-                  <p className="text-white/60 text-sm max-w-[250px] mt-1">
+                  <h3 className="text-xl sm:text-2xl font-bold">Ready to Scan</h3>
+                  <p className="text-white/60 text-xs sm:text-sm max-w-[280px] mt-2 mx-auto">
                     Point your camera at the member's QR code on their phone or card.
                   </p>
                 </div>
-                <Button 
-                  size="lg" 
-                  className="bg-white text-black hover:bg-white/90 font-bold px-8"
-                  onClick={startScanner}
+                <Button
+                  size="lg"
+                  className="bg-white text-black hover:bg-white/90 font-bold px-8 mt-2"
+                  onClick={() => setIsScanning(true)}
                 >
                   Start Camera
                 </Button>
               </div>
-            )}
-            
-            {isScanning && (
-              <Button 
-                variant="destructive" 
-                size="sm" 
-                className="absolute bottom-4 right-4 z-10"
-                onClick={stopScanner}
-              >
-                Cancel
-              </Button>
             )}
           </CardContent>
           
@@ -277,8 +321,7 @@ export default function Attendance({ isKiosk = false }: { isKiosk?: boolean }) {
                     className="w-full text-muted-foreground"
                     onClick={() => {
                       setLastScannedMember(null);
-                      setScannedId(null);
-                      setError(null);
+                                    setError(null);
                     }}
                   >
                     Dismiss & Clear

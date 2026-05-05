@@ -16,15 +16,21 @@ export const addAuditLog = async (
   if (!currentUser) return;
 
   try {
-    await addDoc(collection(db, 'auditLogs'), {
-      userId: currentUser.uid as UserId,
-      userName: userName || currentUser.displayName || undefined,
+    const auditData: any = {
+      userId: currentUser.uid,
       action,
       entityType,
       entityId,
       details,
       timestamp: new Date().toISOString()
-    });
+    };
+
+    const finalUserName = userName || currentUser.displayName;
+    if (finalUserName) {
+      auditData.userName = finalUserName;
+    }
+
+    await addDoc(collection(db, 'auditLogs'), auditData);
   } catch (error) {
     console.error('Audit Log Error:', error);
   }

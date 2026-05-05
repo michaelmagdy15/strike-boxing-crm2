@@ -233,12 +233,9 @@ export default function ResyncPayments({ clients, users }: ResyncPaymentsProps) 
 
   return (
     <Dialog open={isOpen} onOpenChange={v => { if (!v) reset(); setIsOpen(v); }}>
-      {/* @ts-expect-error - DialogTrigger supports asChild but types are incomplete */}
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <DollarSign className="mr-2 h-4 w-4" />
-          Resync Payments
-        </Button>
+      <DialogTrigger render={<Button variant="outline" size="sm" />}>
+        <DollarSign className="mr-2 h-4 w-4" />
+        Resync Payments
       </DialogTrigger>
       <DialogContent className="w-[calc(100vw-2rem)] max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>

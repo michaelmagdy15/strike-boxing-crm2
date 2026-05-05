@@ -406,6 +406,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, message: 'Membership is expired. Please contact staff to renew.' };
     }
 
+    // Block check-in if sessions are exhausted (numeric 0 or negative)
+    if (typeof client.sessionsRemaining === 'number' && client.sessionsRemaining <= 0) {
+      return { success: false, message: 'No sessions remaining. Please renew your membership with staff.' };
+    }
+
     try {
       const recordedBy = currentUser?.id || auth.currentUser?.uid || 'self-checkin';
       await addDoc(collection(db, 'attendance'), {

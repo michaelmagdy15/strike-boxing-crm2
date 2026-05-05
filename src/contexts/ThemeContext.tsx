@@ -18,8 +18,8 @@ function getInitialTheme(): Theme {
     return stored;
   }
 
-  // Fall back to OS preference
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  // Fall back to light mode as platform default
+  return 'light';
 }
 
 function applyTheme(theme: Theme) {

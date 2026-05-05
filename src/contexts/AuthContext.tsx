@@ -68,6 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (userDoc.exists()) {
             userData = userDoc.data() as User;
+            userData.id = userId; // Fix: ensure id is always populated
             if (firebaseUser.email === "michaelmitry13@gmail.com" && userData.role !== 'crm_admin') {
               userData.role = 'crm_admin';
               await updateDoc(userDocRef, { role: 'crm_admin' });

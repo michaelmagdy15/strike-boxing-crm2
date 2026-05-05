@@ -30,7 +30,7 @@ export const useAuditLogs = (currentUser: User | null, params: AuditLogQueryPara
       function egyptDayBoundary(dateStr: string, endOfDay: boolean): string {
         // Cairo is UTC+3 (no DST). Midnight Cairo = UTC-3h.
         const offsetMs = 3 * 60 * 60 * 1000;
-        const [y, m, d] = dateStr.split('-').map(Number);
+        const [y, m, d] = dateStr.split('-').map(Number) as [number, number, number];
         const localMidnight = new Date(Date.UTC(y, m - 1, d)); // midnight UTC for that date string
         if (endOfDay) {
           return new Date(localMidnight.getTime() + 24 * 60 * 60 * 1000 - offsetMs - 1).toISOString(); // 23:59:59.999 Cairo
