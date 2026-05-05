@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { UserRole, User } from './types';
 import { Shield, User as UserIcon, Plus, Trash2, Edit, BarChart, Clock } from 'lucide-react';
+import { formatDistanceToNow, parseISO } from 'date-fns';
 import { UserPerformanceDialog } from './components/UserPerformanceDialog';
 
 export default function Users() {
@@ -171,6 +172,7 @@ export default function Users() {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Branch</TableHead>
+                <TableHead>Last Seen</TableHead>
                 <TableHead>Current Role</TableHead>
                 <TableHead>Change Role</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -198,6 +200,9 @@ export default function Users() {
                     ) : (
                       <span className="text-muted-foreground text-sm">All</span>
                     )}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {user.lastSeen ? formatDistanceToNow(parseISO(user.lastSeen), { addSuffix: true }) : 'Never'}
                   </TableCell>
                   <TableCell>{getRoleBadge(user.role)}</TableCell>
                   <TableCell>

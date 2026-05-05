@@ -19,6 +19,7 @@ export default function Attendance({ isKiosk = false }: { isKiosk?: boolean }) {
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const manualInputRef = useRef<HTMLInputElement>(null);
   const [selectedBranch, setSelectedBranch] = useState<Branch>(() => {
     if (isKiosk) {
       const saved = localStorage.getItem('kioskBranch');
@@ -45,6 +46,19 @@ export default function Attendance({ isKiosk = false }: { isKiosk?: boolean }) {
   useEffect(() => {
     handleScanSuccessRef.current = handleScanSuccess;
   }, [handleScanSuccess]);
+
+  // Press "/" anywhere to jump to the manual ID input (skip if already in a field)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/') return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      e.preventDefault();
+      manualInputRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   useEffect(() => {
     if (!isScanning) return;
@@ -229,13 +243,12 @@ export default function Attendance({ isKiosk = false }: { isKiosk?: boolean }) {
             <div className="flex flex-col space-y-2">
               <Label className="text-xs font-bold uppercase text-muted-foreground ml-1">Manual ID Entry</Label>
               <div className="flex gap-2">
-                <Input 
-                  placeholder="Enter Member ID (e.g. 112)" 
+                <Input
+                  ref={manualInputRef}
+                  placeholder="Enter Member ID (e.g. 112)  [ Press / to focus ]"
                   className="bg-background h-11"
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      handleScanSuccess(e.currentTarget.value);
-                    }
+                    if (e.key === 'Enter') handleScanSuccess(e.currentTarget.value);
                   }}
                 />
                 <Button 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useBlocker } from 'react-router-dom';
 import { useAppContext } from './context';
 import { SALES_NAME_MAPPING } from './constants';
 import { useCoaches } from './hooks/useCoaches';
@@ -117,6 +118,12 @@ export default function Payments() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
+
+  // Warn before navigating away when the new-payment form has unsaved data
+  const isFormDirty = isNewPaymentOpen && (clientSearch.trim() !== '' || amount.trim() !== '');
+  const blocker = useBlocker(({ currentLocation, nextLocation }) =>
+    isFormDirty && currentLocation.pathname !== nextLocation.pathname
+  );
 
   const canDeletePayment = canDeletePayments;
 
@@ -737,6 +744,22 @@ export default function Payments() {
 
   return (
     <div className="space-y-4">
+      {/* Navigate-away guard — fires when form is dirty and user tries to leave */}
+      {blocker.state === 'blocked' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-background border rounded-xl shadow-xl p-6 max-w-sm w-full mx-4 space-y-4">
+            <h3 className="font-bold text-lg">Unsaved Payment</h3>
+            <p className="text-sm text-muted-foreground">
+              You have an unsaved payment form. If you leave now your entries will be lost.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" onClick={() => blocker.reset()}>Stay</Button>
+              <Button variant="destructive" onClick={() => blocker.proceed()}>Leave anyway</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold tracking-tight">Payments</h2>
         <Dialog open={isNewPaymentOpen} onOpenChange={setIsNewPaymentOpen}>

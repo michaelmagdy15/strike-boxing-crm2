@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAppContext } from './context';
 import { SALES_NAME_MAPPING } from './constants';
 import { resolveUserDisplay } from './utils/resolveUserDisplay';
-import { differenceInDays, isSameDay, parseISO, isAfter, isBefore, addDays, subDays, subMonths, startOfMonth, endOfMonth, isWithinInterval, format } from 'date-fns';
+import { differenceInDays, isSameDay, parseISO, isAfter, isBefore, addDays, subDays, subMonths, startOfMonth, endOfMonth, isWithinInterval, format, getDay } from 'date-fns';
 
 const PRIVATE_PACKAGES = [
   'drop session pt', 
@@ -42,7 +42,7 @@ export const isGroupPackage = (pkg: string) => {
   const lower = pkg.toLowerCase().trim();
   return GROUP_PACKAGES.includes(lower) || lower.includes('group') || lower.includes('gt');
 };
-import { Target, Users, CalendarDays, AlertTriangle, Gift, Settings, ChevronLeft, ChevronRight, Trophy, Download, ArrowUpDown, UserCheck } from 'lucide-react';
+import { Target, Users, CalendarDays, AlertTriangle, Gift, Settings, ChevronLeft, ChevronRight, Trophy, Download, ArrowUpDown, UserCheck, UserPlus } from 'lucide-react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import OnlineUsers from './components/OnlineUsers';
 
@@ -86,7 +86,7 @@ function PaginatedList({ items, renderItem, itemsPerPage = 5 }: { items: any[], 
 }
 
 export default function Dashboard() {
-  const { salesTarget, updateSalesTarget, updateUserTarget, currentUser, userTargets, users, canViewGlobalDashboard, canAccessSettings, branches, clients: contextClients, payments: contextPayments } = useAppContext();
+  const { salesTarget, updateSalesTarget, updateUserTarget, currentUser, userTargets, users, canViewGlobalDashboard, canAccessSettings, branches, clients: contextClients, payments: contextPayments, attendances } = useAppContext();
   // Use context data directly instead of creating duplicate Firestore listeners.
   // Context 'clients' and 'payments' are already filtered for the current user's visibility.
   // For manager cross-rep analysis we need unfiltered data — but all users in context already
@@ -522,6 +522,36 @@ export default function Dashboard() {
     }));
   };
 
+  // New vs Returning members for the selected month
+  const { newMembersCount, returningMembersCount } = React.useMemo(() => {
+    const monthStart = startOfMonth(selectedMonth);
+    const monthEnd = endOfMonth(selectedMonth);
+    const newCount = clients.filter(c =>
+      c.startDate && isWithinInterval(parseISO(c.startDate), { start: monthStart, end: monthEnd })
+    ).length;
+    const returningCount = clients.filter(c =>
+      (c.status === 'Active' || c.status === 'Nearly Expired') &&
+      c.startDate && parseISO(c.startDate) < monthStart
+    ).length;
+    return { newMembersCount: newCount, returningMembersCount: returningCount };
+  }, [clients, selectedMonth]);
+
+  // Attendance heatmap: check-ins per day-of-week per branch over the last 90 days
+  const attendanceHeatmap = React.useMemo(() => {
+    const cutoff = subDays(now, 90);
+    const recent = attendances.filter(a => parseISO(a.date) >= cutoff);
+    const branchList = selectedBranch === 'all' ? branches : [selectedBranch as string];
+    return branchList.map(branch => {
+      const counts: number[] = [0, 0, 0, 0, 0, 0, 0];
+      recent.filter(a => a.branch === branch).forEach(a => {
+        const dow = getDay(parseISO(a.date)); // 0 = Sun
+        const idx = dow === 0 ? 6 : dow - 1; // remap Mon=0 … Sun=6
+        counts[idx] = (counts[idx] ?? 0) + 1;
+      });
+      return { branch, counts };
+    });
+  }, [attendances, branches, selectedBranch]);
+
   return (
     <div className="space-y-6">
       {canViewGlobalDashboard ? (
@@ -752,12 +782,89 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{upcomingBirthdays.length}</div>
+            <p className="text-xs text-muted-foreground">In the next 7 days</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">New Members</CardTitle>
+            <UserPlus className="h-4 w-4 text-emerald-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-emerald-600">{newMembersCount}</div>
             <p className="text-xs text-muted-foreground">
-              In the next 7 days
+              Joined in {format(selectedMonth, 'MMM yyyy')}
             </p>
+            <div className="mt-3 pt-3 border-t flex justify-between text-xs text-muted-foreground">
+              <span>Returning active</span>
+              <span className="font-semibold text-foreground">{returningMembersCount}</span>
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Branch Attendance Heatmap */}
+      {attendanceHeatmap.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-muted-foreground" />
+              Branch Attendance — Last 90 Days
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+              const max = Math.max(...attendanceHeatmap.flatMap(b => b.counts), 1);
+              return (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr>
+                        <th className="text-left pr-3 pb-2 font-medium text-muted-foreground w-28">Branch</th>
+                        {DAY_LABELS.map(d => (
+                          <th key={d} className="pb-2 font-medium text-muted-foreground text-center w-12">{d}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {attendanceHeatmap.map(({ branch, counts }) => (
+                        <tr key={branch}>
+                          <td className="pr-3 py-1 font-medium text-sm truncate max-w-[7rem]">{branch}</td>
+                          {counts.map((count, i) => {
+                            const intensity = count / max;
+                            const bg = intensity === 0
+                              ? 'bg-muted/40'
+                              : intensity < 0.33
+                              ? 'bg-primary/20'
+                              : intensity < 0.66
+                              ? 'bg-primary/50'
+                              : 'bg-primary/80';
+                            return (
+                              <td key={i} className="py-1 px-1 text-center">
+                                <div
+                                  title={`${count} check-ins`}
+                                  className={`mx-auto h-8 w-9 rounded flex items-center justify-center font-semibold text-[11px] transition-colors ${bg} ${intensity > 0.5 ? 'text-primary-foreground' : 'text-foreground'}`}
+                                >
+                                  {count > 0 ? count : ''}
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="mt-3 text-[10px] text-muted-foreground">
+                    Colour intensity = relative check-in volume. Darker = busier.
+                  </p>
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="md:col-span-2">
