@@ -361,8 +361,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await userService.inviteUser(email, role, displayName);
   };
 
+  const memoizedCurrentUser = useMemo(() => {
+    return currentUser ? { ...currentUser, role: effectiveRole || currentUser.role } : null;
+  }, [currentUser, effectiveRole]);
+
   const value = useMemo(() => ({
-    currentUser: currentUser ? { ...currentUser, role: effectiveRole || currentUser.role } : null,
+    currentUser: memoizedCurrentUser,
     users,
     allUsers,
     pendingAccounts,
@@ -390,7 +394,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     effectiveRole,
     previewRole,
     setPreviewRole,
-  }), [currentUser, users, pendingAccounts, passwordResetRequests, isAuthReady, isSuperUser, effectiveRole, previewRole]);
+  }), [memoizedCurrentUser, users, pendingAccounts, passwordResetRequests, isAuthReady, isSuperUser, effectiveRole, previewRole]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

@@ -106,6 +106,7 @@ function AppContent() {
                         value={pinInput}
                         onChange={(e) => setPinInput(e.target.value)}
                         maxLength={6}
+                        autoComplete="off"
                       />
                   </div>
                   {pinError && (

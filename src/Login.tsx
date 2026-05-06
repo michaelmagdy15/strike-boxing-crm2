@@ -295,6 +295,7 @@ export default function Login() {
                       value={password}
                       onChange={e => setPassword(e.target.value)}
                       className="pr-10"
+                      autoComplete="current-password"
                     />
                     <button type="button" onClick={() => setShowPassword(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -340,6 +341,7 @@ export default function Login() {
                       value={coachPassword}
                       onChange={e => setCoachPassword(e.target.value)}
                       className="pr-10"
+                      autoComplete="current-password"
                     />
                     <button type="button" onClick={() => setShowCoachPassword(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                       {showCoachPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -381,6 +383,7 @@ export default function Login() {
                       value={memberPassword}
                       onChange={e => setMemberPassword(e.target.value)}
                       className="pr-10"
+                      autoComplete="current-password"
                     />
                     <button type="button" onClick={() => setShowMemberPassword(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                       {showMemberPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
