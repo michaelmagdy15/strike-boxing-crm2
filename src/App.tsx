@@ -32,6 +32,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { NotificationCenter } from './components/NotificationCenter';
 import BuildVersionFooter from './components/BuildVersionFooter';
+import CoachPortal from './coach/CoachPortal';
 
 function AppContent() {
   const { currentUser, logout, isAuthReady, previewRole, setPreviewRole, searchQuery, setSearchQuery, branding, canAccessSettings, canViewGlobalDashboard, canDeletePayments, isManagerOrSama } = useAppContext();
@@ -179,6 +180,10 @@ function AppContent() {
 
   if (!currentUser) {
     return <Login />;
+  }
+
+  if (currentUser.role === 'coach') {
+    return <CoachPortal />;
   }
 
   return (

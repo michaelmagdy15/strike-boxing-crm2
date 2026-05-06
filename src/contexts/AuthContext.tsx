@@ -1,19 +1,21 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { User, UserId, UserRole, isSuperAdmin, isAdmin, BrandingSettings } from '../types';
-import { auth, db, signInWithGoogle, logOut } from '../firebase';
+import { User, UserId, UserRole, isSuperAdmin, isAdmin, BrandingSettings, PendingAccount, PasswordResetRequest } from '../types';
+import { auth, db, signInWithGoogle, signInWithEmail, logOut, createFirebaseUser, sendPasswordReset } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { 
-  doc, 
-  getDoc, 
-  setDoc, 
-  updateDoc, 
-  onSnapshot, 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  onSnapshot,
+  collection,
+  query,
+  where,
+  getDocs,
   deleteDoc,
-  writeBatch
+  writeBatch,
+  addDoc,
+  orderBy,
 } from 'firebase/firestore';
 import * as userService from '../services/userService';
 
@@ -21,13 +23,26 @@ interface AuthContextType {
   currentUser: User | null;
   users: User[];
   allUsers: User[];
+  pendingAccounts: PendingAccount[];
+  passwordResetRequests: PasswordResetRequest[];
   login: () => Promise<void>;
+  loginWithEmail: (email: string, password: string) => Promise<void>;
+  loginWithCoachId: (coachId: string, password: string) => Promise<void>;
+  loginWithMemberId: (memberId: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (id: UserId, updates: Partial<User>) => Promise<void>;
   refreshUserData: () => Promise<void>;
   updateBranding: (updates: Partial<BrandingSettings>) => Promise<void>;
   deleteUser: (id: UserId) => Promise<void>;
   inviteUser: (email: string, role: UserRole, displayName?: string) => Promise<void>;
+  createCoachAccount: (name: string, email: string, branch?: string) => Promise<{ uid: string; coachId: string }>;
+  createClientAccount: (clientId: string, memberId: string, clientName: string, phone?: string) => Promise<{ uid: string }>;
+  submitSignUpRequest: (name: string, email: string, role: UserRole, message?: string) => Promise<void>;
+  approveSignUpRequest: (id: string, pending: PendingAccount) => Promise<void>;
+  denySignUpRequest: (id: string) => Promise<void>;
+  submitPasswordResetRequest: (email: string, name?: string) => Promise<void>;
+  approvePasswordResetRequest: (id: string, email: string) => Promise<void>;
+  denyPasswordResetRequest: (id: string) => Promise<void>;
   isAuthReady: boolean;
   isSuperUser: boolean;
   effectiveRole: UserRole | undefined;
@@ -37,16 +52,28 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const generateCoachId = async (): Promise<string> => {
+  const q = query(collection(db, 'users'), where('role', '==', 'coach'));
+  const snap = await getDocs(q);
+  const nums = snap.docs
+    .map(d => (d.data().coachId as string) || '')
+    .filter(id => id.startsWith('COACH-'))
+    .map(id => parseInt(id.split('-')[1] || '0', 10))
+    .filter(n => !isNaN(n));
+  const maxNum = nums.length > 0 ? Math.max(...nums) : 0;
+  return `COACH-${String(maxNum + 1).padStart(3, '0')}`;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [branding, setBranding] = useState<BrandingSettings>({ companyName: '', logoUrl: '' });
+  const [pendingAccounts, setPendingAccounts] = useState<PendingAccount[]>([]);
+  const [passwordResetRequests, setPasswordResetRequests] = useState<PasswordResetRequest[]>([]);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [previewRole, setPreviewRole] = useState<UserRole | null>(null);
 
   const effectiveRole = useMemo<UserRole | undefined>(() => {
-    // Only admins and managers can preview other roles
     if (currentUser && isAdmin(currentUser.role) && previewRole) {
       return previewRole;
     }
@@ -68,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (userDoc.exists()) {
             userData = userDoc.data() as User;
-            userData.id = userId; // Fix: ensure id is always populated
+            userData.id = userId;
             if (firebaseUser.email === "michaelmitry13@gmail.com" && userData.role !== 'crm_admin') {
               userData.role = 'crm_admin';
               await updateDoc(userDocRef, { role: 'crm_admin' });
@@ -76,7 +103,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               userData.role = 'super_admin';
               await updateDoc(userDocRef, { role: 'super_admin' });
             }
-            // Clean up any stale invite placeholder docs with the same email
             if (firebaseUser.email) {
               const staleQ = query(collection(db, 'users'), where('email', '==', firebaseUser.email));
               const staleSnap = await getDocs(staleQ);
@@ -100,27 +126,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const q = query(collection(db, 'users'), where('email', 'in', emailsToSearch));
               const querySnapshot = await getDocs(q);
               if (!querySnapshot.empty) {
-                // Take role from the first valid invite, then delete all existing docs with this email
-                // to prevent "Duplicate User" issues before creating the final UUID-keyed document.
                 role = querySnapshot.docs[0]!.data()['role'] as UserRole;
                 const batch = writeBatch(db);
                 querySnapshot.docs.forEach(d => batch.delete(d.ref));
                 await batch.commit();
               } else {
-                // As a fallback for case variations not caught by exact or lowercase match
-                // we can do a quick check to see if any user document matches case insensitively.
-                // This is slightly heavier (fetching all users), but users collection is small.
                 const allUsersSnap = await getDocs(collection(db, 'users'));
                 const match = allUsersSnap.docs.find(d => (d.data().email || '').toLowerCase() === emailLower);
                 if (match) {
-                   role = match.data()['role'] as UserRole;
-                   const batch = writeBatch(db);
-                   allUsersSnap.docs.filter(d => (d.data().email || '').toLowerCase() === emailLower).forEach(d => batch.delete(d.ref));
-                   await batch.commit();
+                  role = match.data()['role'] as UserRole;
+                  const batch = writeBatch(db);
+                  allUsersSnap.docs.filter(d => (d.data().email || '').toLowerCase() === emailLower).forEach(d => batch.delete(d.ref));
+                  await batch.commit();
                 }
               }
             }
-            
+
             const newUser: User = {
               id: userId,
               name: firebaseUser.displayName || 'New User',
@@ -141,61 +162,188 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  // Presence Heartbeat
+  // Presence heartbeat
   useEffect(() => {
     if (!currentUser) return;
-
     const updatePresence = async () => {
       try {
-        const userDocRef = doc(db, 'users', currentUser.id);
-        await updateDoc(userDocRef, {
-          lastSeen: new Date().toISOString()
-        });
-      } catch (error) {
-        console.error("Error updating presence:", error);
-      }
+        await updateDoc(doc(db, 'users', currentUser.id), { lastSeen: new Date().toISOString() });
+      } catch { /* silent */ }
     };
-
-    // Update immediately on mount/auth
     updatePresence();
-
-    // Set up heartbeat every 2 minutes
     const interval = setInterval(updatePresence, 2 * 60 * 1000);
-
     return () => clearInterval(interval);
   }, [currentUser?.id]);
 
+  // Users listener
   useEffect(() => {
     if (!currentUser) return;
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      const allUsers = snapshot.docs.map(d => {
+      const allUsersData = snapshot.docs.map(d => {
         const data = d.data();
         const hasStoredId = 'id' in data;
         const user = { ...data, id: d.id } as User;
-        // Mark as pending if this is an invite placeholder (no stored 'id' field = never logged in)
         user.isPending = !hasStoredId;
         return { user, hasStoredId };
       });
-      // Deduplicate by email: prefer real auth-keyed docs (those that have an 'id'
-      // field stored in Firestore data) over invite placeholders (only email/role/name).
       const emailMap = new Map<string, { user: User; hasStoredId: boolean }>();
-      allUsers.forEach(({ user, hasStoredId }) => {
+      allUsersData.forEach(({ user, hasStoredId }) => {
         const emailKey = (user.email || '').toLowerCase();
         const existing = emailMap.get(emailKey);
         if (!existing || (hasStoredId && !existing.hasStoredId)) {
           emailMap.set(emailKey, { user, hasStoredId });
         }
       });
-      setAllUsers(allUsers.map(e => e.user));
+      setAllUsers(allUsersData.map(e => e.user));
       setUsers(Array.from(emailMap.values()).map(e => e.user));
     }, (error) => console.error('Firestore Error (users):', error));
     return () => unsubUsers();
   }, [currentUser]);
 
+  // Pending accounts + password reset requests listeners (admin/manager only)
+  useEffect(() => {
+    if (!currentUser) return;
+    const role = currentUser.role;
+    if (role !== 'manager' && role !== 'admin' && role !== 'super_admin' && role !== 'crm_admin') return;
+
+    const unsubPending = onSnapshot(
+      query(collection(db, 'pendingAccounts'), where('status', '==', 'pending'), orderBy('requestedAt', 'desc')),
+      (snap) => setPendingAccounts(snap.docs.map(d => ({ ...d.data(), id: d.id } as PendingAccount))),
+      () => {}
+    );
+
+    const unsubResets = onSnapshot(
+      query(collection(db, 'passwordResetRequests'), where('status', '==', 'pending'), orderBy('requestedAt', 'desc')),
+      (snap) => setPasswordResetRequests(snap.docs.map(d => ({ ...d.data(), id: d.id } as PasswordResetRequest))),
+      () => {}
+    );
+
+    return () => { unsubPending(); unsubResets(); };
+  }, [currentUser?.id, currentUser?.role]);
+
   const login = async () => { await signInWithGoogle(); };
   const logout = async () => { await logOut(); };
   const refreshUserData = async () => {};
-  const updateBranding = async (updates: Partial<BrandingSettings>) => {};
+  const updateBranding = async (_updates: Partial<BrandingSettings>) => {};
+
+  const loginWithEmailFn = async (email: string, password: string) => {
+    await signInWithEmail(email, password);
+  };
+
+  const loginWithCoachId = async (coachId: string, password: string) => {
+    const q = query(collection(db, 'users'), where('coachId', '==', coachId.toUpperCase().trim()));
+    const snap = await getDocs(q);
+    if (snap.empty) throw new Error('Coach ID not found. Please check and try again.');
+    const coachData = snap.docs[0]!.data();
+    if (!coachData.email) throw new Error('No email associated with this Coach ID.');
+    await signInWithEmail(coachData.email, password);
+  };
+
+  const loginWithMemberId = async (memberId: string, password: string) => {
+    const q = query(collection(db, 'users'), where('clientRecordId', '==', memberId.trim()));
+    const snap = await getDocs(q);
+    if (snap.empty) throw new Error('Member ID not found. Please check and try again.');
+    const memberData = snap.docs[0]!.data();
+    if (!memberData.email) throw new Error('No account associated with this Member ID.');
+    await signInWithEmail(memberData.email, password);
+  };
+
+  const createCoachAccount = async (name: string, email: string, branch?: string) => {
+    const coachId = await generateCoachId();
+    const uid = await createFirebaseUser(email, '12345678');
+    const newUser: User = {
+      id: uid,
+      name,
+      email,
+      role: 'coach',
+      coachId,
+      branch: branch || undefined,
+    };
+    await setDoc(doc(db, 'users', uid), newUser);
+    return { uid, coachId };
+  };
+
+  const createClientAccount = async (clientId: string, memberId: string, clientName: string, phone?: string) => {
+    const email = `member-${memberId.toLowerCase()}@strike-member.local`;
+    const uid = await createFirebaseUser(email, '12345678');
+    const newUser: User = {
+      id: uid,
+      name: clientName,
+      email,
+      role: 'client',
+      clientRecordId: memberId,
+      phone,
+    };
+    await setDoc(doc(db, 'users', uid), newUser);
+    // Update the client record to flag portal access
+    await updateDoc(doc(db, 'clients', clientId), { portalUserId: uid });
+    return { uid };
+  };
+
+  const submitSignUpRequest = async (name: string, email: string, role: UserRole, message?: string) => {
+    const q = query(collection(db, 'users'), where('email', '==', email));
+    const snap = await getDocs(q);
+    if (!snap.empty) throw new Error('An account with this email already exists.');
+    const pendingQ = query(collection(db, 'pendingAccounts'), where('email', '==', email), where('status', '==', 'pending'));
+    const pendingSnap = await getDocs(pendingQ);
+    if (!pendingSnap.empty) throw new Error('A pending request for this email already exists.');
+    await addDoc(collection(db, 'pendingAccounts'), {
+      name,
+      email,
+      role,
+      message: message || '',
+      requestedAt: new Date().toISOString(),
+      status: 'pending',
+    });
+  };
+
+  const approveSignUpRequest = async (id: string, pending: PendingAccount) => {
+    const uid = await createFirebaseUser(pending.email, '12345678');
+    const newUser: User = {
+      id: uid,
+      name: pending.name,
+      email: pending.email,
+      role: pending.role,
+    };
+    if (pending.role === 'coach') {
+      const coachId = await generateCoachId();
+      newUser.coachId = coachId;
+    }
+    await setDoc(doc(db, 'users', uid), newUser);
+    await deleteDoc(doc(db, 'pendingAccounts', id));
+  };
+
+  const denySignUpRequest = async (id: string) => {
+    await updateDoc(doc(db, 'pendingAccounts', id), { status: 'denied' });
+    await deleteDoc(doc(db, 'pendingAccounts', id));
+  };
+
+  const submitPasswordResetRequest = async (email: string, name?: string) => {
+    const existingQ = query(
+      collection(db, 'passwordResetRequests'),
+      where('email', '==', email),
+      where('status', '==', 'pending')
+    );
+    const existingSnap = await getDocs(existingQ);
+    if (!existingSnap.empty) throw new Error('A password reset request for this email is already pending.');
+    await addDoc(collection(db, 'passwordResetRequests'), {
+      email,
+      name: name || '',
+      requestedAt: new Date().toISOString(),
+      status: 'pending',
+    });
+  };
+
+  const approvePasswordResetRequest = async (id: string, email: string) => {
+    await sendPasswordReset(email);
+    await updateDoc(doc(db, 'passwordResetRequests', id), { status: 'sent' });
+    await deleteDoc(doc(db, 'passwordResetRequests', id));
+  };
+
+  const denyPasswordResetRequest = async (id: string) => {
+    await updateDoc(doc(db, 'passwordResetRequests', id), { status: 'denied' });
+    await deleteDoc(doc(db, 'passwordResetRequests', id));
+  };
 
   const updateUser = async (id: UserId, updates: Partial<User>) => {
     const currentName = users.find(u => u.id === id)?.name;
@@ -205,9 +353,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteUser = async (id: UserId) => {
     if (!isSuperUser) throw new Error("Unauthorized");
     const user = users.find(u => u.id === id);
-    if (user && isSuperAdmin(user.role)) {
-      throw new Error("Cannot delete a super user account.");
-    }
+    if (user && isSuperAdmin(user.role)) throw new Error("Cannot delete a super user account.");
     await userService.deleteUser(id, user?.name);
   };
 
@@ -219,19 +365,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     currentUser: currentUser ? { ...currentUser, role: effectiveRole || currentUser.role } : null,
     users,
     allUsers,
+    pendingAccounts,
+    passwordResetRequests,
     login,
+    loginWithEmail: loginWithEmailFn,
+    loginWithCoachId,
+    loginWithMemberId,
     logout,
     updateUser,
     refreshUserData,
     updateBranding,
     deleteUser,
     inviteUser,
+    createCoachAccount,
+    createClientAccount,
+    submitSignUpRequest,
+    approveSignUpRequest,
+    denySignUpRequest,
+    submitPasswordResetRequest,
+    approvePasswordResetRequest,
+    denyPasswordResetRequest,
     isAuthReady,
     isSuperUser,
     effectiveRole,
     previewRole,
-    setPreviewRole
-  }), [currentUser, users, isAuthReady, isSuperUser, effectiveRole, previewRole]);
+    setPreviewRole,
+  }), [currentUser, users, pendingAccounts, passwordResetRequests, isAuthReady, isSuperUser, effectiveRole, previewRole]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

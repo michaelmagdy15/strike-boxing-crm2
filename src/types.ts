@@ -4,7 +4,7 @@ export type LeadCategory = 'Out of area zone' | 'Social class' | 'Price' | 'No a
 export type LeadSource = 'Instagram' | 'WhatsApp' | 'Walk-in' | 'TikTok' | 'Other';
 export type LeadStage = 'New' | 'Trial' | 'Follow Up' | 'Converted' | 'Lost';
 export type PackageType = 'Private' | 'Group';
-export type UserRole = 'manager' | 'rep' | 'admin' | 'super_admin' | 'crm_admin';
+export type UserRole = 'manager' | 'rep' | 'admin' | 'super_admin' | 'crm_admin' | 'coach' | 'client';
 export type InteractionType = 'Call' | 'WhatsApp' | 'Email' | 'Visit';
 export type InteractionOutcome = 'Interested' | 'Not Answered' | 'Scheduled Trial' | 'Rejected' | 'Other';
 
@@ -24,6 +24,31 @@ export interface Coach {
   id: string;
   name: string;
   active: boolean;
+  userId?: string; // links to users collection when coach has a login account
+}
+
+export interface PendingAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  message?: string;
+  requestedAt: string;
+  status: 'pending' | 'approved' | 'denied';
+}
+
+export interface PasswordResetRequest {
+  id: string;
+  email: string;
+  name?: string;
+  requestedAt: string;
+  status: 'pending' | 'sent' | 'denied';
+}
+
+export interface CoachSchedule {
+  coachId: string; // userId
+  days: Record<string, { enabled: boolean; startTime: string; endTime: string }>;
+  updatedAt: string;
 }
 
 export interface ImportBatch {
@@ -50,6 +75,9 @@ export interface User {
   can_assign_leads?: boolean;
   lastSeen?: string;
   isPending?: boolean; // true = invited but hasn't logged in yet
+  coachId?: string;    // e.g. 'COACH-001', only for role='coach'
+  clientRecordId?: string; // links to clients collection for role='client'
+  phone?: string;
 }
 
 export interface PTPackageRecord {

@@ -26,7 +26,11 @@
       "Bash(node convert-to-html.js)",
       "Bash(node convert-to-html.cjs)",
       "Bash(git push *)",
-      "Bash(git commit -m 'fix: normalise Youssef double-s aliases to canonical triple-s spelling *)"
+      "Bash(git commit -m 'fix: normalise Youssef double-s aliases to canonical triple-s spelling *)",
+      "Bash(grep -n \"vite-env\\\\|ImportMeta\\\\|interface ImportMeta\" src/ -r)",
+      "Bash(ls src/*.d.ts)",
+      "Bash(ls *.d.ts)",
+      "Bash(xargs grep *)"
     ]
   }
 }

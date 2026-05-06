@@ -197,41 +197,41 @@ export default function Settings() {
       </div>
 
       <Tabs defaultValue="branding" className="space-y-6">
-        <TabsList className="bg-muted/50 p-1 flex-wrap h-auto gap-1">
-          <TabsTrigger value="branding" className="flex items-center gap-2">
+        <TabsList className="bg-muted/50 p-1 w-full justify-start overflow-x-auto flex-nowrap h-auto gap-1 no-scrollbar">
+          <TabsTrigger value="branding" className="flex items-center gap-2 whitespace-nowrap">
             <Building2 className="h-4 w-4" />
             Branding
           </TabsTrigger>
-          <TabsTrigger value="users" className="flex items-center gap-2">
+          <TabsTrigger value="users" className="flex items-center gap-2 whitespace-nowrap">
             <Users className="h-4 w-4" />
             Users
           </TabsTrigger>
-          <TabsTrigger value="branches" className="flex items-center gap-2">
+          <TabsTrigger value="branches" className="flex items-center gap-2 whitespace-nowrap">
             <MapPin className="h-4 w-4" />
             Branches
           </TabsTrigger>
-          <TabsTrigger value="packages" className="flex items-center gap-2">
+          <TabsTrigger value="packages" className="flex items-center gap-2 whitespace-nowrap">
             <Package className="h-4 w-4" />
             Packages
           </TabsTrigger>
-          <TabsTrigger value="coaches" className="flex items-center gap-2">
+          <TabsTrigger value="coaches" className="flex items-center gap-2 whitespace-nowrap">
             <Dumbbell className="h-4 w-4" />
             Coaches
           </TabsTrigger>
-          <TabsTrigger value="commission" className="flex items-center gap-2">
+          <TabsTrigger value="commission" className="flex items-center gap-2 whitespace-nowrap">
             <BadgePercent className="h-4 w-4" />
             Commission
           </TabsTrigger>
-          <TabsTrigger value="backup" className="flex items-center gap-2">
+          <TabsTrigger value="backup" className="flex items-center gap-2 whitespace-nowrap">
             <Download className="h-4 w-4" />
             Backup
           </TabsTrigger>
-          <TabsTrigger value="sms" className="flex items-center gap-2">
+          <TabsTrigger value="sms" className="flex items-center gap-2 whitespace-nowrap">
             <MessageSquare className="h-4 w-4" />
             SMS
           </TabsTrigger>
           {canWipe && (
-            <TabsTrigger value="danger" className="flex items-center gap-2 text-destructive data-[state=active]:bg-destructive data-[state=active]:text-destructive-foreground">
+            <TabsTrigger value="danger" className="flex items-center gap-2 whitespace-nowrap text-destructive data-[state=active]:bg-destructive data-[state=active]:text-destructive-foreground">
               <AlertTriangle className="h-4 w-4" />
               Danger Zone
             </TabsTrigger>

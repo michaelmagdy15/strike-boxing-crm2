@@ -1,12 +1,19 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { initializeApp, deleteApp } from 'firebase/app';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+} from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
-// Use initializeFirestore with persistence enabled
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({
     tabManager: persistentMultipleTabManager()
@@ -22,6 +29,29 @@ export const signInWithGoogle = async () => {
   } catch (error) {
     console.error("Error signing in with Google", error);
     throw error;
+  }
+};
+
+export const signInWithEmail = async (email: string, password: string) => {
+  return signInWithEmailAndPassword(auth, email, password);
+};
+
+export const sendPasswordReset = async (email: string) => {
+  return sendPasswordResetEmail(auth, email);
+};
+
+/**
+ * Creates a Firebase Auth user without disrupting the current admin session.
+ * Uses a temporary secondary app instance that gets deleted after creation.
+ */
+export const createFirebaseUser = async (email: string, password: string): Promise<string> => {
+  const tempApp = initializeApp(firebaseConfig as any, `temp-${Date.now()}`);
+  const tempAuth = getAuth(tempApp);
+  try {
+    const cred = await createUserWithEmailAndPassword(tempAuth, email, password);
+    return cred.user.uid;
+  } finally {
+    await deleteApp(tempApp);
   }
 };
 
