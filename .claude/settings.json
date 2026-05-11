@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:www.mi5a.com)",
+      "WebFetch(domain:mi5a.com)",
+      "WebFetch(domain:instantdomainsearch.com)",
+      "Bash(dig +short google.com A)",
+      "Bash(dig +short forge.com A)",
+      "Bash(dig +short nizo.com A)",
+      "Bash(dig +short wafi.com A)"
     ]
   }
 }

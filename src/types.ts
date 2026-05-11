@@ -187,6 +187,7 @@ export interface Client {
   lastContactDate?: string; // ISO string
   nextReminderDate?: string; // ISO string
   paid?: boolean;
+  createdAt?: string; // ISO string — set on creation, used for sorting
 }
 
 export interface ClientPackage {

@@ -708,7 +708,13 @@ export default function Payments() {
       if (key === 'date') {
         const dateA = new Date(a.date).getTime();
         const dateB = new Date(b.date).getTime();
-        return direction === 'asc' ? dateA - dateB : dateB - dateA;
+        if (dateA !== dateB) {
+          return direction === 'asc' ? dateA - dateB : dateB - dateA;
+        }
+        // Tiebreaker: use created_at so same-day payments appear in entry order
+        const createdA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const createdB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return direction === 'asc' ? createdA - createdB : createdB - createdA;
       } else if (key === 'amount') {
         return direction === 'asc' ? a.amount - b.amount : b.amount - a.amount;
       }

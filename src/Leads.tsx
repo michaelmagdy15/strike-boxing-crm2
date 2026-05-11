@@ -85,7 +85,7 @@ export default function Leads() {
   const [filterStage, setFilterStage] = useState<LeadStage | 'All'>('All');
   const [filterInterest, setFilterInterest] = useState<LeadInterest | 'All'>('All');
   const [filterAssignedTo, setFilterAssignedTo] = useState<string | 'All'>('All');
-  const [sortBy, setSortBy] = useState<'default' | 'score'>('default');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'score'>('newest');
 
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const deferredFilterBranch = useDeferredValue(filterBranch);
@@ -249,6 +249,18 @@ export default function Leads() {
 
     if (deferredSortBy === 'score') {
       filtered.sort((a, b) => calculateLeadScore(b) - calculateLeadScore(a));
+    } else if (deferredSortBy === 'newest') {
+      filtered.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : (a.lastContactDate ? new Date(a.lastContactDate).getTime() : 0);
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : (b.lastContactDate ? new Date(b.lastContactDate).getTime() : 0);
+        return dateB - dateA;
+      });
+    } else if (deferredSortBy === 'oldest') {
+      filtered.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : (a.lastContactDate ? new Date(a.lastContactDate).getTime() : 0);
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : (b.lastContactDate ? new Date(b.lastContactDate).getTime() : 0);
+        return dateA - dateB;
+      });
     }
 
     return filtered;
@@ -419,31 +431,37 @@ export default function Leads() {
   };
 
   const handleAddLead = () => {
-    if (newLeadName && newLeadPhone) {
-      const newLead: Client = {
-        id: Math.random().toString(36).substr(2, 9),
-        name: newLeadName,
-        phone: newLeadPhone,
-        status: 'Lead',
-        source: newLeadSource,
-        branch: newLeadBranch || undefined,
-        stage: 'New',
-        comments: [],
-        interactions: [],
-        assignedTo: newLeadAssignedTo || (currentUser?.role === 'rep' ? currentUser.id : undefined),
-        lastContactDate: new Date().toISOString().split('T')[0],
-        nextReminderDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-        linkedAccount: newLeadLinked || undefined,
-      };
-      addClient(newLead);
-      setIsNewLeadOpen(false);
-      setNewLeadName('');
-      setNewLeadPhone('');
-      setNewLeadSource('Instagram');
-      setNewLeadBranch('');
-      setNewLeadAssignedTo('');
-      setNewLeadLinked(false);
+    if (!newLeadName || newLeadName.trim().length < 2) {
+      alert('Please enter a valid lead name (at least 2 characters).');
+      return;
     }
+    if (!newLeadPhone || newLeadPhone.trim().length < 7) {
+      alert('Please enter a valid phone number.');
+      return;
+    }
+    const newLead: Client = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: newLeadName.trim(),
+      phone: newLeadPhone.trim(),
+      status: 'Lead',
+      source: newLeadSource,
+      branch: newLeadBranch || undefined,
+      stage: 'New',
+      comments: [],
+      interactions: [],
+      assignedTo: newLeadAssignedTo || (currentUser?.role === 'rep' ? currentUser.id : undefined),
+      lastContactDate: new Date().toISOString(),
+      nextReminderDate: new Date(Date.now() + 86400000).toISOString(),
+      linkedAccount: newLeadLinked || undefined,
+    };
+    addClient(newLead);
+    setIsNewLeadOpen(false);
+    setNewLeadName('');
+    setNewLeadPhone('');
+    setNewLeadSource('Instagram');
+    setNewLeadBranch('');
+    setNewLeadAssignedTo('');
+    setNewLeadLinked(false);
   };
 
   const handleStageChange = (lead: Client, newStage: LeadStage) => {
@@ -1262,12 +1280,13 @@ export default function Leads() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
           <div className="space-y-2">
             <Label className="text-xs">Sort By</Label>
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as 'default' | 'score')}>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as 'newest' | 'oldest' | 'score')}>
               <SelectTrigger className="h-9">
                 <SelectValue placeholder="Sort" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="default">Default</SelectItem>
+                <SelectItem value="newest">Newest First</SelectItem>
+                <SelectItem value="oldest">Oldest First</SelectItem>
                 <SelectItem value="score">Score (High-Low)</SelectItem>
               </SelectContent>
             </Select>
