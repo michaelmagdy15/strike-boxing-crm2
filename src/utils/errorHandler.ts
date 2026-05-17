@@ -47,6 +47,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   }
+  // Log the structured error for debugging — do NOT throw, as this is called from
+  // onSnapshot error callbacks where throwing would crash the component tree.
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
 }

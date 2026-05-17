@@ -6,12 +6,19 @@ import { handleFirestoreError, OperationType } from '../utils/errorHandler';
 import { cleanData } from '../utils';
 import { addAuditLog } from '../services/auditService';
 import { PACKAGES } from '../constants';
+import { useAuth } from '../contexts/AuthContext';
 
 export const usePackages = () => {
+  const { currentUser } = useAuth();
   const [packages, setPackages] = useState<Package[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!currentUser) {
+      setPackages([]);
+      setLoading(false);
+      return;
+    }
     const unsub = onSnapshot(collection(db, 'packages'), (snapshot) => {
       setPackages(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Package)));
       setLoading(false);
@@ -20,7 +27,7 @@ export const usePackages = () => {
       setLoading(false);
     });
     return () => unsub();
-  }, []);
+  }, [currentUser]);
 
   const addPackage = async (pkg: Omit<Package, 'id'>) => {
     try {

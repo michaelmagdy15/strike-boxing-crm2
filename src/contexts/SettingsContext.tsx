@@ -20,7 +20,7 @@ interface SettingsContextType {
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const SettingsProvider: React.FC<{ children: React.ReactNode; isAuthenticated?: boolean }> = ({ children, isAuthenticated = false }) => {
   const [branding, setBranding] = useState<BrandingSettings>({
     companyName: 'Strike',
     logoUrl: '/strikelogo.png'
@@ -35,31 +35,54 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [branches, setBranches] = useState<Branch[]>(['COMPLEX', 'MIVIDA', 'Strike IMPACT']);
   const [commissionRates, setCommissionRates] = useState({ ptRate: 8, groupRate: 5 });
 
+  // Branding is publicly readable per security rules — always subscribe regardless of auth state
   useEffect(() => {
-    const unsubBranding = onSnapshot(doc(db, 'settings', 'branding'), (snapshot) => {
-      if (snapshot.exists()) setBranding(snapshot.data() as BrandingSettings);
-    }, (error) => console.error('Firestore Error (branding):', error));
-
-    const unsubBranches = onSnapshot(doc(db, 'settings', 'branches'), (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        if (data?.branches && Array.isArray(data.branches)) setBranches(data.branches);
-      }
-    }, (error) => console.error('Firestore Error (branches):', error));
-
-    const unsubCommission = onSnapshot(doc(db, 'settings', 'commission'), (snapshot) => {
-      if (snapshot.exists()) setCommissionRates(snapshot.data() as { ptRate: number; groupRate: number });
-    }, (error) => console.error('Firestore Error (commission):', error));
-
-    const unsubTarget = onSnapshot(doc(db, 'settings', 'sales-target'), (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        setSalesTarget(prev => ({ ...prev, targetAmount: data.targetAmount || 50000 }));
-      }
-    }, (error) => console.error('Firestore Error (sales-target):', error));
-
-    return () => { unsubBranding(); unsubBranches(); unsubCommission(); unsubTarget(); };
+    const unsubBranding = onSnapshot(
+      doc(db, 'settings', 'branding'),
+      (snapshot) => {
+        if (snapshot.exists()) setBranding(snapshot.data() as BrandingSettings);
+      },
+      (error) => console.error('Firestore Error (branding):', error)
+    );
+    return () => { unsubBranding(); };
   }, []);
+
+  // Auth-required settings — only subscribe when a user is logged in to avoid permission errors
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const unsubBranches = onSnapshot(
+      doc(db, 'settings', 'branches'),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          if (data?.branches && Array.isArray(data.branches)) setBranches(data.branches);
+        }
+      },
+      (error) => console.error('Firestore Error (branches):', error)
+    );
+
+    const unsubCommission = onSnapshot(
+      doc(db, 'settings', 'commission'),
+      (snapshot) => {
+        if (snapshot.exists()) setCommissionRates(snapshot.data() as { ptRate: number; groupRate: number });
+      },
+      (error) => console.error('Firestore Error (commission):', error)
+    );
+
+    const unsubTarget = onSnapshot(
+      doc(db, 'settings', 'sales-target'),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          setSalesTarget(prev => ({ ...prev, targetAmount: data.targetAmount || 50000 }));
+        }
+      },
+      (error) => console.error('Firestore Error (sales-target):', error)
+    );
+
+    return () => { unsubBranches(); unsubCommission(); unsubTarget(); };
+  }, [isAuthenticated]);
 
   const updateBranding = useCallback(async (updates: Partial<BrandingSettings>) => {
     await setDoc(doc(db, 'settings', 'branding'), updates, { merge: true });

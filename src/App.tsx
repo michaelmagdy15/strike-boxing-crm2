@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { AppProvider, useAppContext } from './context';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -528,19 +528,29 @@ function AppContent() {
   );
 }
 
+/** Bridges auth state into SettingsProvider so private collections only subscribe when logged in */
+function AuthAwareSettingsProvider({ children }: { children: React.ReactNode }) {
+  const { currentUser, isAuthReady } = useAuth();
+  return (
+    <SettingsProvider isAuthenticated={isAuthReady && currentUser != null}>
+      {children}
+    </SettingsProvider>
+  );
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
         <AuthProvider>
-          <SettingsProvider>
+          <AuthAwareSettingsProvider>
             <AppProvider>
               <ThemeProvider>
                 <AppContent />
                 <BuildVersionFooter />
               </ThemeProvider>
             </AppProvider>
-          </SettingsProvider>
+          </AuthAwareSettingsProvider>
         </AuthProvider>
       </BrowserRouter>
     </ErrorBoundary>

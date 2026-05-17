@@ -5,12 +5,19 @@ import { Coach } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandler';
 import { cleanData } from '../utils';
 import { addAuditLog } from '../services/auditService';
+import { useAuth } from '../contexts/AuthContext';
 
 export const useCoaches = () => {
+  const { currentUser } = useAuth();
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!currentUser) {
+      setCoaches([]);
+      setLoading(false);
+      return;
+    }
     const unsub = onSnapshot(collection(db, 'coaches'), (snapshot) => {
       setCoaches(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Coach)));
       setLoading(false);
@@ -19,7 +26,7 @@ export const useCoaches = () => {
       setLoading(false);
     });
     return () => unsub();
-  }, []);
+  }, [currentUser]);
 
   const addCoach = async (coach: Omit<Coach, 'id'>) => {
     try {

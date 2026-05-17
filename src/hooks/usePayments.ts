@@ -17,6 +17,11 @@ export const usePayments = ({ currentUser, clients, canDeletePayments }: UsePaym
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!currentUser) {
+      setPayments([]);
+      setLoading(false);
+      return;
+    }
     const unsub = onSnapshot(collection(db, 'payments'), (snapshot) => {
       // Filter out soft-deleted payments (where deleted_at is not null)
       setPayments(snapshot.docs
@@ -29,7 +34,7 @@ export const usePayments = ({ currentUser, clients, canDeletePayments }: UsePaym
       setLoading(false);
     });
     return () => unsub();
-  }, []);
+  }, [currentUser]);
 
   const addPayment = async (payment: Omit<Payment, 'id' | 'client_name' | 'amount_paid' | 'created_at' | 'package_category_type' | 'deleted_at'>) => {
     if (!currentUser) return;
