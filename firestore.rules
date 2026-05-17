@@ -326,6 +326,22 @@ service cloud.firestore {
       allow write: if isAdmin() && (settingId != 'branding' || isValidBranding(request.resource.data));
     }
 
+    // --- Pending Accounts (sign-up requests) ---
+    match /pendingAccounts/{docId} {
+      // Anyone (even unauthenticated) can create a sign-up request
+      allow create: if true;
+      // Only admins can read, update (approve/deny), or delete pending requests
+      allow read, update, delete: if isAdmin();
+    }
+
+    // --- Password Reset Requests ---
+    match /passwordResetRequests/{docId} {
+      // Anyone can submit a reset request (unauthenticated user forgot password)
+      allow create: if true;
+      // Only admins can read, update (approve/deny), or delete reset requests
+      allow read, update, delete: if isAdmin();
+    }
+
     // --- Import Batches ---
     match /importBatches/{batchId} {
       allow read: if isAuthenticated();
