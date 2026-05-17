@@ -102,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (firebaseUser.email === "michaelmitry13@gmail.com" && userData.role !== 'crm_admin') {
               userData.role = 'crm_admin';
               await updateDoc(userDocRef, { role: 'crm_admin' });
-            } else if (firebaseUser.email === "magd.gallab@gmail.com" && userData.role !== 'super_admin') {
+            } else if ((firebaseUser.email === "magd.gallab@gmail.com" || firebaseUser.email === "admin@strike.eg") && userData.role !== 'super_admin') {
               userData.role = 'super_admin';
               await updateDoc(userDocRef, { role: 'super_admin' });
             }
@@ -122,7 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             let role: UserRole = 'rep';
             if (firebaseUser.email === "michaelmitry13@gmail.com") {
               role = 'crm_admin';
-            } else if (firebaseUser.email === "magd.gallab@gmail.com") {
+            } else if (firebaseUser.email === "magd.gallab@gmail.com" || firebaseUser.email === "admin@strike.eg") {
               role = 'super_admin';
             } else if (firebaseUser.email) {
               const emailLower = firebaseUser.email.toLowerCase();

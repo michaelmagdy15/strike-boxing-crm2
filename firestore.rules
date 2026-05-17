@@ -24,16 +24,18 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && (
-        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
-        (request.auth.token.email == "magd.gallab@gmail.com" && request.auth.token.email_verified == true) ||
+        (request.auth.token.email == "michaelmitry13@gmail.com") ||
+        (request.auth.token.email == "magd.gallab@gmail.com") ||
+        (request.auth.token.email == "admin@strike.eg") ||
         (userExists() && getUserRole() in ['admin', 'manager', 'super_admin', 'crm_admin'])
       );
     }
 
     function isSuperAdmin() {
       return isAuthenticated() && (
-        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
-        (request.auth.token.email == "magd.gallab@gmail.com" && request.auth.token.email_verified == true) ||
+        (request.auth.token.email == "michaelmitry13@gmail.com") ||
+        (request.auth.token.email == "magd.gallab@gmail.com") ||
+        (request.auth.token.email == "admin@strike.eg") ||
         (userExists() && getUserRole() in ['super_admin', 'crm_admin'])
       );
     }
