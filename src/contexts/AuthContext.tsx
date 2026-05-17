@@ -48,6 +48,8 @@ interface AuthContextType {
   effectiveRole: UserRole | undefined;
   previewRole: UserRole | null;
   setPreviewRole: (role: UserRole | null) => void;
+  authError: string | null;
+  setAuthError: (error: string | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -72,6 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [passwordResetRequests, setPasswordResetRequests] = useState<PasswordResetRequest[]>([]);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [previewRole, setPreviewRole] = useState<UserRole | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const effectiveRole = useMemo<UserRole | undefined>(() => {
     if (currentUser && isAdmin(currentUser.role) && previewRole) {
@@ -114,6 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
             }
             setCurrentUser(userData);
+            setAuthError(null);
           } else {
             let role: UserRole = 'rep';
             if (firebaseUser.email === "michaelmitry13@gmail.com") {
@@ -150,12 +154,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             };
             await setDoc(userDocRef, newUser);
             setCurrentUser(newUser);
+            setAuthError(null);
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error("Error fetching user doc:", error);
+          setAuthError(`[Firestore Auth Error] ${error.code || 'UNKNOWN'}: ${error.message || String(error)}`);
+          // If we fail to load or update the user document, we shouldn't consider the user fully logged in
+          setCurrentUser(null);
         }
       } else {
         setCurrentUser(null);
+        setAuthError(null);
       }
       setIsAuthReady(true);
     });
@@ -394,7 +403,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     effectiveRole,
     previewRole,
     setPreviewRole,
-  }), [memoizedCurrentUser, users, pendingAccounts, passwordResetRequests, isAuthReady, isSuperUser, effectiveRole, previewRole]);
+    authError,
+    setAuthError,
+  }), [memoizedCurrentUser, users, pendingAccounts, passwordResetRequests, isAuthReady, isSuperUser, effectiveRole, previewRole, authError]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

@@ -25,7 +25,7 @@ const GoogleIcon = () => (
 );
 
 export default function Login() {
-  const { login, loginWithEmail, loginWithCoachId, loginWithMemberId, submitSignUpRequest, submitPasswordResetRequest, isAuthReady } = useAuth();
+  const { login, loginWithEmail, loginWithCoachId, loginWithMemberId, submitSignUpRequest, submitPasswordResetRequest, isAuthReady, authError, setAuthError } = useAuth();
   const { branding } = useSettings();
 
   const [view, setView] = useState<View>('login');
@@ -75,6 +75,7 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     setError('');
+    setAuthError(null);
     setIsLoading(true);
     try { await login(); } catch (err) { handleError(err); }
     finally { setIsLoading(false); }
@@ -84,6 +85,7 @@ export default function Login() {
     e.preventDefault();
     if (!email || !password) { setError('Please enter your email and password.'); return; }
     setError('');
+    setAuthError(null);
     setIsLoading(true);
     try { await loginWithEmail(email, password); } catch (err) { handleError(err); }
     finally { setIsLoading(false); }
@@ -242,13 +244,20 @@ export default function Login() {
           <CardTitle className="text-2xl">Sign In</CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
+          {authError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription className="break-words font-mono text-xs">
+                {authError}
+              </AlertDescription>
+            </Alert>
+          )}
           {error && (
             <Alert variant="destructive" className="mb-4">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
 
-          <Tabs defaultValue="staff" onValueChange={() => setError('')}>
+          <Tabs defaultValue="staff" onValueChange={() => { setError(''); setAuthError(null); }}>
             <TabsList className="grid grid-cols-3 w-full mb-4">
               <TabsTrigger value="staff" className="flex items-center gap-1.5 text-xs">
                 <ShieldCheck className="h-3.5 w-3.5" /> Staff
