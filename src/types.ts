@@ -41,6 +41,8 @@ export interface PasswordResetRequest {
   id: string;
   email: string;
   name?: string;
+  memberId?: string;  // set for client/member reset requests
+  phone?: string;     // set for client/member reset requests
   requestedAt: string;
   status: 'pending' | 'sent' | 'denied';
 }

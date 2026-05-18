@@ -43,6 +43,7 @@ interface AuthContextType {
   approveSignUpRequest: (id: string, pending: PendingAccount) => Promise<void>;
   denySignUpRequest: (id: string) => Promise<void>;
   submitPasswordResetRequest: (email: string, name?: string) => Promise<void>;
+  submitMemberPasswordResetRequest: (memberId: string, phone: string) => Promise<void>;
   approvePasswordResetRequest: (id: string, email: string) => Promise<void>;
   denyPasswordResetRequest: (id: string) => Promise<void>;
   isAuthReady: boolean;
@@ -360,6 +361,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       status: 'pending',
     });
   };
+  const submitMemberPasswordResetRequest = async (memberId: string, phone: string) => {
+    // Look up the Firebase user whose clientRecordId matches the provided Member ID
+    const userQ = query(collection(db, 'users'), where('clientRecordId', '==', memberId.trim()));
+    const userSnap = await getDocs(userQ);
+    if (userSnap.empty) {
+      throw new Error('Member ID not found. Please check your ID and try again.');
+    }
+    const userData = userSnap.docs[0]!.data();
+    const syntheticEmail: string = userData.email || '';
+    const memberName: string = userData.name || '';
+
+    // Verify phone against the clients collection
+    const clientQ = query(collection(db, 'clients'), where('memberId', '==', memberId.trim()));
+    const clientSnap = await getDocs(clientQ);
+    if (!clientSnap.empty) {
+      const clientPhone: string = (clientSnap.docs[0]!.data().phone || '').replace(/\s/g, '');
+      const inputPhone = phone.trim().replace(/\s/g, '');
+      if (clientPhone && inputPhone && clientPhone !== inputPhone) {
+        throw new Error('Phone number does not match our records for this Member ID.');
+      }
+    }
+
+    // Check for an existing pending request
+    try {
+      const existingQ = query(
+        collection(db, 'passwordResetRequests'),
+        where('email', '==', syntheticEmail),
+        where('status', '==', 'pending')
+      );
+      const existingSnap = await getDocs(existingQ);
+      if (!existingSnap.empty) {
+        throw new Error('A password reset request for this account is already pending admin approval.');
+      }
+    } catch (err: any) {
+      if (err?.message?.includes('pending admin approval')) throw err;
+    }
+
+    await addDoc(collection(db, 'passwordResetRequests'), {
+      email: syntheticEmail,
+      name: memberName,
+      memberId: memberId.trim(),
+      phone: phone.trim(),
+      requestedAt: new Date().toISOString(),
+      status: 'pending',
+    });
+  };
 
   const approvePasswordResetRequest = async (id: string, email: string) => {
     await sendPasswordReset(email);
@@ -462,6 +509,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     approveSignUpRequest,
     denySignUpRequest,
     submitPasswordResetRequest,
+    submitMemberPasswordResetRequest,
     approvePasswordResetRequest,
     denyPasswordResetRequest,
     isAuthReady,
