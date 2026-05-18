@@ -11,17 +11,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { UserRole, User } from './types';
-import { Shield, User as UserIcon, Plus, Trash2, Edit, BarChart, Clock } from 'lucide-react';
+import { Shield, User as UserIcon, Plus, Trash2, Edit, BarChart, Clock, KeyRound, Loader2, CheckCircle2 } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { UserPerformanceDialog } from './components/UserPerformanceDialog';
 
 export default function Users() {
-  const { users, currentUser, updateUser, inviteUser, deleteUser } = useAuth();
+  const { users, currentUser, updateUser, inviteUser, deleteUser, activatePendingUser } = useAuth();
   const { branches } = useSettings();
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('rep');
+  const [activatingUserId, setActivatingUserId] = useState<string | null>(null);
+  const [activatedUserId, setActivatedUserId] = useState<string | null>(null);
   
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState('');
@@ -78,6 +80,20 @@ export default function Users() {
   const handleDeleteUser = (userId: string) => {
     if (window.confirm("Are you sure you want to delete this user? This revokes their access.")) {
       deleteUser(userId);
+    }
+  };
+
+  const handleActivatePending = async (user: User) => {
+    if (!window.confirm(`Create a login account for ${user.name} (${user.email})?\n\nThey will be able to sign in with email + password \"12345678\". They should change this after first login.`)) return;
+    setActivatingUserId(user.id);
+    try {
+      await activatePendingUser(user.id, user.email, user.role, user.name);
+      setActivatedUserId(user.id);
+      setTimeout(() => setActivatedUserId(null), 3000);
+    } catch (err: any) {
+      window.alert(`Failed to activate account: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setActivatingUserId(null);
     }
   };
 
@@ -229,6 +245,25 @@ export default function Users() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      {/* Activate button for pending-invite users (no Firebase Auth account yet) */}
+                      {user.isPending && canChangeRoles && user.id !== currentUser.id && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleActivatePending(user)}
+                          disabled={activatingUserId === user.id}
+                          title="Activate account — creates login with password 12345678"
+                          className="text-amber-600 hover:bg-amber-50"
+                        >
+                          {activatingUserId === user.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : activatedUserId === user.id ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <KeyRound className="h-4 w-4" />
+                          )}
+                        </Button>
+                      )}
                       {(user.role === 'rep' || user.role === 'manager') && (
                         <Button
                           variant="ghost"

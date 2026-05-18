@@ -1,11 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { useAppContext } from './context';
+import { useAuth } from './contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Save, Building2, Users, Package, AlertTriangle, ShieldAlert, Trash2, Dumbbell, Lock, Download, Upload, MessageSquare, Send } from 'lucide-react';
+import { Save, Building2, Users, Package, AlertTriangle, ShieldAlert, Trash2, Dumbbell, Lock, Download, Upload, MessageSquare, Send, KeyRound, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import UsersManagement from './Users';
 import Packages from './Packages';
@@ -18,6 +19,7 @@ import { exportDatabaseToJson, restoreDatabaseFromJson } from './services/backup
 
 export default function Settings() {
   const { branding, updateBranding, currentUser, wipeSystem, canAccessSettings, branches, updateBranches } = useAppContext();
+  const { changeMyPassword } = useAuth();
   const [companyName, setCompanyName] = useState(branding.companyName);
   const [logoUrl, setLogoUrl] = useState(branding.logoUrl);
   const [kioskPin, setKioskPin] = useState(branding.kioskPin || '');
@@ -25,6 +27,14 @@ export default function Settings() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingPin, setIsSavingPin] = useState(false);
   const [newBranchName, setNewBranchName] = useState('');
+
+  // Change password state
+  const [currentPwd, setCurrentPwd] = useState('');
+  const [newPwd, setNewPwd] = useState('');
+  const [confirmPwd, setConfirmPwd] = useState('');
+  const [showPwd, setShowPwd] = useState(false);
+  const [pwdStatus, setPwdStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isChangingPwd, setIsChangingPwd] = useState(false);
 
   const [isWipeDialogOpen, setIsWipeDialogOpen] = useState(false);
   const [wipeStep, setWipeStep] = useState(1);
@@ -178,14 +188,106 @@ export default function Settings() {
     printWindow.document.close();
   };
 
+  const handleChangePassword = async () => {
+    setPwdStatus(null);
+    if (!newPwd || newPwd.length < 8) {
+      setPwdStatus({ type: 'error', message: 'New password must be at least 8 characters.' });
+      return;
+    }
+    if (newPwd !== confirmPwd) {
+      setPwdStatus({ type: 'error', message: 'New passwords do not match.' });
+      return;
+    }
+    setIsChangingPwd(true);
+    try {
+      await changeMyPassword(currentPwd, newPwd);
+      setPwdStatus({ type: 'success', message: 'Password updated successfully! Use your new password next time you log in.' });
+      setCurrentPwd(''); setNewPwd(''); setConfirmPwd('');
+    } catch (err: any) {
+      const msg = err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential'
+        ? 'Current password is incorrect.'
+        : err?.code === 'auth/too-many-requests'
+        ? 'Too many attempts. Please wait a few minutes and try again.'
+        : err?.message || 'Failed to change password.';
+      setPwdStatus({ type: 'error', message: msg });
+    } finally {
+      setIsChangingPwd(false);
+    }
+  };
+
+  const ChangePasswordCard = (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <KeyRound className="h-5 w-5 text-primary" />
+          Change My Password
+        </CardTitle>
+        <CardDescription>
+          Update your login password. Enter your current password first to verify it's you.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+          <strong>Default password?</strong> If you were just added to the system, your current password is <code className="font-mono bg-amber-100 px-1 rounded">12345678</code>. Change it here.
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="currentPwd">Current Password</Label>
+          <div className="relative">
+            <input
+              id="currentPwd"
+              type={showPwd ? 'text' : 'password'}
+              value={currentPwd}
+              onChange={e => setCurrentPwd(e.target.value)}
+              placeholder="Enter your current password"
+              className="w-full px-3 py-2 border rounded-md text-sm pr-10"
+            />
+            <button type="button" onClick={() => setShowPwd(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="newPwd">New Password</Label>
+          <input
+            id="newPwd"
+            type={showPwd ? 'text' : 'password'}
+            value={newPwd}
+            onChange={e => setNewPwd(e.target.value)}
+            placeholder="At least 8 characters"
+            className="w-full px-3 py-2 border rounded-md text-sm"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="confirmPwd">Confirm New Password</Label>
+          <input
+            id="confirmPwd"
+            type={showPwd ? 'text' : 'password'}
+            value={confirmPwd}
+            onChange={e => setConfirmPwd(e.target.value)}
+            placeholder="Repeat new password"
+            className="w-full px-3 py-2 border rounded-md text-sm"
+          />
+        </div>
+        <Button className="w-full" onClick={handleChangePassword} disabled={isChangingPwd || !currentPwd || !newPwd || !confirmPwd}>
+          {isChangingPwd ? 'Updating...' : 'Update Password'}
+        </Button>
+        {pwdStatus && (
+          <p className={`text-sm font-medium flex items-center gap-2 ${
+            pwdStatus.type === 'success' ? 'text-green-600' : 'text-destructive'
+          }`}>
+            {pwdStatus.type === 'success' && <CheckCircle2 className="h-4 w-4" />}
+            {pwdStatus.message}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+
   if (!canAccessSettings) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
-        <ShieldAlert className="h-16 w-16 text-destructive opacity-20" />
-        <h2 className="text-2xl font-bold">Access Restricted</h2>
-        <p className="text-muted-foreground max-w-md">
-          You do not have permission to access Settings. Please contact your administrator.
-        </p>
+      <div className="space-y-6 max-w-md mx-auto py-8">
+        <h2 className="text-2xl font-bold tracking-tight">My Account</h2>
+        {ChangePasswordCard}
       </div>
     );
   }
@@ -373,6 +475,7 @@ export default function Settings() {
               </CardContent>
             </Card>
           </div>
+          {ChangePasswordCard}
         </TabsContent>
 
         {/* ── Branches ── */}

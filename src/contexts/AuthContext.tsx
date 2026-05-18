@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { User, UserId, UserRole, isSuperAdmin, isAdmin, BrandingSettings, PendingAccount, PasswordResetRequest } from '../types';
 import { auth, db, signInWithGoogle, signInWithEmail, logOut, createFirebaseUser, sendPasswordReset } from '../firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, updatePassword as fbUpdatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import {
   doc,
   getDoc,
@@ -18,6 +18,7 @@ import {
   orderBy,
 } from 'firebase/firestore';
 import * as userService from '../services/userService';
+import { activatePendingUser as activatePendingUserService } from '../services/userService';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -35,6 +36,7 @@ interface AuthContextType {
   updateBranding: (updates: Partial<BrandingSettings>) => Promise<void>;
   deleteUser: (id: UserId) => Promise<void>;
   inviteUser: (email: string, role: UserRole, displayName?: string) => Promise<void>;
+  activatePendingUser: (pendingDocId: string, email: string, role: UserRole, name: string) => Promise<void>;
   createCoachAccount: (name: string, email: string, branch?: string) => Promise<{ uid: string; coachId: string }>;
   createClientAccount: (clientId: string, memberId: string, clientName: string, phone?: string) => Promise<{ uid: string }>;
   submitSignUpRequest: (name: string, email: string, role: UserRole, message?: string) => Promise<void>;
@@ -50,6 +52,7 @@ interface AuthContextType {
   setPreviewRole: (role: UserRole | null) => void;
   authError: string | null;
   setAuthError: (error: string | null) => void;
+  changeMyPassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -370,6 +373,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await userService.inviteUser(email, role, displayName);
   };
 
+  const activatePendingUser = async (pendingDocId: string, email: string, role: UserRole, name: string) => {
+    await activatePendingUserService(pendingDocId, email, role, name);
+  };
+
+  /**
+   * Allows the currently signed-in user to change their own password.
+   * Requires re-authentication first (Firebase security requirement).
+   */
+  const changeMyPassword = async (currentPassword: string, newPassword: string) => {
+    const user = auth.currentUser;
+    if (!user || !user.email) throw new Error('No authenticated user found.');
+    // Re-authenticate before changing password (Firebase requires this)
+    const credential = EmailAuthProvider.credential(user.email, currentPassword);
+    await reauthenticateWithCredential(user, credential);
+    await fbUpdatePassword(user, newPassword);
+  };
+
   const memoizedCurrentUser = useMemo(() => {
     return currentUser ? { ...currentUser, role: effectiveRole || currentUser.role } : null;
   }, [currentUser, effectiveRole]);
@@ -392,6 +412,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     inviteUser,
     createCoachAccount,
     createClientAccount,
+    activatePendingUser,
     submitSignUpRequest,
     approveSignUpRequest,
     denySignUpRequest,
@@ -405,6 +426,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setPreviewRole,
     authError,
     setAuthError,
+    changeMyPassword,
   }), [memoizedCurrentUser, users, pendingAccounts, passwordResetRequests, isAuthReady, isSuperUser, effectiveRole, previewRole, authError]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
