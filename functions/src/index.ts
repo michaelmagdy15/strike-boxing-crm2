@@ -1,4 +1,4 @@
-import { onRequest } from "firebase-functions/v2/https";
+import { onRequest, onCall, HttpsError } from "firebase-functions/v2/https";
 import { onDocumentCreated, onDocumentUpdated, FirestoreEvent, QueryDocumentSnapshot, Change } from "firebase-functions/v2/firestore";
 import { defineSecret } from "firebase-functions/params";
 import * as logger from "firebase-functions/logger";
@@ -9,6 +9,56 @@ import { sendSms, sendLeadAssignedNotification, SMS_SECRETS } from "./utils/smsS
 // Initialize Firebase Admin for Firestore access
 admin.initializeApp();
 const db = admin.firestore();
+
+const ADMIN_EMAILS = [
+  "michaelmitry13@gmail.com",
+  "magd.gallab@gmail.com",
+  "admin@strike.eg",
+];
+const ADMIN_ROLES = ["admin", "super_admin", "crm_admin", "manager"];
+
+/**
+ * Callable: Force reset a user's password to "12345678" and flag mustChangePassword.
+ * Only callable by authenticated admins/super_admins.
+ * Data: { userId: string }
+ */
+export const forcePasswordReset = onCall({ cors: true }, async (request) => {
+  const callerEmail = request.auth?.token?.email ?? "";
+  const callerUid = request.auth?.uid;
+
+  if (!callerUid) {
+    throw new HttpsError("unauthenticated", "You must be signed in.");
+  }
+
+  // Check caller is an admin
+  const isHardcodedAdmin = ADMIN_EMAILS.includes(callerEmail);
+  if (!isHardcodedAdmin) {
+    const callerDoc = await db.collection("users").doc(callerUid).get();
+    const callerRole = callerDoc.data()?.role ?? "";
+    if (!ADMIN_ROLES.includes(callerRole)) {
+      throw new HttpsError("permission-denied", "Only admins can force password resets.");
+    }
+  }
+
+  const { userId } = request.data as { userId: string };
+  if (!userId) {
+    throw new HttpsError("invalid-argument", "userId is required.");
+  }
+
+  // Prevent resetting your own account this way
+  if (userId === callerUid) {
+    throw new HttpsError("invalid-argument", "You cannot force-reset your own account.");
+  }
+
+  // Reset Firebase Auth password to default
+  await admin.auth().updateUser(userId, { password: "12345678" });
+
+  // Mark mustChangePassword in Firestore
+  await db.collection("users").doc(userId).update({ mustChangePassword: true });
+
+  logger.info(`[forcePasswordReset] ${callerEmail} force-reset password for user ${userId}`);
+  return { success: true };
+});
 
 // Callable function for member upgrades with race-condition prevention
 export const upgradeMemberPackage = onRequest(async (req: any, res: any) => {

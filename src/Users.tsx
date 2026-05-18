@@ -14,9 +14,7 @@ import { UserRole, User } from './types';
 import { Shield, User as UserIcon, Plus, Trash2, Edit, BarChart, Clock, KeyRound, Loader2, CheckCircle2, RotateCcw } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { UserPerformanceDialog } from './components/UserPerformanceDialog';
-import { doc, updateDoc, query, collection, where, getDocs } from 'firebase/firestore';
-import { db } from './firebase';
-import { sendPasswordReset } from './firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 export default function Users() {
   const { users, currentUser, updateUser, inviteUser, deleteUser, activatePendingUser, passwordResetRequests, approvePasswordResetRequest, denyPasswordResetRequest } = useAuth();
@@ -90,27 +88,16 @@ export default function Users() {
   };
 
   const handleForcePasswordReset = async (user: User) => {
-    if (!window.confirm(`Force a password reset for ${user.name} (${user.email})?\n\nThey will be prompted to set a new password on next login.${
-      !user.email.endsWith('@strike-member.local') ? '\n\nA reset email will also be sent to their inbox.' : ''
-    }`)) return;
+    if (!window.confirm(`Force reset password for ${user.name}?\n\nThis will reset their password to "12345678" and they will be required to change it on next login.`)) return;
 
     setForcingResetUserId(user.id);
     try {
-      // Mark mustChangePassword on their user doc
-      await updateDoc(doc(db, 'users', user.id), { mustChangePassword: true });
-
-      // Send a Firebase reset email for real (non-synthetic) accounts
-      if (!user.email.endsWith('@strike-member.local')) {
-        await sendPasswordReset(user.email);
-      }
-
-      window.alert(`Password reset forced for ${user.name}.${
-        !user.email.endsWith('@strike-member.local')
-          ? ' A reset email has been sent to their inbox.'
-          : ' They will be prompted to set a new password on next login.'
-      }`);
+      const functions = getFunctions();
+      const forceReset = httpsCallable(functions, 'forcePasswordReset');
+      await forceReset({ userId: user.id });
+      window.alert(`Done! ${user.name}'s password has been reset to "12345678". They will be prompted to change it on next login.`);
     } catch (err: any) {
-      window.alert(`Failed to force reset: ${err?.message || 'Unknown error'}`);
+      window.alert(`Failed to reset password: ${err?.message || 'Unknown error'}`);
     } finally {
       setForcingResetUserId(null);
     }
