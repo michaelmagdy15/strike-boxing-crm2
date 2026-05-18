@@ -10,6 +10,7 @@ import {
   fetchSignInMethodsForEmail,
 } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
@@ -22,6 +23,7 @@ export const db = initializeFirestore(app, {
 }, (firebaseConfig as any).firestoreDatabaseId);
 
 export const googleProvider = new GoogleAuthProvider();
+export const storage = getStorage(app);
 
 export const signInWithGoogle = async () => {
   try {

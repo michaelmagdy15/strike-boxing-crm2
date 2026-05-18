@@ -6,11 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Save, Building2, Users, Package, AlertTriangle, ShieldAlert, Trash2, Dumbbell, Lock, Download, Upload, MessageSquare, Send, KeyRound, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { Save, UserCircle2, Building2, Users, Package, AlertTriangle, ShieldAlert, Trash2, Dumbbell, Lock, Download, Upload, MessageSquare, Send, KeyRound, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import UsersManagement from './Users';
 import Packages from './Packages';
 import Coaches from './Coaches';
+import MyProfile from './components/MyProfile';
 import CommissionReport from './components/CommissionReport';
 import { BadgePercent, QrCode, Printer, MapPin, Plus } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -307,8 +308,12 @@ export default function Settings() {
         <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
       </div>
 
-      <Tabs defaultValue="branding" className="space-y-6">
+      <Tabs defaultValue="my-profile" className="space-y-6">
         <TabsList className="bg-muted/50 p-1 w-full justify-start overflow-x-auto flex-nowrap h-auto gap-1 no-scrollbar">
+          <TabsTrigger value="my-profile" className="flex items-center gap-2 whitespace-nowrap">
+            <UserCircle2 className="h-4 w-4" />
+            My Profile
+          </TabsTrigger>
           <TabsTrigger value="branding" className="flex items-center gap-2 whitespace-nowrap">
             <Building2 className="h-4 w-4" />
             Branding
@@ -348,6 +353,11 @@ export default function Settings() {
             </TabsTrigger>
           )}
         </TabsList>
+
+        {/* ── My Profile ── */}
+        <TabsContent value="my-profile" className="space-y-6 animate-in fade-in-50 duration-500">
+          <MyProfile />
+        </TabsContent>
 
         {/* ── Branding ── */}
         <TabsContent value="branding" className="space-y-6 animate-in fade-in-50 duration-500">

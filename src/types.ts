@@ -78,6 +78,8 @@ export interface User {
   coachId?: string;    // e.g. 'COACH-001', only for role='coach'
   clientRecordId?: string; // links to clients collection for role='client'
   phone?: string;
+  mustChangePassword?: boolean; // true = forced change on next login
+  photoURL?: string;           // avatar image URL
 }
 
 export interface PTPackageRecord {

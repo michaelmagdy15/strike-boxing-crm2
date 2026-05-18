@@ -53,6 +53,8 @@ interface AuthContextType {
   authError: string | null;
   setAuthError: (error: string | null) => void;
   changeMyPassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  completeForcedPasswordChange: (newPassword: string) => Promise<void>;
+  updateMyProfile: (updates: { photoURL?: string; name?: string }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -331,13 +333,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const submitPasswordResetRequest = async (email: string, name?: string) => {
-    const existingQ = query(
-      collection(db, 'passwordResetRequests'),
-      where('email', '==', email),
-      where('status', '==', 'pending')
-    );
-    const existingSnap = await getDocs(existingQ);
-    if (!existingSnap.empty) throw new Error('A password reset request for this email is already pending.');
     await addDoc(collection(db, 'passwordResetRequests'), {
       email,
       name: name || '',
@@ -348,12 +343,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const approvePasswordResetRequest = async (id: string, email: string) => {
     await sendPasswordReset(email);
-    await updateDoc(doc(db, 'passwordResetRequests', id), { status: 'sent' });
+    // Find user by email and mark mustChangePassword so the force-change dialog shows on next login
+    try {
+      const q = query(collection(db, 'users'), where('email', '==', email));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        await updateDoc(snap.docs[0]!.ref, { mustChangePassword: true });
+      }
+    } catch { /* silent — email still sent */ }
     await deleteDoc(doc(db, 'passwordResetRequests', id));
   };
 
   const denyPasswordResetRequest = async (id: string) => {
-    await updateDoc(doc(db, 'passwordResetRequests', id), { status: 'denied' });
     await deleteDoc(doc(db, 'passwordResetRequests', id));
   };
 
@@ -388,6 +389,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const credential = EmailAuthProvider.credential(user.email, currentPassword);
     await reauthenticateWithCredential(user, credential);
     await fbUpdatePassword(user, newPassword);
+  };
+
+  /** Called from the ForcePasswordChangeDialog — tries reauth with default pwd then updates */
+  const completeForcedPasswordChange = async (newPassword: string) => {
+    const user = auth.currentUser;
+    if (!user || !user.email) throw new Error('No authenticated user found.');
+    // Try default password first; if user already changed it via email link this will fail gracefully
+    try {
+      const cred = EmailAuthProvider.credential(user.email, '12345678');
+      await reauthenticateWithCredential(user, cred);
+    } catch {
+      // User may have already signed in via a reset link — current session is fresh enough
+    }
+    await fbUpdatePassword(user, newPassword);
+    await updateDoc(doc(db, 'users', user.uid), { mustChangePassword: false });
+    setCurrentUser(prev => prev ? { ...prev, mustChangePassword: false } : prev);
+  };
+
+  /** Update current user's own profile (name / avatar) */
+  const updateMyProfile = async (updates: { photoURL?: string; name?: string }) => {
+    const user = auth.currentUser;
+    if (!user) throw new Error('No authenticated user.');
+    await updateDoc(doc(db, 'users', user.uid), updates);
+    setCurrentUser(prev => prev ? { ...prev, ...updates } : prev);
   };
 
   const memoizedCurrentUser = useMemo(() => {
@@ -427,6 +452,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     authError,
     setAuthError,
     changeMyPassword,
+    completeForcedPasswordChange,
+    updateMyProfile,
   }), [memoizedCurrentUser, users, pendingAccounts, passwordResetRequests, isAuthReady, isSuperUser, effectiveRole, previewRole, authError]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

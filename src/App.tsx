@@ -33,6 +33,7 @@ import { Badge } from '@/components/ui/badge';
 import { NotificationCenter } from './components/NotificationCenter';
 import BuildVersionFooter from './components/BuildVersionFooter';
 import CoachPortal from './coach/CoachPortal';
+import { ForcePasswordChangeDialog } from './components/ForcePasswordChangeDialog';
 
 function AppContent() {
   const { currentUser, logout, isAuthReady, previewRole, setPreviewRole, searchQuery, setSearchQuery, branding, canAccessSettings, canViewGlobalDashboard, canDeletePayments, isManagerOrSama } = useAppContext();
@@ -185,6 +186,11 @@ function AppContent() {
 
   if (currentUser.role === 'coach') {
     return <CoachPortal />;
+  }
+
+  // Block the app until user sets a real password
+  if (currentUser.mustChangePassword) {
+    return <ForcePasswordChangeDialog />;
   }
 
   return (
