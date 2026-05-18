@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['strikelogo.png'],
+        includeAssets: ['pwa-icon.png', 'favicon.png', 'strikelogo.png'],
         manifest: {
           name: 'Strike Boxing CRM',
           short_name: 'Strike CRM',
@@ -29,16 +29,22 @@ export default defineConfig(({ mode }) => {
           scope: '/',
           icons: [
             {
-              src: '/strikelogo.png',
+              src: '/pwa-icon.png',
               sizes: '192x192',
               type: 'image/png',
-              purpose: 'any maskable',
+              purpose: 'any',
             },
             {
-              src: '/strikelogo.png',
+              src: '/pwa-icon.png',
               sizes: '512x512',
               type: 'image/png',
-              purpose: 'any maskable',
+              purpose: 'any',
+            },
+            {
+              src: '/pwa-icon.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
             },
           ],
         },
