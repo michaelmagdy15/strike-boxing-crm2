@@ -112,7 +112,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               // Staff
               'atefstrike@gmail.com',
               'samahany614@gmail.com',
-              'hassantarek104@gmail.com',
               'yemadd200@gmail.com',
               'maisonmohmed6@gmail.com',
               'mostafamahmoud688@gmail.com',
@@ -120,10 +119,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ];
             if (firebaseUser.email === "michaelmitry13@gmail.com" && userData.role !== 'crm_admin') {
               userData.role = 'crm_admin';
-              await updateDoc(userDocRef, { role: 'crm_admin' });
+              try { await updateDoc(userDocRef, { role: 'crm_admin' }); } catch { /* will be set next admin login */ }
             } else if (OWNER_EMAILS.includes(firebaseUser.email || '') && userData.role !== 'super_admin') {
               userData.role = 'super_admin';
-              await updateDoc(userDocRef, { role: 'super_admin' });
+              try { await updateDoc(userDocRef, { role: 'super_admin' }); } catch { /* will be set next admin login */ }
             }
             if (firebaseUser.email) {
               const staleQ = query(collection(db, 'users'), where('email', '==', firebaseUser.email));
@@ -145,7 +144,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               // Staff
               'atefstrike@gmail.com',
               'samahany614@gmail.com',
-              'hassantarek104@gmail.com',
               'yemadd200@gmail.com',
               'maisonmohmed6@gmail.com',
               'mostafamahmoud688@gmail.com',
