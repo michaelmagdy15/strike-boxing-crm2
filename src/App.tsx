@@ -222,7 +222,7 @@ function AppContent() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            {currentUser.email === "michaelmitry13@gmail.com" && (
+            {currentUser.role === 'crm_admin' && (
               <div className="hidden sm:flex items-center space-x-2 h-8">
                 <Select 
                   value={previewRole || "none"} 
@@ -264,6 +264,25 @@ function AppContent() {
               <span className={`text-[10px] sm:text-xs uppercase tracking-wider ${previewRole ? 'text-amber-500 font-bold' : ''}`}>
                 {previewRole ? `PREVIEW: ${previewRole}` : currentUser.role}
               </span>
+            </div>
+            {/* User avatar — shows photo or initials fallback */}
+            <div
+              className="h-8 w-8 sm:h-9 sm:w-9 rounded-full overflow-hidden flex-shrink-0 border-2 border-primary/30 bg-primary/10 flex items-center justify-center cursor-pointer"
+              onClick={() => setActiveTab('settings')}
+              title="My Profile"
+            >
+              {currentUser.photoURL ? (
+                <img
+                  src={currentUser.photoURL}
+                  alt={currentUser.name}
+                  className="h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className="text-xs font-bold text-primary select-none">
+                  {(currentUser.name || currentUser.email || '?').charAt(0).toUpperCase()}
+                </span>
+              )}
             </div>
             <Button variant="ghost" size="icon" onClick={logout} title="Logout" className="h-8 w-8 sm:h-10 sm:w-10">
               <LogOut className="h-4 w-4 sm:h-5 sm:w-5" />

@@ -43,6 +43,16 @@ export const usePTSessions = (currentUser: User | null, clients: Client[]) => {
       if (record) {
         const clientName = clients.find(c => c.id === record.clientId)?.name || record.clientId;
         await addAuditLog('UPDATE', 'PACKAGE_RECORD', id, `Updated package status to ${updates.status} for ${clientName}`);
+
+        // Deduct one session when a PT session is marked Attended
+        if (updates.status === 'Attended') {
+          const client = clients.find(c => c.id === record.clientId);
+          if (client && typeof client.sessionsRemaining === 'number' && client.sessionsRemaining > 0) {
+            await updateDoc(doc(db, 'clients', record.clientId), {
+              sessionsRemaining: client.sessionsRemaining - 1,
+            });
+          }
+        }
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `sessions/${id}`);

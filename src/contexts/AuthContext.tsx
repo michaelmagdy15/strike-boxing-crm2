@@ -104,10 +104,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (userDoc.exists()) {
             userData = userDoc.data() as User;
             userData.id = userId;
+            const OWNER_EMAILS = ['magd.gallab@gmail.com', 'admin@strike.eg', 'strike.egyptt@gmail.com'];
             if (firebaseUser.email === "michaelmitry13@gmail.com" && userData.role !== 'crm_admin') {
               userData.role = 'crm_admin';
               await updateDoc(userDocRef, { role: 'crm_admin' });
-            } else if ((firebaseUser.email === "magd.gallab@gmail.com" || firebaseUser.email === "admin@strike.eg") && userData.role !== 'super_admin') {
+            } else if (OWNER_EMAILS.includes(firebaseUser.email || '') && userData.role !== 'super_admin') {
               userData.role = 'super_admin';
               await updateDoc(userDocRef, { role: 'super_admin' });
             }
@@ -124,10 +125,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setCurrentUser(userData);
             setAuthError(null);
           } else {
+            const OWNER_EMAILS_NEW = ['magd.gallab@gmail.com', 'admin@strike.eg', 'strike.egyptt@gmail.com'];
             let role: UserRole = 'rep';
             if (firebaseUser.email === "michaelmitry13@gmail.com") {
               role = 'crm_admin';
-            } else if (firebaseUser.email === "magd.gallab@gmail.com" || firebaseUser.email === "admin@strike.eg") {
+            } else if (OWNER_EMAILS_NEW.includes(firebaseUser.email || '')) {
               role = 'super_admin';
             } else if (firebaseUser.email) {
               const emailLower = firebaseUser.email.toLowerCase();
@@ -333,6 +335,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const submitPasswordResetRequest = async (email: string, name?: string) => {
+    // Rate-limit: block duplicate pending requests for the same email
+    const existingQ = query(
+      collection(db, 'passwordResetRequests'),
+      where('email', '==', email),
+      where('status', '==', 'pending')
+    );
+    const existingSnap = await getDocs(existingQ);
+    if (!existingSnap.empty) {
+      throw new Error('A password reset request for this email is already pending admin approval. Please wait for it to be processed.');
+    }
     await addDoc(collection(db, 'passwordResetRequests'), {
       email,
       name: name || '',
