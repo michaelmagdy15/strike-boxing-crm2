@@ -25,7 +25,7 @@ import Login from './Login';
 import Reports from './Reports';
 import MemberCheckin from './MemberCheckin';
 import HelpPage from './HelpPage';
-import { Activity, Users, UserPlus, CreditCard, LogOut, Calendar as CalendarIcon, ShieldAlert, Settings as SettingsIcon, Eye, EyeOff, CheckSquare, Package, Search, Scan, History, BarChart3, LayoutDashboard, MoreHorizontal, X, Sun, Moon } from 'lucide-react';
+import { Activity, Users, UserPlus, CreditCard, LogOut, Calendar as CalendarIcon, ShieldAlert, Settings as SettingsIcon, Eye, EyeOff, CheckSquare, Package, Search, Scan, History, BarChart3, LayoutDashboard, MoreHorizontal, X, Sun, Moon, Smartphone } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,6 +34,8 @@ import { NotificationCenter } from './components/NotificationCenter';
 import BuildVersionFooter from './components/BuildVersionFooter';
 import CoachPortal from './coach/CoachPortal';
 import { ForcePasswordChangeDialog } from './components/ForcePasswordChangeDialog';
+import { PWAInstallBanner } from './components/PWAInstallBanner';
+import { QRCodePage } from './components/QRCodePage';
 
 function AppContent() {
   const { currentUser, logout, isAuthReady, previewRole, setPreviewRole, searchQuery, setSearchQuery, branding, canAccessSettings, canViewGlobalDashboard, canDeletePayments, isManagerOrSama } = useAppContext();
@@ -358,6 +360,10 @@ function AppContent() {
                     <SettingsIcon className="h-4 w-4 mr-2" />
                     Settings
                   </TabsTrigger>
+                  <TabsTrigger value="qrcode" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 text-sm">
+                    <Smartphone className="h-4 w-4 mr-2" />
+                    App QR
+                  </TabsTrigger>
                 </>
               )}
             </TabsList>
@@ -407,6 +413,9 @@ function AppContent() {
               </TabsContent>
               <TabsContent value="settings" className="m-0 animate-in fade-in-50 duration-300">
                 <Settings />
+              </TabsContent>
+              <TabsContent value="qrcode" className="m-0 animate-in fade-in-50 duration-300 p-4">
+                <QRCodePage />
               </TabsContent>
             </>
           )}
@@ -572,6 +581,7 @@ export default function App() {
             <AppProvider>
               <ThemeProvider>
                 <AppContent />
+                <PWAInstallBanner />
                 <BuildVersionFooter />
               </ThemeProvider>
             </AppProvider>

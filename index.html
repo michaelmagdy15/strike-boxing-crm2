@@ -3,11 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- PWA / home-screen install -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Strike CRM" />
     <meta name="theme-color" content="#000000" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🥊</text></svg>">
+    <meta name="application-name" content="Strike CRM" />
+
+    <!-- Strike logo as home-screen icon (iOS & Android) -->
+    <link rel="apple-touch-icon" href="/strikelogo.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/strikelogo.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/strikelogo.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/strikelogo.png" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/strikelogo.png" />
+
     <title>Strike Boxing CRM</title>
   </head>
   <body>
@@ -15,4 +28,3 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
