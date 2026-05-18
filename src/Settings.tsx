@@ -342,10 +342,7 @@ export default function Settings() {
             <Download className="h-4 w-4" />
             Backup
           </TabsTrigger>
-          <TabsTrigger value="sms" className="flex items-center gap-2 whitespace-nowrap">
-            <MessageSquare className="h-4 w-4" />
-            SMS
-          </TabsTrigger>
+
           {canWipe && (
             <TabsTrigger value="danger" className="flex items-center gap-2 whitespace-nowrap text-destructive data-[state=active]:bg-destructive data-[state=active]:text-destructive-foreground">
               <AlertTriangle className="h-4 w-4" />
@@ -634,63 +631,6 @@ export default function Settings() {
           </div>
         </TabsContent>
 
-        {/* ── SMS ── */}
-        <TabsContent value="sms" className="animate-in fade-in-50 duration-500">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MessageSquare className="h-5 w-5 text-primary" />
-                SMS Notifications (Twilio)
-              </CardTitle>
-              <CardDescription>
-                Test sending SMS notifications to verify Twilio is configured correctly.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="p-4 border rounded-lg bg-muted/30 space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  <strong>Note:</strong> Twilio trial accounts can only send SMS to verified phone numbers. Add your phone number to "Verified Caller IDs" in your Twilio Console before testing.
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  <strong>Egyptian numbers:</strong> Enter as +201XXXXXXXXX (with +20 country code), or 01XXXXXXXXX (local format, will auto-convert).
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="testSmsPhone">Phone Number</Label>
-                <Input
-                  id="testSmsPhone"
-                  type="tel"
-                  value={testSmsPhone}
-                  onChange={(e) => setTestSmsPhone(e.target.value)}
-                  placeholder="+201000000000"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Enter a phone number in E.164 format (e.g., +201000680580 for Egypt).
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="testSmsMessage">Message</Label>
-                <textarea
-                  id="testSmsMessage"
-                  value={testSmsMessage}
-                  onChange={(e) => setTestSmsMessage(e.target.value)}
-                  placeholder="Test SMS from Strike CRM"
-                  className="w-full px-3 py-2 border rounded-md text-sm resize-none"
-                  rows={3}
-                />
-              </div>
-              <Button className="w-full" onClick={handleSendTestSms} disabled={isSendingSms}>
-                <Send className="mr-2 h-4 w-4" />
-                {isSendingSms ? 'Sending...' : 'Send Test SMS'}
-              </Button>
-              {smsStatus && (
-                <p className={`text-sm font-medium ${smsStatus.type === 'success' ? 'text-green-600' : 'text-destructive'}`}>
-                  {smsStatus.message}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         {/* ── Danger Zone ── */}
         {canWipe && (

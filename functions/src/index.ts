@@ -4,7 +4,6 @@ import { defineSecret } from "firebase-functions/params";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
 import { sendNewLeadEmail, sendAssignmentEmail } from "./utils/mailer";
-import { sendSms, sendLeadAssignedNotification, SMS_SECRETS } from "./utils/smsService";
 
 // Initialize Firebase Admin for Firestore access
 admin.initializeApp();
@@ -106,29 +105,6 @@ export const upgradeMemberPackage = onRequest(async (req: any, res: any) => {
 // SECRETS & CONFIGURATION
 // -------------------------------------------------------------
 const STRIKE_WEBHOOK_SECRET = defineSecret("STRIKE_WEBHOOK_SECRET");
-
-/**
- * HTTP Endpoint: Send a test SMS via Twilio
- * Accepts POST { to: string, message: string }
- */
-export const sendTestSms = onRequest({ cors: true, secrets: SMS_SECRETS }, async (req: any, res: any) => {
-  if (req.method !== "POST") {
-    res.status(405).send("Only POST is allowed");
-    return;
-  }
-  const { to, message } = req.body;
-  if (!to || !message) {
-    res.status(400).json({ error: "Missing required fields: to, message" });
-    return;
-  }
-  try {
-    await sendSms(to, message);
-    res.json({ success: true, to });
-  } catch (err: any) {
-    logger.error("Error sending test SMS:", err);
-    res.status(500).json({ error: err.message || "Failed to send SMS" });
-  }
-});
 
 
 /**
@@ -238,8 +214,7 @@ export const onLeadCreated = onDocumentCreated("clients/{clientId}", async (even
       return;
     }
 
-    // 2. Send emails + SMS to reps/managers who have a phone number
-    const users = usersSnapshot.docs.map(doc => doc.data());
+    // 2. Send emails to reps/managers
     const emailPromises = recipientEmails.map(email =>
       sendNewLeadEmail(email, {
         name: leadData.name,
@@ -247,11 +222,7 @@ export const onLeadCreated = onDocumentCreated("clients/{clientId}", async (even
         source: leadData.source || "Unknown"
       })
     );
-    const smsPromises = users
-      .filter(u => !!u.phone)
-      .map(u => sendLeadAssignedNotification(u.phone, u.name || u.email, leadData.name));
-
-    await Promise.all([...emailPromises, ...smsPromises]);
+    await Promise.all(emailPromises);
     logger.info(`Lead notifications sent to ${recipientEmails.length} users.`);
 
   } catch (error) {
@@ -281,15 +252,7 @@ export const onClientAssigned = onDocumentUpdated("clients/{clientId}", async (e
       if (userEmail) {
         await sendAssignmentEmail(userEmail, afterData.name);
         logger.info(`Assignment notification sent to ${userEmail}`);
-      }
-      const userPhone = userDoc.data()?.phone;
-      if (userPhone) {
-        await sendLeadAssignedNotification(userPhone, userDoc.data()?.name || userEmail || afterData.assignedTo, afterData.name);
-        logger.info(`Assignment SMS sent to ${userPhone}`);
-      }
-      if (!userEmail && !userPhone) {
-        // Check if assignedTo is a name (for sales members without accounts)
-        // In that case, we can't send an email unless we have a mapping.
+      } else {
         logger.warn(`Could not find email for assigned user: ${afterData.assignedTo}`);
       }
     } catch (error) {
