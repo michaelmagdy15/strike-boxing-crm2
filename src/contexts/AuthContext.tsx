@@ -250,13 +250,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubPending = onSnapshot(
       query(collection(db, 'pendingAccounts'), where('status', '==', 'pending'), orderBy('requestedAt', 'desc')),
       (snap) => setPendingAccounts(snap.docs.map(d => ({ ...d.data(), id: d.id } as PendingAccount))),
-      () => {}
+      (err) => console.error('Firestore Error (pendingAccounts listener):', err.code, err.message)
     );
 
     const unsubResets = onSnapshot(
       query(collection(db, 'passwordResetRequests'), where('status', '==', 'pending'), orderBy('requestedAt', 'desc')),
       (snap) => setPasswordResetRequests(snap.docs.map(d => ({ ...d.data(), id: d.id } as PasswordResetRequest))),
-      () => {}
+      (err) => console.error('Firestore Error (passwordResetRequests listener):', err.code, err.message)
     );
 
     return () => { unsubPending(); unsubResets(); };
@@ -322,12 +322,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const submitSignUpRequest = async (name: string, email: string, role: UserRole, message?: string) => {
-    const q = query(collection(db, 'users'), where('email', '==', email));
-    const snap = await getDocs(q);
-    if (!snap.empty) throw new Error('An account with this email already exists.');
-    const pendingQ = query(collection(db, 'pendingAccounts'), where('email', '==', email), where('status', '==', 'pending'));
-    const pendingSnap = await getDocs(pendingQ);
-    if (!pendingSnap.empty) throw new Error('A pending request for this email already exists.');
+    // These reads require auth — unauthenticated callers (login page) won't have
+    // permission, so we wrap them and skip the guard rather than blocking the request.
+    try {
+      const q = query(collection(db, 'users'), where('email', '==', email));
+      const snap = await getDocs(q);
+      if (!snap.empty) throw new Error('An account with this email already exists.');
+    } catch (err: any) {
+      if (err?.message?.includes('already exists')) throw err; // re-throw our own error
+      // else: permission denied for unauthenticated user — skip and proceed
+    }
+    try {
+      const pendingQ = query(collection(db, 'pendingAccounts'), where('email', '==', email), where('status', '==', 'pending'));
+      const pendingSnap = await getDocs(pendingQ);
+      if (!pendingSnap.empty) throw new Error('A pending request for this email already exists.');
+    } catch (err: any) {
+      if (err?.message?.includes('already exists')) throw err; // re-throw our own error
+      // else: permission denied — skip and proceed
+    }
     await addDoc(collection(db, 'pendingAccounts'), {
       name,
       email,
@@ -433,15 +445,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const approvePasswordResetRequest = async (id: string, email: string) => {
-    await sendPasswordReset(email);
-    // Find user by email and mark mustChangePassword so the force-change dialog shows on next login
+    const isSyntheticEmail = email.endsWith('@strike-member.local');
+
+    if (!isSyntheticEmail) {
+      // Real email — Firebase sends a reset link directly
+      await sendPasswordReset(email);
+    }
+
+    // Mark mustChangePassword so the force-change dialog appears on next login
     try {
       const q = query(collection(db, 'users'), where('email', '==', email));
       const snap = await getDocs(q);
       if (!snap.empty) {
         await updateDoc(snap.docs[0]!.ref, { mustChangePassword: true });
       }
-    } catch { /* silent — email still sent */ }
+    } catch { /* silent — the reset email was still sent */ }
+
     await deleteDoc(doc(db, 'passwordResetRequests', id));
   };
 

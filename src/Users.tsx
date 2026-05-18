@@ -11,9 +11,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { UserRole, User } from './types';
-import { Shield, User as UserIcon, Plus, Trash2, Edit, BarChart, Clock, KeyRound, Loader2, CheckCircle2 } from 'lucide-react';
+import { Shield, User as UserIcon, Plus, Trash2, Edit, BarChart, Clock, KeyRound, Loader2, CheckCircle2, RotateCcw } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { UserPerformanceDialog } from './components/UserPerformanceDialog';
+import { doc, updateDoc, query, collection, where, getDocs } from 'firebase/firestore';
+import { db } from './firebase';
+import { sendPasswordReset } from './firebase';
 
 export default function Users() {
   const { users, currentUser, updateUser, inviteUser, deleteUser, activatePendingUser, passwordResetRequests, approvePasswordResetRequest, denyPasswordResetRequest } = useAuth();
@@ -24,6 +27,9 @@ export default function Users() {
   const [inviteRole, setInviteRole] = useState<UserRole>('rep');
   const [activatingUserId, setActivatingUserId] = useState<string | null>(null);
   const [activatedUserId, setActivatedUserId] = useState<string | null>(null);
+  const [approvingResetId, setApprovingResetId] = useState<string | null>(null);
+  const [approvedResetId, setApprovedResetId] = useState<string | null>(null);
+  const [forcingResetUserId, setForcingResetUserId] = useState<string | null>(null);
   
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState('');
@@ -80,6 +86,33 @@ export default function Users() {
   const handleDeleteUser = (userId: string) => {
     if (window.confirm("Are you sure you want to delete this user? This revokes their access.")) {
       deleteUser(userId);
+    }
+  };
+
+  const handleForcePasswordReset = async (user: User) => {
+    if (!window.confirm(`Force a password reset for ${user.name} (${user.email})?\n\nThey will be prompted to set a new password on next login.${
+      !user.email.endsWith('@strike-member.local') ? '\n\nA reset email will also be sent to their inbox.' : ''
+    }`)) return;
+
+    setForcingResetUserId(user.id);
+    try {
+      // Mark mustChangePassword on their user doc
+      await updateDoc(doc(db, 'users', user.id), { mustChangePassword: true });
+
+      // Send a Firebase reset email for real (non-synthetic) accounts
+      if (!user.email.endsWith('@strike-member.local')) {
+        await sendPasswordReset(user.email);
+      }
+
+      window.alert(`Password reset forced for ${user.name}.${
+        !user.email.endsWith('@strike-member.local')
+          ? ' A reset email has been sent to their inbox.'
+          : ' They will be prompted to set a new password on next login.'
+      }`);
+    } catch (err: any) {
+      window.alert(`Failed to force reset: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setForcingResetUserId(null);
     }
   };
 
@@ -286,6 +319,18 @@ export default function Users() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="text-amber-600 hover:bg-amber-50"
+                            onClick={() => handleForcePasswordReset(user)}
+                            disabled={forcingResetUserId === user.id}
+                            title="Force password reset on next login"
+                          >
+                            {forcingResetUserId === user.id
+                              ? <Loader2 className="h-4 w-4 animate-spin" />
+                              : <RotateCcw className="h-4 w-4" />}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="text-destructive hover:bg-destructive/10"
                             onClick={() => handleDeleteUser(user.id)}
                             disabled={user.role === 'super_admin'}
@@ -337,9 +382,28 @@ export default function Users() {
                       <div className="flex justify-end gap-2">
                         <Button
                           size="sm"
-                          onClick={async () => { await approvePasswordResetRequest(req.id, req.email); }}
+                          disabled={approvingResetId === req.id || approvedResetId === req.id}
+                          onClick={async () => {
+                            setApprovingResetId(req.id);
+                            try {
+                              await approvePasswordResetRequest(req.id, req.email);
+                              setApprovedResetId(req.id);
+                              setTimeout(() => setApprovedResetId(null), 3000);
+                            } catch (err: any) {
+                              window.alert(`Failed to send reset email: ${err?.message || 'Unknown error'}`);
+                            } finally {
+                              setApprovingResetId(null);
+                            }
+                          }}
                         >
-                          <CheckCircle2 className="mr-1 h-3 w-3" /> Approve & Send Email
+                          {approvingResetId === req.id ? (
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          ) : approvedResetId === req.id ? (
+                            <CheckCircle2 className="mr-1 h-3 w-3 text-green-500" />
+                          ) : (
+                            <CheckCircle2 className="mr-1 h-3 w-3" />
+                          )}
+                          {approvedResetId === req.id ? 'Sent!' : 'Approve & Send Email'}
                         </Button>
                         <Button
                           size="sm"
