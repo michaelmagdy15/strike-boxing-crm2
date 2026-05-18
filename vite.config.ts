@@ -43,6 +43,8 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
+          // Raise precache limit to 5 MB so all split chunks are accepted
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
           runtimeCaching: [
             {
@@ -62,9 +64,40 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      // Silence the large-chunk warning (we've already raised the workbox limit)
+      chunkSizeWarningLimit: 3000,
+      rollupOptions: {
+        output: {
+          manualChunks: (id) => {
+            // Firebase SDK → separate cacheable chunk
+            if (id.includes('node_modules/firebase')) {
+              if (id.includes('firestore')) return 'firebase-firestore';
+              if (id.includes('auth'))      return 'firebase-auth';
+              if (id.includes('storage'))   return 'firebase-storage';
+              return 'firebase-core';
+            }
+            // React + UI libs → vendor chunk
+            if (id.includes('node_modules/react') ||
+                id.includes('node_modules/react-dom') ||
+                id.includes('node_modules/@radix-ui') ||
+                id.includes('node_modules/lucide-react')) {
+              return 'vendor-react';
+            }
+            // Date utilities
+            if (id.includes('node_modules/date-fns')) return 'vendor-dates';
+            // Chart / heavy libs
+            if (id.includes('node_modules/recharts') ||
+                id.includes('node_modules/d3')) {
+              return 'vendor-charts';
+            }
+          },
+        },
+      },
+    },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env['DISABLE_HMR'] !== 'true',
     },
   };
