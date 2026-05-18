@@ -81,7 +81,7 @@ service cloud.firestore {
 
     // Fields a user is allowed to touch on their own doc (safe self-edit)
     function isSafeUserSelfEdit() {
-      let allowed = ['name', 'email', 'lastSeen'];
+      let allowed = ['name', 'email', 'lastSeen', 'mustChangePassword', 'photoURL'];
       // Ensure the incoming data only changes safe fields compared to current doc
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
     }
