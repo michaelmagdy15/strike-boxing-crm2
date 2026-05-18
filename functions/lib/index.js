@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onPaymentUpdated = exports.onClientAssigned = exports.onLeadCreated = exports.metaWebhook = exports.sendTestSms = exports.upgradeMemberPackage = void 0;
+exports.onPaymentUpdated = exports.onClientAssigned = exports.onLeadCreated = exports.metaWebhook = exports.sendTestSms = exports.upgradeMemberPackage = exports.forcePasswordReset = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const params_1 = require("firebase-functions/params");
@@ -44,6 +44,47 @@ const smsService_1 = require("./utils/smsService");
 // Initialize Firebase Admin for Firestore access
 admin.initializeApp();
 const db = admin.firestore();
+const ADMIN_EMAILS = [
+    "michaelmitry13@gmail.com",
+    "magd.gallab@gmail.com",
+    "admin@strike.eg",
+];
+const ADMIN_ROLES = ["admin", "super_admin", "crm_admin", "manager"];
+/**
+ * Callable: Force reset a user's password to "12345678" and flag mustChangePassword.
+ * Only callable by authenticated admins/super_admins.
+ * Data: { userId: string }
+ */
+exports.forcePasswordReset = (0, https_1.onCall)({ cors: true }, async (request) => {
+    const callerEmail = request.auth?.token?.email ?? "";
+    const callerUid = request.auth?.uid;
+    if (!callerUid) {
+        throw new https_1.HttpsError("unauthenticated", "You must be signed in.");
+    }
+    // Check caller is an admin
+    const isHardcodedAdmin = ADMIN_EMAILS.includes(callerEmail);
+    if (!isHardcodedAdmin) {
+        const callerDoc = await db.collection("users").doc(callerUid).get();
+        const callerRole = callerDoc.data()?.role ?? "";
+        if (!ADMIN_ROLES.includes(callerRole)) {
+            throw new https_1.HttpsError("permission-denied", "Only admins can force password resets.");
+        }
+    }
+    const { userId } = request.data;
+    if (!userId) {
+        throw new https_1.HttpsError("invalid-argument", "userId is required.");
+    }
+    // Prevent resetting your own account this way
+    if (userId === callerUid) {
+        throw new https_1.HttpsError("invalid-argument", "You cannot force-reset your own account.");
+    }
+    // Reset Firebase Auth password to default
+    await admin.auth().updateUser(userId, { password: "12345678" });
+    // Mark mustChangePassword in Firestore
+    await db.collection("users").doc(userId).update({ mustChangePassword: true });
+    logger.info(`[forcePasswordReset] ${callerEmail} force-reset password for user ${userId}`);
+    return { success: true };
+});
 // Callable function for member upgrades with race-condition prevention
 exports.upgradeMemberPackage = (0, https_1.onRequest)(async (req, res) => {
     if (req.method !== "POST") {
