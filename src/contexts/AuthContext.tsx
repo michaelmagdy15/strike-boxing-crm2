@@ -335,15 +335,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const submitPasswordResetRequest = async (email: string, name?: string) => {
-    // Rate-limit: block duplicate pending requests for the same email
-    const existingQ = query(
-      collection(db, 'passwordResetRequests'),
-      where('email', '==', email),
-      where('status', '==', 'pending')
-    );
-    const existingSnap = await getDocs(existingQ);
-    if (!existingSnap.empty) {
-      throw new Error('A password reset request for this email is already pending admin approval. Please wait for it to be processed.');
+    // Rate-limit: block duplicate pending requests for the same email.
+    // Wrapped in try/catch because unauthenticated callers (login page) lack
+    // read permission on this collection — in that case we skip the guard and
+    // just allow the write through.
+    try {
+      const existingQ = query(
+        collection(db, 'passwordResetRequests'),
+        where('email', '==', email),
+        where('status', '==', 'pending')
+      );
+      const existingSnap = await getDocs(existingQ);
+      if (!existingSnap.empty) {
+        throw new Error('A password reset request for this email is already pending admin approval. Please wait for it to be processed.');
+      }
+    } catch (err: any) {
+      // Re-throw our own duplicate error; swallow Firestore permission errors
+      if (err?.message?.includes('pending admin approval')) throw err;
     }
     await addDoc(collection(db, 'passwordResetRequests'), {
       email,
