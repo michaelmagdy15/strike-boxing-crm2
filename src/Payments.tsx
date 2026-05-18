@@ -93,6 +93,8 @@ export default function Payments() {
   const [filterMethod, setFilterMethod] = useState('All');
   const [filterBranch, setFilterBranch] = useState('All');
   const [filterSalesName, setFilterSalesName] = useState('All');
+  const [filterPackage, setFilterPackage] = useState('All');
+  const [filterCoach, setFilterCoach] = useState('All');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const [sortConfig, setSortConfig] = useState<{key: keyof Payment | 'date', direction: 'asc' | 'desc'}>({key: 'date', direction: 'desc'});
@@ -638,6 +640,8 @@ export default function Payments() {
   const deferredSearchTerm = React.useDeferredValue(searchTerm);
   const deferredFilterMethod = React.useDeferredValue(filterMethod);
   const deferredFilterBranch = React.useDeferredValue(filterBranch);
+  const deferredFilterPackage = React.useDeferredValue(filterPackage);
+  const deferredFilterCoach = React.useDeferredValue(filterCoach);
   const deferredFilterDateFrom = React.useDeferredValue(filterDateFrom);
   const deferredFilterDateTo = React.useDeferredValue(filterDateTo);
   const deferredSortConfig = React.useDeferredValue(sortConfig);
@@ -696,6 +700,12 @@ export default function Payments() {
         if (payment.date.substring(0, 10) > deferredFilterDateTo) return false;
       }
 
+      // Package filter
+      if (deferredFilterPackage !== 'All' && payment.packageType !== deferredFilterPackage) return false;
+
+      // Coach filter
+      if (deferredFilterCoach !== 'All' && (payment.coachName || '').toLowerCase() !== deferredFilterCoach.toLowerCase()) return false;
+
       // Hold filter
       if (deferredFilterShowOnlyHeld && !payment.isOnHold) return false;
 
@@ -722,11 +732,36 @@ export default function Payments() {
     });
 
     return result;
-  }, [payments, clients, deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, deferredFilterDateFrom, deferredFilterDateTo, deferredSortConfig, isRep, currentUser, filterSalesName, deferredFilterShowOnlyHeld]);
+  }, [payments, clients, deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, deferredFilterPackage, deferredFilterCoach, deferredFilterDateFrom, deferredFilterDateTo, deferredSortConfig, isRep, currentUser, filterSalesName, deferredFilterShowOnlyHeld]);
+
+  // Unique package names from all payments (for filter dropdown)
+  const uniquePackageNames = React.useMemo(() => {
+    const names = new Set<string>();
+    payments.forEach(p => { if (p.packageType) names.add(p.packageType); });
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [payments]);
+
+  // Unique coach names from all payments that have a coachName
+  const uniqueCoachNames = React.useMemo(() => {
+    const names = new Set<string>();
+    payments.forEach(p => { if (p.coachName) names.add(p.coachName); });
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [payments]);
+
+  // PT Coach earnings from FILTERED payments
+  const coachEarnings = React.useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const p of filteredPayments) {
+      if (p.coachName) {
+        map[p.coachName] = (map[p.coachName] || 0) + p.amount;
+      }
+    }
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [filteredPayments]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, deferredFilterDateFrom, deferredFilterDateTo, deferredSortConfig, deferredFilterShowOnlyHeld]);
+  }, [deferredSearchTerm, deferredFilterMethod, deferredFilterBranch, deferredFilterPackage, deferredFilterCoach, deferredFilterDateFrom, deferredFilterDateTo, deferredSortConfig, deferredFilterShowOnlyHeld]);
 
   const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
   const paginatedPayments = filteredPayments.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -1109,7 +1144,7 @@ export default function Payments() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4 mb-6 bg-card p-4 rounded-xl border shadow-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-9 gap-4 mb-6 bg-card p-4 rounded-xl border shadow-sm">
         <div className="space-y-1.5 xl:col-span-1">
           <Label className="text-xs font-semibold text-muted-foreground ml-1">Search Payments</Label>
           <div className="relative">
@@ -1150,6 +1185,34 @@ export default function Payments() {
             <option value="COMPLEX">COMPLEX</option>
             <option value="MIVIDA">MIVIDA</option>
             <option value="Strike IMPACT">Strike IMPACT</option>
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold text-muted-foreground ml-1">Package</Label>
+          <select
+            className="flex h-11 w-full items-center justify-between rounded-md bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 border-none"
+            value={filterPackage}
+            onChange={(e) => setFilterPackage(e.target.value)}
+          >
+            <option value="All">All Packages</option>
+            {uniquePackageNames.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold text-muted-foreground ml-1">PT Coach</Label>
+          <select
+            className="flex h-11 w-full items-center justify-between rounded-md bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 border-none"
+            value={filterCoach}
+            onChange={(e) => setFilterCoach(e.target.value)}
+          >
+            <option value="All">All Coaches</option>
+            {uniqueCoachNames.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
           </select>
         </div>
 
@@ -1215,6 +1278,55 @@ export default function Payments() {
           </Label>
         </div>
       </div>
+
+      {/* ── PT Coach Earnings (visible only when there are PT payments in the current view) ── */}
+      {coachEarnings.length > 0 && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardHeader className="pb-3 pt-4 px-5">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-primary" />
+              PT Coach Earnings
+              <span className="text-xs font-normal text-muted-foreground ml-1">
+                — based on current filters ({filteredPayments.filter(p => p.coachName).length} PT payments)
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-4">
+            <div className="flex flex-wrap gap-3">
+              {coachEarnings.map(([coach, total]) => (
+                <div
+                  key={coach}
+                  className="flex items-center gap-3 bg-background border border-border rounded-xl px-4 py-2.5 shadow-sm hover:border-primary/40 transition-colors cursor-pointer"
+                  onClick={() => setFilterCoach(filterCoach === coach ? 'All' : coach)}
+                  title={filterCoach === coach ? 'Click to clear coach filter' : `Click to filter by ${coach}`}
+                >
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <span className="text-xs font-bold text-primary">
+                      {coach.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <div className={`text-sm font-semibold leading-tight ${filterCoach === coach ? 'text-primary' : ''}`}>{coach}</div>
+                    <div className="text-xs text-green-600 font-bold">{total.toLocaleString()} LE</div>
+                  </div>
+                  {filterCoach === coach && (
+                    <Badge className="text-[10px] bg-primary/10 text-primary border-none ml-1">Filtered</Badge>
+                  )}
+                </div>
+              ))}
+              {/* Grand total PT revenue */}
+              <div className="flex items-center gap-3 bg-primary/10 border border-primary/30 rounded-xl px-4 py-2.5 shadow-sm ml-auto">
+                <div>
+                  <div className="text-xs text-muted-foreground font-medium">Total PT Revenue</div>
+                  <div className="text-base font-extrabold text-primary">
+                    {coachEarnings.reduce((sum, [, v]) => sum + v, 0).toLocaleString()} LE
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="p-0">
