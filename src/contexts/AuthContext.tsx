@@ -105,7 +105,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (userDoc.exists()) {
             userData = userDoc.data() as User;
             userData.id = userId;
-            const OWNER_EMAILS = ['magd.gallab@gmail.com', 'admin@strike.eg', 'strike.egyptt@gmail.com'];
+            const OWNER_EMAILS = [
+              'magd.gallab@gmail.com',
+              'admin@strike.eg',
+              'strike.egyptt@gmail.com',
+              // Staff
+              'atefstrike@gmail.com',
+              'samahany614@gmail.com',
+              'hassantarek104@gmail.com',
+              'yemadd200@gmail.com',
+              'maisonmohmed6@gmail.com',
+              'mostafamahmoud688@gmail.com',
+              'shadyyoussef305@gmail.com',
+            ];
             if (firebaseUser.email === "michaelmitry13@gmail.com" && userData.role !== 'crm_admin') {
               userData.role = 'crm_admin';
               await updateDoc(userDocRef, { role: 'crm_admin' });
@@ -126,7 +138,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setCurrentUser(userData);
             setAuthError(null);
           } else {
-            const OWNER_EMAILS_NEW = ['magd.gallab@gmail.com', 'admin@strike.eg', 'strike.egyptt@gmail.com'];
+            const OWNER_EMAILS_NEW = [
+              'magd.gallab@gmail.com',
+              'admin@strike.eg',
+              'strike.egyptt@gmail.com',
+              // Staff
+              'atefstrike@gmail.com',
+              'samahany614@gmail.com',
+              'hassantarek104@gmail.com',
+              'yemadd200@gmail.com',
+              'maisonmohmed6@gmail.com',
+              'mostafamahmoud688@gmail.com',
+              'shadyyoussef305@gmail.com',
+            ];
             let role: UserRole = 'rep';
             if (firebaseUser.email === "michaelmitry13@gmail.com") {
               role = 'crm_admin';
