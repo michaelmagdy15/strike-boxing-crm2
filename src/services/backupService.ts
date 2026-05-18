@@ -14,41 +14,64 @@ const ROOT_COLLECTIONS = [
   'settings'
 ];
 
-export const exportDatabaseToJson = async () => {
+export type BackupProgressCallback = (step: string, percent: number) => void;
+
+const ROOT_COLLECTION_WEIGHT = 17; // % allocated to root collections (17 collections * 1% each ≈ 17%)
+const SUBCOLLECTION_WEIGHT   = 80; // % allocated to client subcollection pass
+const BATCH_SIZE = 20;             // parallel reads per batch
+
+export const exportDatabaseToJson = async (onProgress?: BackupProgressCallback) => {
   const backupData: Record<string, any[]> = {};
 
-  for (const collName of ROOT_COLLECTIONS) {
+  // ── Phase 1: Root collections (0 → 17%) ──────────────────────────────────
+  for (let i = 0; i < ROOT_COLLECTIONS.length; i++) {
+    const collName = ROOT_COLLECTIONS[i];
+    const pct = Math.round(((i + 1) / ROOT_COLLECTIONS.length) * ROOT_COLLECTION_WEIGHT);
+    onProgress?.(`Reading ${collName}…`, pct);
+
     const snapshot = await getDocs(collection(db, collName));
     backupData[collName] = snapshot.docs.map(doc => ({
       ...doc.data(),
-      id: doc.id
+      id: doc.id,
     }));
-
-    // Handle subcollections for clients
-    if (collName === 'clients') {
-      const allComments: Record<string, any[]> = {};
-      const allInteractions: Record<string, any[]> = {};
-      for (const clientDoc of snapshot.docs) {
-        const commentsSnapshot = await getDocs(collection(db, 'clients', clientDoc.id, 'comments'));
-        if (!commentsSnapshot.empty) {
-          allComments[clientDoc.id] = commentsSnapshot.docs.map(doc => ({
-            ...doc.data(),
-            id: doc.id
-          }));
-        }
-        const interactionsSnapshot = await getDocs(collection(db, 'clients', clientDoc.id, 'interactions'));
-        if (!interactionsSnapshot.empty) {
-          allInteractions[clientDoc.id] = interactionsSnapshot.docs.map(doc => ({
-            ...doc.data(),
-            id: doc.id
-          }));
-        }
-      }
-      backupData['client_comments'] = [allComments];
-      backupData['client_interactions'] = [allInteractions];
-    }
   }
 
+  // ── Phase 2: Client subcollections in parallel batches (17 → 97%) ─────────
+  const clientDocs = backupData['clients'] ?? [];
+  const allComments: Record<string, any[]>     = {};
+  const allInteractions: Record<string, any[]> = {};
+  const totalClients = clientDocs.length;
+
+  for (let start = 0; start < totalClients; start += BATCH_SIZE) {
+    const batch = clientDocs.slice(start, start + BATCH_SIZE);
+
+    await Promise.all(
+      batch.map(async (client) => {
+        const cid = client.id as string;
+        const [cSnap, iSnap] = await Promise.all([
+          getDocs(collection(db, 'clients', cid, 'comments')),
+          getDocs(collection(db, 'clients', cid, 'interactions')),
+        ]);
+        if (!cSnap.empty)
+          allComments[cid] = cSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+        if (!iSnap.empty)
+          allInteractions[cid] = iSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+      })
+    );
+
+    const done    = Math.min(start + BATCH_SIZE, totalClients);
+    const subPct  = Math.round((done / totalClients) * SUBCOLLECTION_WEIGHT);
+    const overall = ROOT_COLLECTION_WEIGHT + subPct;
+    onProgress?.(
+      `Client notes & history (${done}/${totalClients})…`,
+      Math.min(overall, 97)
+    );
+  }
+
+  backupData['client_comments']     = [allComments];
+  backupData['client_interactions']  = [allInteractions];
+
+  onProgress?.('Generating file…', 99);
   const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -57,6 +80,7 @@ export const exportDatabaseToJson = async () => {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  onProgress?.('Done', 100);
 };
 
 export const restoreDatabaseFromJson = async (jsonData: string) => {

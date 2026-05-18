@@ -7,6 +7,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
+  fetchSignInMethodsForEmail,
 } from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
@@ -53,6 +54,31 @@ export const createFirebaseUser = async (email: string, password: string): Promi
   } finally {
     await deleteApp(tempApp);
   }
+};
+
+/**
+ * Retrieves the UID of an existing Firebase Auth account by signing in with the
+ * known default password. Used when `createFirebaseUser` fails with
+ * `auth/email-already-in-use` to recover the pre-existing UID so Firestore
+ * documents can be migrated to it.
+ */
+export const getExistingUserUID = async (email: string, password: string): Promise<string> => {
+  const tempApp = initializeApp(firebaseConfig as any, `temp-lookup-${Date.now()}`);
+  const tempAuth = getAuth(tempApp);
+  try {
+    const cred = await signInWithEmailAndPassword(tempAuth, email, password);
+    return cred.user.uid;
+  } finally {
+    await deleteApp(tempApp);
+  }
+};
+
+/**
+ * Checks what sign-in methods are registered for an email address.
+ * Useful for diagnosing why an account already exists.
+ */
+export const checkSignInMethods = async (email: string): Promise<string[]> => {
+  return fetchSignInMethodsForEmail(auth, email);
 };
 
 export const logOut = async () => {

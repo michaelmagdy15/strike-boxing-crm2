@@ -16,6 +16,7 @@ import { BadgePercent, QrCode, Printer, MapPin, Plus } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Branch } from './types';
 import { exportDatabaseToJson, restoreDatabaseFromJson } from './services/backupService';
+import type { BackupProgressCallback } from './services/backupService';
 
 export default function Settings() {
   const { branding, updateBranding, currentUser, wipeSystem, canAccessSettings, branches, updateBranches } = useAppContext();
@@ -42,6 +43,7 @@ export default function Settings() {
   const [isWiping, setIsWiping] = useState(false);
 
   const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<{ step: string; percent: number } | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [restoreStatus, setRestoreStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -80,10 +82,17 @@ export default function Settings() {
 
   const handleExport = async () => {
     setIsExporting(true);
+    setExportProgress({ step: 'Starting…', percent: 0 });
+    const onProgress: BackupProgressCallback = (step, percent) => {
+      setExportProgress({ step, percent });
+    };
     try {
-      await exportDatabaseToJson();
+      await exportDatabaseToJson(onProgress);
     } finally {
-      setIsExporting(false);
+      setTimeout(() => {
+        setIsExporting(false);
+        setExportProgress(null);
+      }, 800);
     }
   };
 
@@ -554,9 +563,23 @@ export default function Settings() {
                 <p className="text-sm text-muted-foreground">
                   The backup includes all root collections and client subcollections (comments &amp; interactions). Store the file somewhere safe.
                 </p>
+                {exportProgress && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="capitalize">{exportProgress.step}</span>
+                      <span className="font-medium tabular-nums">{exportProgress.percent}%</span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all duration-300 ease-out"
+                        style={{ width: `${exportProgress.percent}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
                 <Button className="w-full" onClick={handleExport} disabled={isExporting}>
                   <Download className="mr-2 h-4 w-4" />
-                  {isExporting ? 'Exporting...' : 'Download Backup'}
+                  {isExporting ? 'Exporting…' : 'Download Backup'}
                 </Button>
               </CardContent>
             </Card>
