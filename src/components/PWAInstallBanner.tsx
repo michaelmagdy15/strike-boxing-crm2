@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Share, MoreVertical } from 'lucide-react';
+import { X, Share } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface BeforeInstallPromptEvent extends Event {
@@ -70,7 +70,7 @@ export function PWAInstallBanner() {
 
   if (dismissed || !showIosBanner) return null;
 
-  // ── iOS guide banner ──────────────────────────────────────────────────────
+  // ── iOS guide banner (iOS 18+ Safari UI) ─────────────────────────────────
   return (
     <div
       style={{
@@ -79,19 +79,19 @@ export function PWAInstallBanner() {
         left: 0,
         right: 0,
         zIndex: 9999,
-        padding: '16px 20px 32px',
+        padding: '16px 20px 36px',
         background: 'linear-gradient(135deg, #111 0%, #1a1a1a 100%)',
         borderTop: '1px solid rgba(255,255,255,0.12)',
         boxShadow: '0 -8px 40px rgba(0,0,0,0.6)',
         display: 'flex',
         flexDirection: 'column',
-        gap: '14px',
+        gap: '12px',
         animation: 'slideUp 0.35s cubic-bezier(.22,1,.36,1)',
       }}
     >
       <style>{`
         @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+        @keyframes bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
         .pwa-bounce { animation: bounce 1.4s ease-in-out infinite; }
       `}</style>
 
@@ -105,25 +105,69 @@ export function PWAInstallBanner() {
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <img src="/strikelogo.png" alt="Strike" style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'contain', background: '#000' }} />
+        {/* Logo — white bg, small, properly padded */}
+        <div style={{
+          width: 40,
+          height: 40,
+          borderRadius: 10,
+          background: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+          padding: 5,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+        }}>
+          <img
+            src="/strikelogo.png"
+            alt="Strike"
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          />
+        </div>
         <div>
-          <div style={{ color: '#fff', fontWeight: 700, fontSize: 15, letterSpacing: '0.02em' }}>Add Strike CRM to your Home Screen</div>
-          <div style={{ color: '#888', fontSize: 12, marginTop: 2 }}>Access your portal like a native app — no App Store needed</div>
+          <div style={{ color: '#fff', fontWeight: 700, fontSize: 14, letterSpacing: '0.02em' }}>Add Strike CRM to your Home Screen</div>
+          <div style={{ color: '#888', fontSize: 11, marginTop: 2 }}>Access your portal like a native app — no App Store needed</div>
         </div>
       </div>
 
-      {/* Steps */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <Step n={1} icon={<Share size={16} color="#fff" />} label='Tap the Share button' sub='at the bottom of Safari' />
-        <Step n={2} icon={<span style={{ fontSize: 16 }}>📋</span>} label='"Add to Home Screen"' sub='scroll down in the share sheet' />
-        <Step n={3} icon={<span style={{ fontSize: 16 }}>✅</span>} label='Tap "Add"' sub='top-right corner of the dialog' />
+      {/* Steps — updated for iOS 18+ Safari */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+        <Step
+          n={1}
+          icon={<span style={{ fontSize: 15 }}>⋯</span>}
+          label='Tap the "⋯" button'
+          sub='bottom-right corner of Safari'
+        />
+
+        <Step
+          n={2}
+          icon={<Share size={14} color="#fff" />}
+          label='Tap "Share"'
+          sub='in the menu that appears'
+        />
+
+        <Step
+          n={3}
+          icon={<span style={{ fontSize: 14 }}>📋</span>}
+          label='Tap "View More…"'
+          sub='bottom-right of the share sheet'
+        />
+
+        <Step
+          n={4}
+          icon={<span style={{ fontSize: 14 }}>➕</span>}
+          label='"Add to Home Screen"'
+          sub='find it in the list, then tap Add'
+        />
+
       </div>
 
-      {/* Animated arrow pointing down toward iOS share button */}
-      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 4 }}>
+      {/* Animated arrow pointing to bottom-right (where ⋯ button lives) */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingRight: 12, paddingTop: 2 }}>
         <div className="pwa-bounce" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, color: '#e5b94e' }}>
-          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Tap here</span>
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Start here</span>
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
             <path d="M10 2v14M4 10l6 6 6-6" stroke="#e5b94e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
@@ -134,17 +178,17 @@ export function PWAInstallBanner() {
 
 function Step({ n, icon, label, sub }: { n: number; icon: React.ReactNode; label: string; sub: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
       <div style={{
-        width: 28, height: 28, borderRadius: '50%', background: '#e5b94e',
+        width: 24, height: 24, borderRadius: '50%', background: '#e5b94e',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: '#000', fontWeight: 800, fontSize: 13, flexShrink: 0,
+        color: '#000', fontWeight: 800, fontSize: 12, flexShrink: 0,
       }}>{n}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-        <span>{icon}</span>
+        <span style={{ display: 'flex', alignItems: 'center', minWidth: 18 }}>{icon}</span>
         <div>
-          <div style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{label}</div>
-          <div style={{ color: '#666', fontSize: 11 }}>{sub}</div>
+          <div style={{ color: '#fff', fontSize: 12, fontWeight: 600 }}>{label}</div>
+          <div style={{ color: '#666', fontSize: 10 }}>{sub}</div>
         </div>
       </div>
     </div>
