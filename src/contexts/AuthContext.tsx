@@ -109,12 +109,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               'magd.gallab@gmail.com',
               'admin@strike.eg',
               'strike.egyptt@gmail.com',
-              // Staff
-              'atefstrike@gmail.com',
-              'samahany614@gmail.com',
-              'yemadd200@gmail.com',
-              'maisonmohmed6@gmail.com',
-              'mostafamahmoud688@gmail.com',
               'shadyyoussef305@gmail.com',
             ];
             if (firebaseUser.email === "michaelmitry13@gmail.com" && userData.role !== 'crm_admin') {
@@ -141,12 +135,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               'magd.gallab@gmail.com',
               'admin@strike.eg',
               'strike.egyptt@gmail.com',
-              // Staff
-              'atefstrike@gmail.com',
-              'samahany614@gmail.com',
-              'yemadd200@gmail.com',
-              'maisonmohmed6@gmail.com',
-              'mostafamahmoud688@gmail.com',
               'shadyyoussef305@gmail.com',
             ];
             let role: UserRole = 'rep';
