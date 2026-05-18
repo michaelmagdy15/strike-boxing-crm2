@@ -499,6 +499,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // User may have already signed in via a reset link — current session is fresh enough
     }
     await fbUpdatePassword(user, newPassword);
+    // Force token refresh so Firestore gets the new token before we write
+    await user.getIdToken(true);
     await updateDoc(doc(db, 'users', user.uid), { mustChangePassword: false });
     setCurrentUser(prev => prev ? { ...prev, mustChangePassword: false } : prev);
   };
