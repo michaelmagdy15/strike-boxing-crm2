@@ -25,7 +25,7 @@ import Login from './Login';
 import Reports from './Reports';
 import MemberCheckin from './MemberCheckin';
 import HelpPage from './HelpPage';
-import { Activity, Users, UserPlus, CreditCard, LogOut, Calendar as CalendarIcon, ShieldAlert, Settings as SettingsIcon, Eye, EyeOff, CheckSquare, Package, Search, Scan, History, BarChart3, LayoutDashboard, MoreHorizontal, X, Sun, Moon, Smartphone } from 'lucide-react';
+import { Activity, Users, UserPlus, CreditCard, LogOut, Calendar as CalendarIcon, ShieldAlert, Settings as SettingsIcon, Eye, EyeOff, CheckSquare, Package, Search, Scan, History, BarChart3, LayoutDashboard, MoreHorizontal, X, Sun, Moon, Smartphone, FileText } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,8 +36,13 @@ import CoachPortal from './coach/CoachPortal';
 import { ForcePasswordChangeDialog } from './components/ForcePasswordChangeDialog';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { QRCodePage } from './components/QRCodePage';
+import QuoteGenerator from './QuoteGenerator';
+
+const QUOTE_GENERATOR_EMAILS = ['magd.gallab@gmail.com', 'michaelmitry13@gmail.com'];
 
 function AppContent() {
+  const { currentUser: authUser } = useAuth();
+  const canUseQuoteGenerator = QUOTE_GENERATOR_EMAILS.includes((authUser?.email || '').toLowerCase());
   const { currentUser, logout, isAuthReady, previewRole, setPreviewRole, searchQuery, setSearchQuery, branding, canAccessSettings, canViewGlobalDashboard, canDeletePayments, isManagerOrSama } = useAppContext();
   const { theme, toggleTheme } = useTheme();
   const [isKioskMode, setIsKioskMode] = React.useState(window.location.pathname === '/kiosk');
@@ -366,6 +371,13 @@ function AppContent() {
                   </TabsTrigger>
                 </>
               )}
+
+              {canUseQuoteGenerator && (
+                <TabsTrigger value="quotes" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 text-sm">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Quotes
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
 
@@ -418,6 +430,12 @@ function AppContent() {
                 <QRCodePage />
               </TabsContent>
             </>
+          )}
+
+          {canUseQuoteGenerator && (
+            <TabsContent value="quotes" className="m-0 animate-in fade-in-50 duration-300">
+              <QuoteGenerator />
+            </TabsContent>
           )}
         </Tabs>
       </main>
@@ -474,7 +492,7 @@ function AppContent() {
         <button
           onClick={() => setShowMoreMenu(prev => !prev)}
           className={`flex flex-col items-center gap-0.5 px-3 py-2 min-w-[52px] transition-colors ${
-            showMoreMenu || ['tasks','payments','reports','audit','settings'].includes(activeTab)
+            showMoreMenu || ['tasks','payments','reports','audit','settings','quotes'].includes(activeTab)
               ? 'text-primary' : 'text-muted-foreground'
           }`}
         >
@@ -546,6 +564,17 @@ function AppContent() {
                     <span className="text-[10px] font-semibold">Settings</span>
                   </button>
                 </>
+              )}
+              {canUseQuoteGenerator && (
+                <button
+                  onClick={() => { setActiveTab('quotes'); setShowMoreMenu(false); }}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-colors ${
+                    activeTab === 'quotes' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
+                  }`}
+                >
+                  <FileText className="h-5 w-5" />
+                  <span className="text-[10px] font-semibold">Quotes</span>
+                </button>
               )}
               <button
                 onClick={() => { logout(); setShowMoreMenu(false); }}
