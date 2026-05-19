@@ -196,7 +196,17 @@ export default function Payments() {
       return;
     }
     if (window.confirm('Are you sure you want to delete this payment record? This action cannot be undone.')) {
-      await deletePayment(id);
+      try {
+        await deletePayment(id);
+      } catch (error) {
+        setAlertTitle('Delete Failed');
+        setAlertDescription(
+          error instanceof Error
+            ? error.message
+            : 'Permission denied. You may not have the required role, or your session needs to be refreshed. Try logging out and back in.'
+        );
+        setAlertOpen(true);
+      }
     }
   };
 

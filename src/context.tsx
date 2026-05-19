@@ -203,9 +203,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     recordAttendance 
   } = useAttendance(currentUser, clients);
 
+  const auditLogDateFrom = React.useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().substring(0, 10);
+  }, []);
   const { 
     auditLogs 
-  } = useAuditLogs(currentUser, { dateFrom: '', dateTo: '' });
+  } = useAuditLogs(currentUser, { dateFrom: auditLogDateFrom, dateTo: '' });
 
   const { 
     importBatches, 

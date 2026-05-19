@@ -24,18 +24,26 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && (
-        (request.auth.token.email == "michaelmitry13@gmail.com") ||
-        (request.auth.token.email == "magd.gallab@gmail.com") ||
-        (request.auth.token.email == "admin@strike.eg") ||
+        request.auth.token.email in [
+          "michaelmitry13@gmail.com",
+          "magd.gallab@gmail.com",
+          "admin@strike.eg",
+          "strike.egyptt@gmail.com",
+          "shadyyoussef305@gmail.com"
+        ] ||
         (userExists() && getUserRole() in ['admin', 'manager', 'super_admin', 'crm_admin'])
       );
     }
 
     function isSuperAdmin() {
       return isAuthenticated() && (
-        (request.auth.token.email == "michaelmitry13@gmail.com") ||
-        (request.auth.token.email == "magd.gallab@gmail.com") ||
-        (request.auth.token.email == "admin@strike.eg") ||
+        request.auth.token.email in [
+          "michaelmitry13@gmail.com",
+          "magd.gallab@gmail.com",
+          "admin@strike.eg",
+          "strike.egyptt@gmail.com",
+          "shadyyoussef305@gmail.com"
+        ] ||
         (userExists() && getUserRole() in ['super_admin', 'crm_admin'])
       );
     }
@@ -105,7 +113,7 @@ service cloud.firestore {
              isNonEmptyString(data.sales_rep_id) &&
              isNonEmptyString(data.created_at) &&
              data.amount is number && data.amount > 0 &&
-             data.amount_paid is number && data.amount_paid > 0 &&
+             data.amount_paid is number && data.amount_paid >= 0 &&
              isNonEmptyString(data.packageType) &&
              data.package_category_type in ['Private Training', 'Group Training'] &&
              data.method in ['Cash', 'Credit Card', 'Bank Transfer', 'Instapay', 'Other'] &&

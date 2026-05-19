@@ -6,9 +6,49 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { format, parseISO, subYears } from 'date-fns';
+import { format, parseISO, subYears, subDays } from 'date-fns';
 import { AuditLog, Branch } from './types';
-import { MapPin, Search, Filter, ShieldAlert, History, RefreshCw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { MapPin, Search, Filter, ShieldAlert, History, RefreshCw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Archive, Download, Trash2 } from 'lucide-react';
+import { collection, getDocs, query, where, orderBy, writeBatch, doc } from 'firebase/firestore';
+import { db } from './firebase';
+
+const OWNER_EMAILS = ['michaelmitry13@gmail.com', 'magd.gallab@gmail.com'];
+
+async function fetchAndArchiveOldLogs(cutoffDays: number): Promise<{ logs: AuditLog[]; count: number }> {
+  const cutoff = subDays(new Date(), cutoffDays).toISOString();
+  const q = query(
+    collection(db, 'auditLogs'),
+    where('timestamp', '<', cutoff),
+    orderBy('timestamp', 'desc')
+  );
+  const snap = await getDocs(q);
+  const logs = snap.docs.map(d => ({ ...d.data(), id: d.id } as AuditLog));
+  return { logs, count: snap.docs.length };
+}
+
+async function deleteLogsFromFirestore(logs: AuditLog[]): Promise<void> {
+  const BATCH_SIZE = 400;
+  for (let i = 0; i < logs.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    logs.slice(i, i + BATCH_SIZE).forEach(log => {
+      batch.delete(doc(db, 'auditLogs', log.id));
+    });
+    await batch.commit();
+  }
+}
+
+function downloadJSON(data: AuditLog[], cutoffDays: number): void {
+  const cutoffDate = format(subDays(new Date(), cutoffDays), 'yyyy-MM-dd');
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const filename = `strike-audit-archive_before-${cutoffDate}_exported-${today}.json`;
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const PAGE_SIZE = 20;
 
@@ -43,6 +83,46 @@ export default function AuditLogs() {
     currentUser?.role === 'super_admin' ||
     currentUser?.role === 'crm_admin' ||
     !!currentUser?.can_access_settings_and_history;
+
+  const isOwner = OWNER_EMAILS.includes(currentUser?.email || '');
+
+  // Archive state
+  const [archiveCutoff, setArchiveCutoff] = useState(30);
+  const [archiveStatus, setArchiveStatus] = useState<'idle' | 'fetching' | 'confirm' | 'deleting' | 'done'>('idle');
+  const [archiveLogs, setArchiveLogs] = useState<AuditLog[]>([]);
+  const [archiveError, setArchiveError] = useState('');
+
+  const handleArchiveFetch = async () => {
+    setArchiveStatus('fetching');
+    setArchiveError('');
+    try {
+      const { logs } = await fetchAndArchiveOldLogs(archiveCutoff);
+      setArchiveLogs(logs);
+      if (logs.length === 0) {
+        setArchiveError(`No logs older than ${archiveCutoff} days found.`);
+        setArchiveStatus('idle');
+      } else {
+        downloadJSON(logs, archiveCutoff);
+        setArchiveStatus('confirm');
+      }
+    } catch (e) {
+      setArchiveError('Failed to fetch logs. Check your connection.');
+      setArchiveStatus('idle');
+    }
+  };
+
+  const handleArchiveDelete = async () => {
+    setArchiveStatus('deleting');
+    try {
+      await deleteLogsFromFirestore(archiveLogs);
+      setArchiveStatus('done');
+      setArchiveLogs([]);
+      refresh();
+    } catch (e) {
+      setArchiveError('Delete failed. Some records may still exist.');
+      setArchiveStatus('confirm');
+    }
+  };
 
   // Date range — default last 1 year
   const defaultFrom = format(subYears(new Date(), 1), 'yyyy-MM-dd');
@@ -111,11 +191,99 @@ export default function AuditLogs() {
           <h2 className="text-2xl font-bold tracking-tight">System History</h2>
           <p className="text-muted-foreground text-sm">Track all activities and changes across branches.</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => { refresh(); resetPage(); }} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          {loading ? 'Loading…' : 'Refresh'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => { refresh(); resetPage(); }} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? 'Loading…' : 'Refresh'}
+          </Button>
+          {isOwner && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-amber-500/40 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+              onClick={() => setArchiveStatus(s => s === 'idle' ? 'fetching' : 'idle')}
+              disabled={archiveStatus === 'fetching' || archiveStatus === 'deleting'}
+            >
+              <Archive className="h-4 w-4 mr-2" />
+              Export & Archive
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* Archive Panel — owners only */}
+      {isOwner && archiveStatus !== 'idle' && (
+        <div className="rounded-xl border border-amber-400/30 bg-amber-50/50 dark:bg-amber-950/20 p-4 space-y-3">
+          <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-semibold text-sm">
+            <Archive className="h-4 w-4" />
+            Export & Archive Audit Logs
+          </div>
+
+          {archiveStatus === 'fetching' && (
+            <div className="flex items-end gap-3 flex-wrap">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-muted-foreground">Archive logs older than</label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={7} max={365}
+                    className="h-9 w-24 text-sm"
+                    value={archiveCutoff}
+                    onChange={e => setArchiveCutoff(Number(e.target.value))}
+                  />
+                  <span className="text-sm text-muted-foreground">days</span>
+                </div>
+              </div>
+              <Button size="sm" className="h-9 bg-amber-600 hover:bg-amber-700 text-white" onClick={handleArchiveFetch}>
+                <Download className="h-4 w-4 mr-2" />
+                Download JSON
+              </Button>
+              <Button size="sm" variant="ghost" className="h-9" onClick={() => setArchiveStatus('idle')}>
+                Cancel
+              </Button>
+            </div>
+          )}
+
+          {archiveStatus === 'confirm' && (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                ✅ <strong>{archiveLogs.length.toLocaleString()} records</strong> downloaded successfully.
+                Now you can delete them from Firestore to free up space.
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleArchiveDelete}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete {archiveLogs.length.toLocaleString()} records from Firestore
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setArchiveStatus('idle')}>
+                  Keep in Firestore
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {archiveStatus === 'deleting' && (
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              Deleting {archiveLogs.length.toLocaleString()} records from Firestore…
+            </p>
+          )}
+
+          {archiveStatus === 'done' && (
+            <p className="text-sm text-emerald-600 font-semibold">
+              ✅ Archive complete. Firestore cleaned up. The downloaded file is your permanent record.
+            </p>
+          )}
+
+          {archiveError && (
+            <p className="text-sm text-destructive">{archiveError}</p>
+          )}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-muted/30 border rounded-xl p-4 space-y-3">
