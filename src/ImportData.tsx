@@ -337,7 +337,7 @@ export default function ImportData({ type }: ImportDataProps) {
 
         let rawStatus = (typeOfClient || 'Lead').toString().trim();
         rawStatus = rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase();
-        let status: any = ["Lead", "Active", "Nearly Expired", "Expired", "Hold", "Pending", "Interested", "Interest"].includes(rawStatus) ? rawStatus : 'Lead';
+        let status: any = ["Lead", "Active", "Nearly Expired", "Expired", "Hold"].includes(rawStatus) ? rawStatus : 'Lead';
         
         if (isHold) {
           status = 'Hold';
