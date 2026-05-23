@@ -26,6 +26,7 @@ export const exportDatabaseToJson = async (onProgress?: BackupProgressCallback) 
   // ── Phase 1: Root collections (0 → 17%) ──────────────────────────────────
   for (let i = 0; i < ROOT_COLLECTIONS.length; i++) {
     const collName = ROOT_COLLECTIONS[i];
+    if (!collName) continue;
     const pct = Math.round(((i + 1) / ROOT_COLLECTIONS.length) * ROOT_COLLECTION_WEIGHT);
     onProgress?.(`Reading ${collName}…`, pct);
 
