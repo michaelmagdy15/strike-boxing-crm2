@@ -97,6 +97,7 @@ export default defineConfig(({ mode }) => {
                 id.includes('node_modules/d3')) {
               return 'vendor-charts';
             }
+            return;
           },
         },
       },

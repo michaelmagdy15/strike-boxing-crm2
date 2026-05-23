@@ -42,5 +42,11 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "noPropertyAccessFromIndexSignature": false
-  }
+  },
+  "exclude": [
+    "functions",
+    "node_modules",
+    "dist",
+    "dist-server"
+  ]
 }
