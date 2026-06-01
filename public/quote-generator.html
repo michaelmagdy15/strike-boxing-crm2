@@ -554,6 +554,76 @@
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 3px; }
+
+  /* Compact Mode to fit A4 */
+  .quote-doc.compact-mode {
+    min-height: 842px !important;
+  }
+  .quote-doc.compact-mode .doc-header {
+    padding: 16px 40px 10px !important;
+  }
+  .quote-doc.compact-mode .doc-logo img {
+    height: 32px !important;
+  }
+  .quote-doc.compact-mode .doc-logo-bar {
+    margin-top: 4px !important;
+  }
+  .quote-doc.compact-mode .doc-meta-top {
+    font-size: 7.5px !important;
+  }
+  .quote-doc.compact-mode .doc-title-block {
+    margin-top: 10px !important;
+  }
+  .quote-doc.compact-mode .doc-title {
+    font-size: 26px !important;
+  }
+  .quote-doc.compact-mode .doc-title-rule {
+    margin-top: 6px !important;
+  }
+  .quote-doc.compact-mode .doc-tagline {
+    font-size: 8.5px !important;
+    margin-top: 6px !important;
+  }
+  .quote-doc.compact-mode .doc-recipient {
+    margin-top: 8px !important;
+    padding: 4px 10px !important;
+  }
+  .quote-doc.compact-mode .doc-stats {
+    margin-top: 10px !important;
+  }
+  .quote-doc.compact-mode .doc-stat {
+    padding: 8px 6px !important;
+  }
+  .quote-doc.compact-mode .doc-session-box {
+    margin-top: 10px !important;
+    padding: 8px 16px !important;
+  }
+  .quote-doc.compact-mode .doc-section {
+    margin-top: 10px !important;
+    padding-top: 10px !important;
+  }
+  .quote-doc.compact-mode .doc-pkg-head {
+    padding: 8px 12px !important;
+  }
+  .quote-doc.compact-mode .doc-pkg-head-title {
+    font-size: 11px !important;
+  }
+  .quote-doc.compact-mode .doc-pkg-row {
+    padding: 8px 12px !important;
+  }
+  .quote-doc.compact-mode .doc-pkg-price {
+    font-size: 20px !important;
+  }
+  .quote-doc.compact-mode .doc-notes {
+    margin-top: 8px !important;
+  }
+  .quote-doc.compact-mode .doc-note-row {
+    padding: 3px 0 !important;
+  }
+  .quote-doc.compact-mode .doc-footer {
+    margin-top: 12px !important;
+    padding: 8px 40px !important;
+  }
 </style>
 </head>
 <body>
@@ -1394,6 +1464,12 @@ async function downloadPDF() {
     const originalTransform = docElement.style.transform;
     docElement.style.transform = 'none';
 
+    // Apply compact mode if the natural scrollHeight exceeds 842px
+    const needsCompact = docElement.scrollHeight > 842;
+    if (needsCompact) {
+      docElement.classList.add('compact-mode');
+    }
+
     // Ensure logo base64 is available (may not be ready if download clicked very quickly)
     if (!window._logoB64) {
       try {
@@ -1430,7 +1506,8 @@ async function downloadPDF() {
     // Restore original image srcs
     imgs.forEach((img, i) => { img.src = originalSrcs[i]; });
 
-    // Restore scale
+    // Restore scale and remove compact mode
+    docElement.classList.remove('compact-mode');
     docElement.style.transform = originalTransform;
     scalePreview();
 
@@ -1451,35 +1528,20 @@ async function downloadPDF() {
       compress: true
     });
 
-    // --- Smart page breaks: snap cuts to section boundaries ---
-    const pxToPt = naturalHeightPt / docElement.scrollHeight;
-    const sections = Array.from(docElement.querySelectorAll(
-      '.doc-header, .doc-title-block, .doc-stats, .doc-session-box, ' +
-      '.doc-section, .doc-packages, .doc-notes, .doc-footer'
-    ));
-    // Bottom edge of each section in pt
-    const sectionEdgesPt = sections
-      .map(el => (el.offsetTop + el.offsetHeight) * pxToPt)
-      .sort((a, b) => a - b);
+    // Scale to fit exactly 1 A4 page
+    let finalW = ptWidth;
+    let finalH = naturalHeightPt;
+    let xOffset = 0;
+    let yOffset = 0;
 
-    // Build page start positions
-    const pageStarts = [0];
-    let pageEnd = ptHeight;
-    while (pageEnd < naturalHeightPt) {
-      // Find the last section bottom that fits within this page budget
-      let safeCut = pageEnd; // fallback: hard cut
-      for (let i = sectionEdgesPt.length - 1; i >= 0; i--) {
-        if (sectionEdgesPt[i] <= pageEnd) { safeCut = sectionEdgesPt[i]; break; }
-      }
-      pageStarts.push(safeCut);
-      pageEnd = safeCut + ptHeight;
+    if (naturalHeightPt > ptHeight) {
+      const scale = ptHeight / naturalHeightPt;
+      finalW = ptWidth * scale;
+      finalH = ptHeight;
+      xOffset = (ptWidth - finalW) / 2;
     }
 
-    // Render each page by shifting the full image
-    for (let i = 0; i < pageStarts.length; i++) {
-      if (i > 0) pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, -pageStarts[i], ptWidth, naturalHeightPt, undefined, 'FAST');
-    }
+    pdf.addImage(imgData, 'JPEG', xOffset, yOffset, finalW, finalH, undefined, 'FAST');
 
     const safeName = (state.client.organization || state.program.name || 'strike')
       .replace(/[^a-z0-9]+/gi, '-').toLowerCase();
