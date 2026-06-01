@@ -636,6 +636,13 @@
           <input id="f-sessions-week" type="number" min="1" max="7" value="3">
         </div>
         <div>
+          <label>Show Frequency?</label>
+          <select id="f-show-freq">
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+        <div>
           <label>Duration</label>
           <input id="f-session-dur" placeholder="1 Hour 30 Minutes">
         </div>
@@ -651,7 +658,7 @@
           <label>Time Slot 1</label>
           <input id="f-slot1" placeholder="09:00 AM – 10:30 AM">
         </div>
-        <div>
+        <div class="field-full">
           <label>Time Slot 2 (optional)</label>
           <input id="f-slot2" placeholder="10:30 AM – 12:00 PM">
         </div>
@@ -794,6 +801,7 @@ const state = {
     ]
   },
   schedule: {
+    showFrequency: true,
     sessionsPerWeek: 3,
     sessionDuration: '1 Hour 30 Minutes',
     minParticipants: 15,
@@ -876,6 +884,11 @@ function migrateState(s) {
       founder: s.founder || 'Shady Youssef'
     };
     delete s.founder;
+  }
+
+  // Ensure showFrequency exists
+  if (s.schedule && s.schedule.showFrequency === undefined) {
+    s.schedule.showFrequency = true;
   }
 }
 
@@ -1172,7 +1185,7 @@ function renderPreview() {
     <div class="doc-pkg-col">
       <div class="doc-pkg-head">
         <div class="doc-pkg-head-title">${esc(dur.label)}</div>
-        <div class="doc-pkg-head-sub">${s.schedule.sessionsPerWeek} Sessions Per Week</div>
+        ${s.schedule.showFrequency !== false ? `<div class="doc-pkg-head-sub">${s.schedule.sessionsPerWeek} Sessions Per Week</div>` : ''}
       </div>
       ${dur.packages.map(pkg => {
         const math = calcPackage(pkg.price, pkg.participants);
@@ -1252,7 +1265,9 @@ function renderPreview() {
       }
     });
   }
-  statsList.push({ label: 'Frequency', val: `${s.schedule.sessionsPerWeek} Sessions Per Week` });
+  if (s.schedule.showFrequency !== false) {
+    statsList.push({ label: 'Frequency', val: `${s.schedule.sessionsPerWeek} Sessions Per Week` });
+  }
 
   const statsHtml = statsList.map(st => `
     <div class="doc-stat">
@@ -1287,7 +1302,7 @@ function renderPreview() {
       ${s.client.email ? `<div style="font-family:var(--mono);font-size:8px;color:#888;margin-top:4px;">${esc(s.client.email)}</div>` : ''}
     </div>
 
-    <div class="doc-stats">
+    <div class="doc-stats" style="grid-template-columns: repeat(${Math.max(1, Math.min(3, statsList.length))}, 1fr);">
       ${statsHtml}
     </div>
 
@@ -1579,9 +1594,11 @@ function drawPDF(pdf) {
       }
     });
   }
-  stats.push({ label: 'FREQUENCY', val: `${state.schedule.sessionsPerWeek} Sessions Per Week` });
+  if (state.schedule.showFrequency !== false) {
+    stats.push({ label: 'FREQUENCY', val: `${state.schedule.sessionsPerWeek} Sessions Per Week` });
+  }
 
-  const numCols = 3;
+  const numCols = Math.max(1, Math.min(3, stats.length));
   const colW = CW / numCols;
   const statRowH = 38;
   const rowsCount = Math.ceil(stats.length / numCols);
@@ -1644,18 +1661,22 @@ function drawPDF(pdf) {
   const numDur = state.durations.length;
   if (numDur > 0) {
     const durW = (CW - (numDur - 1) * 10) / numDur;
-    let colMaxY = y + 30;
+    const hasFreq = state.schedule.showFrequency !== false;
+    const headH = hasFreq ? 30 : 22;
+    let colMaxY = y + headH;
 
     state.durations.forEach((dur, di) => {
       const dx = ML + di * (durW + 10);
       // Header
-      pdf.setFillColor(...darkBg); pdf.rect(dx, y, durW, 30, 'F');
+      pdf.setFillColor(...darkBg); pdf.rect(dx, y, durW, headH, 'F');
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(...gold);
-      pdf.text(dur.label.toUpperCase(), dx + durW / 2, y + 14, { align: 'center' });
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(180, 180, 180);
-      pdf.text(`${state.schedule.sessionsPerWeek} SESSIONS PER WEEK`, dx + durW / 2, y + 25, { align: 'center' });
+      pdf.text(dur.label.toUpperCase(), dx + durW / 2, y + (hasFreq ? 14 : 15), { align: 'center' });
+      if (hasFreq) {
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(180, 180, 180);
+        pdf.text(`${state.schedule.sessionsPerWeek} SESSIONS PER WEEK`, dx + durW / 2, y + 25, { align: 'center' });
+      }
 
-      let py = y + 30;
+      let py = y + headH;
       dur.packages.forEach((pkg, pi) => {
         const math = calcPackage(pkg.price, pkg.participants);
         const hasDiscount = math.discountPct > 0;
@@ -1838,6 +1859,7 @@ function syncForm() {
   setVal('f-prog-name',    s.program.name);
   setVal('f-prog-desc',    s.program.description);
   setVal('f-sessions-week',s.schedule.sessionsPerWeek);
+  setVal('f-show-freq',    s.schedule.showFrequency !== false ? 'yes' : 'no');
   setVal('f-session-dur',  s.schedule.sessionDuration);
   setVal('f-min-pax',      s.schedule.minParticipants);
   setVal('f-max-pax',      s.schedule.maxParticipants);
@@ -1874,6 +1896,7 @@ function wireForm() {
   bind('f-prog-name',    v => state.program.name = v);
   bind('f-prog-desc',    v => state.program.description = v);
   bind('f-sessions-week',v => { state.schedule.sessionsPerWeek = parseInt(v) || 1; renderPreview(); });
+  bindSelect('f-show-freq', v => { state.schedule.showFrequency = (v === 'yes'); renderPreview(); });
   bind('f-session-dur',  v => state.schedule.sessionDuration = v);
   bind('f-min-pax',      v => state.schedule.minParticipants = parseInt(v) || 0);
   bind('f-max-pax',      v => state.schedule.maxParticipants = parseInt(v) || 0);
