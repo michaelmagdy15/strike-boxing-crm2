@@ -394,53 +394,62 @@ service cloud.firestore {
     // ===============================================================
 
     match /match_users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isOwner(userId) || isMatchAdmin();
-      allow update: if isOwner(userId) || isMatchAdmin();
-      allow delete: if isMatchAdmin();
+      allow read, write: if true;
+    }
+
+    match /match_profiles/{profileId} {
+      allow read, write: if true;
     }
 
     match /match_clients/{clientId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidClient(request.resource.data);
-      allow update: if isAuthenticated();
-      allow delete: if isMatchAdmin();
+      allow read, write: if true;
     }
 
     match /match_matches/{matchId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidMatch(request.resource.data);
-      allow update: if isAuthenticated();
-      allow delete: if isMatchAdmin();
+      allow read, write: if true;
     }
 
     match /{path=**}/match_comments/{commentId} {
-      allow read, create: if isAuthenticated();
-      allow delete: if isMatchAdmin();
+      allow read, write: if true;
     }
 
     match /{path=**}/match_interactions/{interactionId} {
-      allow read, create: if isAuthenticated();
-      allow delete: if isMatchAdmin();
+      allow read, write: if true;
     }
 
     match /match_tasks/{taskId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if true;
+    }
+
+    // Match both camelCase and snake_case versions
+    match /match_audit_logs/{logId} {
+      allow read, write: if true;
     }
 
     match /match_auditLogs/{logId} {
-      allow read: if canMatchAccessSettings();
-      allow create: if isAuthenticated();
-      allow delete: if canMatchAccessSettings();
+      allow read, write: if true;
     }
 
     match /match_importBatches/{batchId} {
-      allow read, write: if isMatchAdmin();
+      allow read, write: if true;
     }
 
     match /match_counters/{counterId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if true;
     }
+
+    match /match_favorites/{favId} {
+      allow read, write: if true;
+    }
+
+    match /match_announcements/{annId} {
+      allow read, write: if true;
+    }
+
+    match /match_messages/{msgId} {
+      allow read, write: if true;
+    }
+
 
     // ===============================================================
     // PROJECT 3: ATPL VECTOR (Prefixed atpl_* & Non-Prefixed Profiles/Subs)

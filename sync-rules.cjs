@@ -21,15 +21,22 @@ const projectDefinitions = [
     name: 'GamenEG-Brand',
     absolute: 'C:/Users/Mi5a/GamenEG-Brand',
     relative: '../GamenEG-Brand'
+  },
+  {
+    name: 'Matchmaking CRM',
+    absolute: 'H:/Matchmaking CRM/strike-boxing-crm2-master',
+    relative: '../../Matchmaking CRM/strike-boxing-crm2-master'
   }
 ];
 
 // Helper to resolve the directory path for a project configuration
 function resolveProjectDir(def) {
-  // Check relative path first (relative to the current working directory of script run)
-  const relativePath = path.resolve(process.cwd(), def.relative);
-  if (fs.existsSync(relativePath) && fs.statSync(relativePath).isDirectory()) {
-    return relativePath;
+  // Check relative path first
+  if (def.relative) {
+    const relativePath = path.resolve(process.cwd(), def.relative);
+    if (fs.existsSync(relativePath) && fs.statSync(relativePath).isDirectory()) {
+      return relativePath;
+    }
   }
 
   // Check absolute path
