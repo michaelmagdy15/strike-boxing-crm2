@@ -3,7 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ===============================================================
-    // Auth Helpers
+    // Global Auth Helpers
     // ===============================================================
 
     function isAuthenticated() {
@@ -13,16 +13,63 @@ service cloud.firestore {
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
-
-    function getUserRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    
+    function isPlatformOwner() {
+      return isAuthenticated() && (
+        (request.auth.token.email == "michaelmitry13@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/global_users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/global_users/$(request.auth.uid)).data.role == 'platform_owner')
+      );
     }
+
+    // ===============================================================
+    // Tenant-Level Auth Helpers
+    // ===============================================================
+
+    function isTenantMember(tenantId) {
+      return isAuthenticated() && (
+        isPlatformOwner() ||
+        exists(/databases/$(database)/documents/tenants/$(tenantId)/users/$(request.auth.uid))
+      );
+    }
+
+    // Scope check helper to fetch data role dynamically
+    function getTenantRole(tenantId) {
+      return get(/databases/$(database)/documents/tenants/$(tenantId)/users/$(request.auth.uid)).data.role;
+    }
+
+    function isTenantAdmin(tenantId) {
+      return isAuthenticated() && (
+        isPlatformOwner() ||
+        (isTenantMember(tenantId) && getTenantRole(tenantId) in ['admin', 'manager', 'super_admin', 'crm_admin'])
+      );
+    }
+
+    // Checks super user status inside the tenant
+    function isTenantSuperAdmin(tenantId) {
+      return isAuthenticated() && (
+        isPlatformOwner() ||
+        (isTenantMember(tenantId) && getTenantRole(tenantId) in ['super_admin', 'crm_admin'])
+      );
+    }
+
+    function isTenantRep(tenantId) {
+      return isAuthenticated() && isTenantMember(tenantId) && getTenantRole(tenantId) == 'rep';
+    }
+
+    // ===============================================================
+    // Strike CRM Root Auth Helpers
+    // ===============================================================
 
     function userExists() {
       return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function isAdmin() {
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isStrikeAdmin() {
       return isAuthenticated() && (
         request.auth.token.email in [
           "michaelmitry13@gmail.com",
@@ -36,7 +83,7 @@ service cloud.firestore {
       );
     }
 
-    function isSuperAdmin() {
+    function isStrikeSuperAdmin() {
       return isAuthenticated() && (
         request.auth.token.email in [
           "michaelmitry13@gmail.com",
@@ -48,10 +95,6 @@ service cloud.firestore {
         ] ||
         (userExists() && getUserRole() in ['super_admin', 'crm_admin'])
       );
-    }
-
-    function isRep() {
-      return isAuthenticated() && userExists() && getUserRole() == 'rep';
     }
 
     // ===============================================================
@@ -84,15 +127,12 @@ service cloud.firestore {
     // Entity Validators
     // ===============================================================
 
-    // --- Users ---
     function isValidRole(role) {
       return role in ['rep', 'manager', 'admin', 'super_admin', 'crm_admin'];
     }
 
-    // Fields a user is allowed to touch on their own doc (safe self-edit)
     function isSafeUserSelfEdit() {
       let allowed = ['name', 'email', 'lastSeen', 'mustChangePassword', 'photoURL'];
-      // Ensure the incoming data only changes safe fields compared to current doc
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
     }
 
@@ -108,7 +148,6 @@ service cloud.firestore {
              data.status in ['Lead', 'Active', 'Nearly Expired', 'Expired', 'Hold'];
     }
 
-    // --- Payments ---
     function isValidPaymentCreate(data) {
       return isNonEmptyString(data.clientId) &&
              isNonEmptyString(data.client_name) &&
@@ -119,24 +158,19 @@ service cloud.firestore {
              isNonEmptyString(data.packageType) &&
              data.package_category_type in ['Private Training', 'Group Training'] &&
              data.method in ['Cash', 'Credit Card', 'Bank Transfer', 'Instapay', 'Other'] &&
-             // If instapayRef is present it must be exactly 12 digits
              (!('instapayRef' in data) || (data.instapayRef is string && data.instapayRef.matches('^[0-9]{12}$')));
     }
 
-    // On payment UPDATE: nobody can change the financial core or attribution
     function paymentImmutableFieldsUnchanged() {
-      let immutable = ['clientId', 'client_name', 'amount', 'sales_rep_id', 'created_at',
-                       'package_category_type'];
+      let immutable = ['clientId', 'client_name', 'amount', 'sales_rep_id', 'created_at', 'package_category_type'];
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(immutable);
     }
 
-    // --- Sessions (PT) ---
     function isValidSession(data) {
       return isNonEmptyString(data.clientId) &&
              data.status in ['Scheduled', 'Attended', 'No Show', 'Cancelled'];
     }
 
-    // --- Interactions ---
     function isValidInteraction(data) {
       return isNonEmptyString(data.date) &&
              data.type in ['Call', 'WhatsApp', 'Email', 'Visit'] &&
@@ -144,7 +178,6 @@ service cloud.firestore {
              isNonEmptyString(data.author);
     }
 
-    // --- Attendance ---
     function isValidAttendance(data) {
       return isNonEmptyString(data.clientId) &&
              isNonEmptyString(data.branch) &&
@@ -152,7 +185,6 @@ service cloud.firestore {
              isNonEmptyString(data.recordedBy);
     }
 
-    // --- Tasks ---
     function isValidTask(data) {
       return isNonEmptyString(data.title) &&
              isNonEmptyString(data.dueDate) &&
@@ -169,8 +201,6 @@ service cloud.firestore {
              resource.data.createdBy == request.auth.uid;
     }
 
-    // --- Packages ---
-    // sessions == 0 means "unlimited" (time-governed only, e.g. 6-month package)
     function isValidPackage(data) {
       return isNonEmptyString(data.name) &&
              data.price is number && data.price >= 0 &&
@@ -179,13 +209,12 @@ service cloud.firestore {
              data.type in ['Private', 'Group', 'Other'];
     }
 
-    // --- Coaches ---
+    // Coach status validation helper
     function isValidCoach(data) {
       return isNonEmptyString(data.name) &&
              data.active is bool;
     }
 
-    // --- Targets ---
     function isValidTarget(data) {
       return isNonEmptyString(data.userId) &&
              data.targetAmount is number && data.targetAmount >= 0 &&
@@ -193,7 +222,6 @@ service cloud.firestore {
              data.month.matches('^[0-9]{4}-[0-9]{2}$');
     }
 
-    // --- Audit Logs ---
     function isValidAuditLog(data) {
       return isNonEmptyString(data.userId) &&
              data.action in ['CREATE', 'UPDATE', 'DELETE'] &&
@@ -203,7 +231,6 @@ service cloud.firestore {
              isNonEmptyString(data.timestamp);
     }
 
-    // --- Branding ---
     function isValidBranding(data) {
       return data.keys().hasAny(['companyName', 'logoUrl', 'kioskPin', 'dailyCheckinPin']) &&
              (!('companyName' in data) || isNonEmptyString(data.companyName)) &&
@@ -211,17 +238,24 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // Collection Group Rules (subcollections)
+    // Global Platform Collections
+    // ===============================================================
+    
+    match /global_users/{userId} {
+      allow read: if isPlatformOwner() || isOwner(userId);
+      allow write: if isPlatformOwner();
+    }
+
+    // ===============================================================
+    // Collection Group Rules (subcollections across all tenants)
     // ===============================================================
 
     match /{path=**}/comments/{commentId} {
       allow read: if isAuthenticated();
-      // Writes handled by the parent /clients/{clientId}/comments rule below
     }
 
     match /{path=**}/interactions/{interactionId} {
       allow read: if isAuthenticated();
-      // Writes handled by the parent /clients/{clientId}/interactions rule below
     }
 
     match /{path=**}/attendance/{attendanceId} {
@@ -230,145 +264,243 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // Collection Rules
+    // Tenant Structure (Multi-Tenant SaaS, e.g., ATPLVECTOR)
     // ===============================================================
 
-    // --- Users ---
-    // Read: any authenticated user (needed to show rep lists, dropdowns, etc.)
-    // Self-write: only safe fields (name, email, lastSeen) — NOT role or permissions
-    // Admin write: admins can update any field; super_admins can create/delete
+    match /tenants/{tenantId} {
+      
+      // The tenant record itself
+      allow read: if isTenantMember(tenantId);
+      allow write: if isPlatformOwner();
+
+      // --- Users ---
+      match /users/{userId} {
+        allow read: if isTenantMember(tenantId);
+        allow create: if isTenantSuperAdmin(tenantId) || isOwner(userId);
+        allow update: if (isOwner(userId) && isSafeUserSelfEdit()) || isTenantAdmin(tenantId);
+        allow delete: if isTenantSuperAdmin(tenantId);
+      }
+
+      // --- Clients ---
+      match /clients/{clientId} {
+        allow read: if isTenantMember(tenantId);
+        allow create, update: if isTenantMember(tenantId) && isValidClient(request.resource.data);
+        allow delete: if isTenantAdmin(tenantId);
+
+        match /comments/{commentId} {
+          allow read, create: if isTenantMember(tenantId);
+          allow update, delete: if isTenantAdmin(tenantId);
+        }
+
+        match /interactions/{interactionId} {
+          allow read: if isTenantMember(tenantId);
+          allow create, update: if isTenantMember(tenantId) && isValidInteraction(request.resource.data);
+          allow delete: if isTenantAdmin(tenantId);
+        }
+      }
+
+      // --- Payments ---
+      match /payments/{paymentId} {
+        allow read: if isTenantMember(tenantId);
+        allow create: if isTenantMember(tenantId) && isValidPaymentCreate(request.resource.data);
+        allow update: if isTenantAdmin(tenantId) && paymentImmutableFieldsUnchanged();
+        allow delete: if isTenantSuperAdmin(tenantId);
+      }
+
+      // --- Sessions ---
+      match /sessions/{sessionId} {
+        allow read: if isTenantMember(tenantId);
+        allow create, update: if isTenantMember(tenantId) && isValidSession(request.resource.data);
+        allow delete: if isTenantAdmin(tenantId);
+      }
+
+      // --- Tasks ---
+      match /tasks/{taskId} {
+        allow read: if isTenantMember(tenantId);
+        allow create, update: if isTenantMember(tenantId) && isValidTask(request.resource.data);
+        allow delete: if isTenantAdmin(tenantId) || isTaskCreator();
+      }
+
+      // --- Packages ---
+      match /packages/{packageId} {
+        allow read: if isTenantMember(tenantId);
+        allow create, update: if isTenantAdmin(tenantId) && isValidPackage(request.resource.data);
+        allow delete: if isTenantAdmin(tenantId);
+      }
+
+      // --- Coaches ---
+      match /coaches/{coachId} {
+        allow read: if isTenantMember(tenantId);
+        allow create, update: if isTenantAdmin(tenantId) && isValidCoach(request.resource.data);
+        allow delete: if isTenantAdmin(tenantId);
+      }
+
+      // --- Targets ---
+      match /targets/{targetId} {
+        allow read: if isTenantMember(tenantId);
+        allow create, update: if isTenantAdmin(tenantId) && isValidTarget(request.resource.data);
+        allow delete: if isTenantAdmin(tenantId);
+      }
+
+      // --- Audit Logs ---
+      match /auditLogs/{logId} {
+        allow read: if isTenantAdmin(tenantId);
+        allow create: if isTenantMember(tenantId) && isValidAuditLog(request.resource.data);
+        allow update: if false;
+        allow delete: if isTenantSuperAdmin(tenantId);
+      }
+
+      // --- Settings ---
+      match /settings/{settingId} {
+        allow read: if settingId == 'branding' ? true : isTenantMember(tenantId);
+        allow write: if isTenantAdmin(tenantId) && (settingId != 'branding' || isValidBranding(request.resource.data));
+      }
+
+      // --- Pending Accounts ---
+      match /pendingAccounts/{docId} {
+        allow read, write: if isTenantAdmin(tenantId) || isPlatformOwner();
+        allow create: if isAuthenticated();
+      }
+
+      // --- Password Reset Requests ---
+      match /passwordResetRequests/{docId} {
+        allow read, write: if isTenantAdmin(tenantId) || isPlatformOwner();
+        allow create: if isAuthenticated();
+      }
+
+      // --- Import Batches ---
+      match /importBatches/{batchId} {
+        allow read: if isTenantMember(tenantId);
+        allow write, delete: if isTenantAdmin(tenantId);
+      }
+
+      // --- Counters ---
+      match /counters/{counterId} {
+        allow read: if isTenantMember(tenantId);
+        allow write: if counterId == 'clients' ? isTenantMember(tenantId) : isTenantAdmin(tenantId);
+      }
+    }
+    
+    // ===============================================================
+    // Strike CRM Root Collections (Single-Tenant Flat Structure)
+    // ===============================================================
+
+    // --- Root users ---
     match /users/{userId} {
       allow read: if isAuthenticated();
-
-      // An admin/super_admin can create a new user doc (invite placeholder or on first login)
-      allow create: if isSuperAdmin() ||
-                       // Allow the user themselves to create their own doc on first login
-                       isOwner(userId);
-
-      // Updates: self can only touch safe fields; admins can touch any field
-      allow update: if (isOwner(userId) && isSafeUserSelfEdit()) ||
-                       isAdmin();
-
-      // Delete (revoking access): super_admin only
-      allow delete: if isSuperAdmin();
+      allow create: if isStrikeSuperAdmin() || isOwner(userId);
+      allow update: if (isOwner(userId) && isSafeUserSelfEdit()) || isStrikeAdmin();
+      allow delete: if isStrikeSuperAdmin();
     }
 
-    // --- Clients ---
+    // --- Root settings (branding, global config) ---
+    match /settings/{settingId} {
+      allow read: if settingId == 'branding' || isAuthenticated();
+      allow write: if isStrikeAdmin() && (settingId != 'branding' || isValidBranding(request.resource.data));
+    }
+
+    // --- Root clients ---
     match /clients/{clientId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidClient(request.resource.data);
       allow update: if isAuthenticated() && isValidClient(request.resource.data);
-      allow delete: if isAdmin();
+      allow delete: if isStrikeAdmin();
 
       match /comments/{commentId} {
         allow read: if isAuthenticated();
         allow create: if isAuthenticated();
-        // Comments are immutable once written
-        allow update, delete: if isAdmin();
+        allow update, delete: if isStrikeAdmin();
       }
 
       match /interactions/{interactionId} {
         allow read: if isAuthenticated();
         allow create: if isAuthenticated() && isValidInteraction(request.resource.data);
         allow update: if isAuthenticated() && isValidInteraction(request.resource.data);
-        allow delete: if isAdmin();
+        allow delete: if isStrikeAdmin();
       }
     }
 
-    // --- Payments ---
+    // --- Root payments ---
     match /payments/{paymentId} {
       allow read: if isAuthenticated();
-      // Full field validation on creation
       allow create: if isAuthenticated() && isValidPaymentCreate(request.resource.data);
-      // Admins can update, but cannot change core financial/attribution fields
-      allow update: if isAdmin() && paymentImmutableFieldsUnchanged();
-      // Soft-delete (setting deleted_at) — admin only, hard delete — super_admin only
-      allow delete: if isSuperAdmin();
+      allow update: if isStrikeAdmin() && paymentImmutableFieldsUnchanged();
+      allow delete: if isStrikeSuperAdmin();
     }
 
-    // --- Sessions (PT package records) ---
+    // --- Root sessions (PT package records) ---
     match /sessions/{sessionId} {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated() && isValidSession(request.resource.data);
-      allow delete: if isAdmin();
+      allow delete: if isStrikeAdmin();
     }
 
-    // --- Tasks ---
+    // --- Root tasks ---
     match /tasks/{taskId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidTask(request.resource.data);
       allow update: if isAuthenticated() && isValidTask(request.resource.data);
-      // Only the task creator OR an admin can delete a task
-      allow delete: if isAdmin() || isTaskCreator();
+      allow delete: if isStrikeAdmin() || isTaskCreator();
     }
 
-    // --- Packages ---
-    // sessions == 0 is valid and means "unlimited" (time-governed, e.g. 6-month package)
+    // --- Root packages ---
     match /packages/{packageId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAdmin() && isValidPackage(request.resource.data);
-      allow delete: if isAdmin();
+      allow create, update: if isStrikeAdmin() && isValidPackage(request.resource.data);
+      allow delete: if isStrikeAdmin();
     }
 
-    // --- Coaches ---
+    // --- Root coaches ---
     match /coaches/{coachId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAdmin() && isValidCoach(request.resource.data);
-      allow delete: if isAdmin();
+      allow create, update: if isStrikeAdmin() && isValidCoach(request.resource.data);
+      allow delete: if isStrikeAdmin();
     }
 
-    // --- Targets (sales targets) ---
+    // --- Root targets (sales targets) ---
     match /targets/{targetId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAdmin() && isValidTarget(request.resource.data);
-      allow delete: if isAdmin();
+      allow create, update: if isStrikeAdmin() && isValidTarget(request.resource.data);
+      allow delete: if isStrikeAdmin();
     }
 
-    // --- Audit Logs ---
+    // --- Root audit logs ---
     match /auditLogs/{logId} {
-      allow read: if isAdmin();
+      allow read: if isStrikeAdmin();
       allow create: if isAuthenticated() && isValidAuditLog(request.resource.data);
-      // Logs are immutable — no updates
       allow update: if false;
-      allow delete: if isSuperAdmin();
+      allow delete: if isStrikeSuperAdmin();
     }
 
-    // --- Settings (branding, global config) ---
-    match /settings/{settingId} {
-      // Branding is readable without auth (for logo display on login page)
-      allow read: if settingId == 'branding' || isAuthenticated();
-      allow write: if isAdmin() && (settingId != 'branding' || isValidBranding(request.resource.data));
-    }
-
-    // --- Pending Accounts (sign-up requests) ---
+    // --- Root pending accounts (sign-up requests) ---
     match /pendingAccounts/{docId} {
-      // Anyone (even unauthenticated) can create a sign-up request
       allow create: if true;
-      // Only admins can read, update (approve/deny), or delete pending requests
-      allow read, update, delete: if isAdmin();
+      allow read, update, delete: if isStrikeAdmin();
     }
 
-    // --- Password Reset Requests ---
+    // --- Root password reset requests ---
     match /passwordResetRequests/{docId} {
-      // Anyone can submit a reset request (unauthenticated user forgot password)
       allow create: if true;
-      // Only admins can read, update (approve/deny), or delete reset requests
-      allow read, update, delete: if isAdmin();
+      allow read, update, delete: if isStrikeAdmin();
     }
 
-    // --- Import Batches ---
+    // --- Root import batches ---
     match /importBatches/{batchId} {
       allow read: if isAuthenticated();
-      allow write, delete: if isAdmin();
+      allow write, delete: if isStrikeAdmin();
     }
 
-    // --- Counters (sequential member IDs) ---
-    // The 'clients' counter must be writable by any authenticated user
-    // because sales reps call generateMemberId() when adding new clients.
-    // Other counters remain admin-only.
+    // --- Root counters (sequential member IDs) ---
     match /counters/{counterId} {
       allow read: if isAuthenticated();
-      allow write: if counterId == 'clients' ? isAuthenticated() : isAdmin();
+      allow write: if counterId == 'clients' ? isAuthenticated() : isStrikeAdmin();
+    }
+
+    // ===============================================================
+    // Platform Fallback / Super Admin Bypass
+    // ===============================================================
+    match /{document=**} {
+      allow read, write: if isPlatformOwner();
     }
   }
 }
