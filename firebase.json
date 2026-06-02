@@ -18,7 +18,10 @@
     {
       "database": "(default)",
       "rules": "firestore.rules",
-      "indexes": "firestore.indexes.json"
+      "indexes": "firestore.indexes.json",
+      "predeploy": [
+        "node sync-rules.cjs"
+      ]
     }
   ],
   "storage": {
