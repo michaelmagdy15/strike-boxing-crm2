@@ -146,6 +146,9 @@ export interface Payment {
   discountedAmount?: number; // Final amount after discount
   isUpgradePayment?: boolean; // True if this payment resulted from member upgrade (not manual entry)
   previousPackageName?: string; // Package name before upgrade
+  wasTransferredDueToUpgrade?: boolean; // True if payment was transferred from an old package due to upgrade
+  transferredFromPackageName?: string; // Name of the package it was originally paid for
+  transferredAt?: string; // Timestamp of the transfer
   isOnHold?: boolean; // True if payment/package is temporarily paused
   holdReason?: string; // Reason for holding the payment/package
   holdDate?: string; // ISO string - when the hold was placed

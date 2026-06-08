@@ -83,6 +83,7 @@ export default function Clients() {
   const [upgradePkgName, setUpgradePkgName] = useState('');
   const [upgradeStartDate, setUpgradeStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [upgradePaymentMethod, setUpgradePaymentMethod] = useState('Cash');
+  const [upgradeInstapayRef, setUpgradeInstapayRef] = useState('');
   const [upgradeSalesRep, setUpgradeSalesRep] = useState('unassigned');
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -187,6 +188,11 @@ export default function Clients() {
     const repId = upgradeSalesRep !== 'unassigned' ? upgradeSalesRep : (currentUser?.id || '');
     const repName = users.find(u => u.id === repId)?.name || '';
 
+    if (upgradePaymentMethod === 'Instapay' && (!upgradeInstapayRef || !/^\d{12}$/.test(upgradeInstapayRef))) {
+      alert('Please enter a valid 12-digit Instapay reference number.');
+      return;
+    }
+
     try {
       await processPaymentTransaction({
         clientId: client.id,
@@ -196,6 +202,7 @@ export default function Clients() {
         clientPackages: client.packages,
         amount: amountToPay,
         method: upgradePaymentMethod as any,
+        instapayRef: upgradePaymentMethod === 'Instapay' ? upgradeInstapayRef : undefined,
         packageType: pkg.name,
         packageCategory: pkg.name.toLowerCase().includes('pt') || pkg.name.toLowerCase().includes('private') ? 'Private Training' : 'Group Training',
         sales_rep_id: repId,
@@ -216,6 +223,7 @@ export default function Clients() {
       setUpgradePkgName('');
       setUpgradeStartDate(format(new Date(), 'yyyy-MM-dd'));
       setUpgradePaymentMethod('Cash');
+      setUpgradeInstapayRef('');
       setUpgradeSalesRep('unassigned');
     }
   };
@@ -1475,11 +1483,25 @@ export default function Clients() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Cash">Cash</SelectItem>
-                          <SelectItem value="InstaPay">InstaPay</SelectItem>
                           <SelectItem value="Credit Card">Credit Card</SelectItem>
+                          <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                          <SelectItem value="Instapay">Instapay</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
+                    {upgradePaymentMethod === 'Instapay' && (
+                      <div className="space-y-2">
+                        <Label className="text-sm font-semibold">Instapay Ref (12 digits)</Label>
+                        <Input
+                          placeholder="123456789012"
+                          maxLength={12}
+                          value={upgradeInstapayRef}
+                          onChange={(e) => setUpgradeInstapayRef(e.target.value.replace(/\D/g, ''))}
+                          className="h-11 rounded-xl"
+                        />
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <Label className="text-sm font-semibold">Sales Representative</Label>
                       <Select value={upgradeSalesRep} onValueChange={(val) => val && setUpgradeSalesRep(val)}>
