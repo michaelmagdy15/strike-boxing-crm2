@@ -88,7 +88,10 @@ export default function App() {
   }, [canGoBack]);
 
   const handleRetry = () => {
-    setKey((prevKey) => prevKey + 1);
+    NetInfo.fetch().then((state) => {
+      setIsConnected(state.isConnected !== false);
+      setKey((prevKey) => prevKey + 1);
+    });
   };
 
   const renderLoading = () => (
@@ -147,6 +150,12 @@ export default function App() {
           
           // Camera access configuration for iOS WebView
           mediaCapturePermissionGrantType="grant"
+          
+          // Custom User-Agent suffix for Guideline 4.8 Apple Sign-In compliance
+          applicationNameForUserAgent="StrikeCRM-Mobile"
+          
+          // Handle load errors by showing custom offline screen
+          onError={() => setIsConnected(false)}
           
           // Inject the push token so the web client can read it
           injectedJavaScriptBeforeContentLoaded={runBeforeFirstPaint}

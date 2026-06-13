@@ -369,10 +369,12 @@ function AppContent() {
                     <SettingsIcon className="h-4 w-4 mr-2" />
                     Settings
                   </TabsTrigger>
-                  <TabsTrigger value="qrcode" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 text-sm">
-                    <Smartphone className="h-4 w-4 mr-2" />
-                    App QR
-                  </TabsTrigger>
+                  {!/StrikeCRM-Mobile/i.test(navigator.userAgent) && (
+                    <TabsTrigger value="qrcode" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 text-sm">
+                      <Smartphone className="h-4 w-4 mr-2" />
+                      App QR
+                    </TabsTrigger>
+                  )}
                 </>
               )}
 
@@ -430,9 +432,11 @@ function AppContent() {
               <TabsContent value="settings" className="m-0 animate-in fade-in-50 duration-300">
                 <Settings />
               </TabsContent>
-              <TabsContent value="qrcode" className="m-0 animate-in fade-in-50 duration-300 p-4">
-                <QRCodePage />
-              </TabsContent>
+              {!/StrikeCRM-Mobile/i.test(navigator.userAgent) && (
+                <TabsContent value="qrcode" className="m-0 animate-in fade-in-50 duration-300 p-4">
+                  <QRCodePage />
+                </TabsContent>
+              )}
             </>
           )}
 

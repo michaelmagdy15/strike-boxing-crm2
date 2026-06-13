@@ -294,22 +294,26 @@ export default function Login() {
 
             {/* ── Staff Tab ── */}
             <TabsContent value="staff" className="space-y-4">
-              <Button
-                variant="outline"
-                className="w-full h-12 justify-center gap-3 border-muted-foreground/20 hover:bg-primary hover:text-primary-foreground transition-all"
-                onClick={handleGoogleLogin}
-                disabled={isLoading}
-              >
-                <GoogleIcon />
-                <span className="font-semibold">Continue with Google</span>
-              </Button>
+              {!/StrikeCRM-Mobile/i.test(navigator.userAgent) && (
+                <>
+                  <Button
+                    variant="outline"
+                    className="w-full h-12 justify-center gap-3 border-muted-foreground/20 hover:bg-primary hover:text-primary-foreground transition-all"
+                    onClick={handleGoogleLogin}
+                    disabled={isLoading}
+                  >
+                    <GoogleIcon />
+                    <span className="font-semibold">Continue with Google</span>
+                  </Button>
 
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">or</span>
-                </div>
-              </div>
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">or</span>
+                    </div>
+                  </div>
+                </>
+              )}
 
               <form onSubmit={handleEmailLogin} className="space-y-3">
                 <div className="space-y-1.5">

@@ -10,7 +10,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.strikeboxing.crm",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app requires access to the camera to scan member QR codes for attendance and check-in."
+        "NSCameraUsageDescription": "This app requires access to the camera to scan member QR codes for attendance and check-in.",
+        "NSPhotoLibraryUsageDescription": "This app requires access to your photo library to let you upload profile pictures and branding logos."
       }
     },
     "android": {

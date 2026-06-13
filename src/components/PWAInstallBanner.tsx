@@ -20,7 +20,8 @@ function detectPlatform(): Platform {
 function isInStandaloneMode(): boolean {
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
-    ('standalone' in navigator && (navigator as any).standalone === true)
+    ('standalone' in navigator && (navigator as any).standalone === true) ||
+    /StrikeCRM-Mobile/i.test(navigator.userAgent)
   );
 }
 
