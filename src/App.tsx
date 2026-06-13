@@ -33,6 +33,7 @@ import { Badge } from '@/components/ui/badge';
 import { NotificationCenter } from './components/NotificationCenter';
 import BuildVersionFooter from './components/BuildVersionFooter';
 import CoachPortal from './coach/CoachPortal';
+import MemberPortal from './member/MemberPortal';
 import { ForcePasswordChangeDialog } from './components/ForcePasswordChangeDialog';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { QRCodePage } from './components/QRCodePage';
@@ -193,6 +194,10 @@ function AppContent() {
 
   if (currentUser.role === 'coach') {
     return <CoachPortal />;
+  }
+
+  if (currentUser.role === 'client') {
+    return <MemberPortal />;
   }
 
   // Block the app until user sets a real password
