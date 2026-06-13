@@ -11,7 +11,11 @@ export const useImportBatches = (currentUser: User | null, clients: Client[], pa
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || currentUser.role === 'coach' || currentUser.role === 'client') {
+      setImportBatches([]);
+      setLoading(false);
+      return;
+    }
     const unsub = onSnapshot(
       query(collection(db, 'importBatches'), orderBy('date', 'desc')),
       (snapshot) => {

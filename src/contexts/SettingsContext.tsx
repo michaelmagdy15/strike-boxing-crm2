@@ -20,7 +20,7 @@ interface SettingsContextType {
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-export const SettingsProvider: React.FC<{ children: React.ReactNode; isAuthenticated?: boolean }> = ({ children, isAuthenticated = false }) => {
+export const SettingsProvider: React.FC<{ children: React.ReactNode; isAuthenticated?: boolean; role?: string }> = ({ children, isAuthenticated = false, role }) => {
   const [branding, setBranding] = useState<BrandingSettings>({
     companyName: 'Strike',
     logoUrl: '/strikelogo.png'
@@ -47,9 +47,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode; isAuthentic
     return () => { unsubBranding(); };
   }, []);
 
-  // Auth-required settings — only subscribe when a user is logged in to avoid permission errors
+  // Auth-required settings — only subscribe when a privileged user is logged in to avoid permission errors
   useEffect(() => {
     if (!isAuthenticated) return;
+    if (role === 'coach' || role === 'client') return;
 
     const unsubBranches = onSnapshot(
       doc(db, 'settings', 'branches'),

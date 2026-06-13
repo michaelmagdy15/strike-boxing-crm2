@@ -17,7 +17,7 @@ export const usePayments = ({ currentUser, clients, canDeletePayments }: UsePaym
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!currentUser) {
+    if (!currentUser || currentUser.role === 'coach' || currentUser.role === 'client') {
       setPayments([]);
       setLoading(false);
       return;

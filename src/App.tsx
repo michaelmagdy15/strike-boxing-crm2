@@ -603,7 +603,10 @@ function AppContent() {
 function AuthAwareSettingsProvider({ children }: { children: React.ReactNode }) {
   const { currentUser, isAuthReady } = useAuth();
   return (
-    <SettingsProvider isAuthenticated={isAuthReady && currentUser != null}>
+    <SettingsProvider 
+      isAuthenticated={isAuthReady && currentUser != null}
+      role={currentUser?.role}
+    >
       {children}
     </SettingsProvider>
   );
