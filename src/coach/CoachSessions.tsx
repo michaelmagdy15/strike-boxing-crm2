@@ -28,7 +28,7 @@ export default function CoachSessions() {
 
   useEffect(() => {
     if (!currentUser) return;
-    const q = query(collection(db, 'ptPackageRecords'), where('trainerId', '==', currentUser.id));
+    const q = query(collection(db, 'sessions'), where('trainerId', '==', currentUser.id));
     const unsub = onSnapshot(q, async (snap) => {
       const records = snap.docs.map(d => ({ ...d.data(), id: d.id } as PTPackageRecord));
       records.sort((a, b) => b.date.localeCompare(a.date));
@@ -50,7 +50,7 @@ export default function CoachSessions() {
   }, [currentUser?.id]);
 
   const handleStatusUpdate = async (id: string, newStatus: PTPackageRecord['status']) => {
-    await updateDoc(doc(db, 'ptPackageRecords', id), { status: newStatus });
+    await updateDoc(doc(db, 'sessions', id), { status: newStatus });
   };
 
   const filtered = statusFilter === 'all' ? sessions : sessions.filter(s => s.status === statusFilter);

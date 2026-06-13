@@ -308,7 +308,7 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isOwner(userId) || isStrikeAdmin();
       allow update: if isOwner(userId) || isStrikeAdmin();
       allow delete: if isStrikeSuperAdmin();

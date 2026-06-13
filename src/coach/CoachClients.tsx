@@ -18,7 +18,7 @@ export default function CoachClients() {
     if (!currentUser) return;
     const fetch = async () => {
       // Get all PT sessions where this coach is the trainer
-      const sessionsQ = query(collection(db, 'ptPackageRecords'), where('trainerId', '==', currentUser.id));
+      const sessionsQ = query(collection(db, 'sessions'), where('trainerId', '==', currentUser.id));
       const sessionsSnap = await getDocs(sessionsQ);
       const clientIds = [...new Set(sessionsSnap.docs.map(d => d.data().clientId as string))];
       if (clientIds.length === 0) { setLoading(false); return; }
