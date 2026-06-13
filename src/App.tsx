@@ -191,17 +191,17 @@ function AppContent() {
     return <Login />;
   }
 
+  // Block the app until user sets a real password
+  if (currentUser.mustChangePassword) {
+    return <ForcePasswordChangeDialog />;
+  }
+
   if (currentUser.role === 'coach') {
     return <CoachPortal />;
   }
 
   if (currentUser.role === 'client') {
     return <MemberPortal />;
-  }
-
-  // Block the app until user sets a real password
-  if (currentUser.mustChangePassword) {
-    return <ForcePasswordChangeDialog />;
   }
 
   return (

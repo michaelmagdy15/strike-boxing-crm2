@@ -51,7 +51,7 @@ const migratePackageData = (client: Client, systemPackages: any[]): Partial<Clie
 };
 
 export default function Clients() {
-  const { currentUser, users, payments, clients, addClient, updateClient, deleteClient, deleteMultipleClients, addComment, addInteraction, canViewGlobalDashboard, canDeleteRecords, recalculateAllPackages, isManagerOrSama, branches, processPaymentTransaction, fetchClientDetails } = useAppContext();
+  const { currentUser, users, payments, clients, addClient, updateClient, deleteClient, deleteMultipleClients, addComment, addInteraction, canViewGlobalDashboard, canDeleteRecords, recalculateAllPackages, isManagerOrSama, branches, processPaymentTransaction, fetchClientDetails, createClientAccount } = useAppContext();
   const { packages } = usePackages();
   const [activeTab, setActiveTab] = useState('active');
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
@@ -66,6 +66,7 @@ export default function Clients() {
     setActiveClientDetails({ clientId, ...details });
     setIsDetailsLoading(false);
   };
+  const [isActivatingPortal, setIsActivatingPortal] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
   const [clientToDelete, setClientToDelete] = useState<string | null>(null);
@@ -858,7 +859,7 @@ export default function Clients() {
                                     <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Date of Birth</Label>
                                     <Input type="date" className="h-9 rounded-lg bg-background text-sm px-3" defaultValue={client.dateOfBirth ? format(parseISO(client.dateOfBirth), 'yyyy-MM-dd') : ''} onChange={(e) => updateClient(client.id, { dateOfBirth: new Date(e.target.value).toISOString() })} />
                                   </div>
-                                  <div className="space-y-1 col-span-2">
+                                                                  <div className="space-y-1 col-span-2">
                                     <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Assigned Sales Rep</Label>
                                     <select
                                       className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-60 disabled:cursor-not-allowed"
@@ -873,6 +874,55 @@ export default function Clients() {
                                     </select>
                                     {currentUser?.role === 'rep' && !!client.assignedTo && (
                                       <p className="text-[9px] text-muted-foreground mt-0.5">Assignment locked — contact a manager to reassign.</p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Portal Access Control */}
+                                <div className="border-t pt-3 mt-4 space-y-2">
+                                  <Label className="text-[10px] font-bold uppercase tracking-wider text-primary">Portal Access</Label>
+                                  <div className="flex items-center justify-between">
+                                    {client.portalUserId ? (
+                                      <div className="space-y-0.5">
+                                        <p className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
+                                          <CheckCircle className="h-3.5 w-3.5" /> Portal Active
+                                        </p>
+                                        <p className="text-[9px] text-muted-foreground font-mono select-all cursor-pointer" title="Click to copy email">
+                                          Email: member-{client.memberId?.toLowerCase()}@strike-member.local
+                                        </p>
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-0.5">
+                                        <p className="text-xs text-muted-foreground">No portal access enabled yet.</p>
+                                      </div>
+                                    )}
+                                    
+                                    {!client.portalUserId && (
+                                      client.memberId ? (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="text-xs font-bold text-primary border-primary/20 hover:border-primary/40"
+                                          disabled={isActivatingPortal === client.id}
+                                          onClick={async () => {
+                                            if (window.confirm(`Enable portal access for ${client.name}?`)) {
+                                              setIsActivatingPortal(client.id);
+                                              try {
+                                                await createClientAccount(client.id, client.memberId, client.name, client.phone);
+                                                alert("Portal access enabled! Default password is: 12345678");
+                                              } catch (err: any) {
+                                                alert("Failed to enable portal access: " + err.message);
+                                              } finally {
+                                                setIsActivatingPortal(null);
+                                              }
+                                            }
+                                          }}
+                                        >
+                                          {isActivatingPortal === client.id ? "Activating..." : "Enable Access"}
+                                        </Button>
+                                      ) : (
+                                        <p className="text-[10px] text-amber-500 font-semibold italic">Requires a Member ID to enable access</p>
+                                      )
                                     )}
                                   </div>
                                 </div>

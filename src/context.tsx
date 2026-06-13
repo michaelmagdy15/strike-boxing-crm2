@@ -118,6 +118,7 @@ export interface AppContextType {
   updateBranches: (branches: Branch[]) => Promise<void>;
   processPaymentTransaction: (params: PaymentTransactionParams) => Promise<void>;
   fetchClientDetails: (clientId: string) => Promise<{ comments: CRMComment[]; interactions: InteractionLog[] }>;
+  createClientAccount: (clientId: string, memberId: string, clientName: string, phone?: string) => Promise<{ uid: string }>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -134,7 +135,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     logout, 
     updateUser, 
     deleteUser, 
-    inviteUser 
+    inviteUser,
+    createClientAccount
   } = useAuth();
 
   const { 
@@ -549,7 +551,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     branches,
     updateBranches,
     processPaymentTransaction,
-    fetchClientDetails
+    fetchClientDetails,
+    createClientAccount
   }), [
     currentUser, effectiveRole, users, visibleClients, loadingClients,
     salesStats, visiblePayments, loadingPayments, ptPackageRecords,
@@ -557,7 +560,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     coaches, importBatches, userTargets, searchQuery, isAuthReady, branding,
     previewRole, attendances, canDeletePayments, canAccessSettings,
     canViewGlobalDashboard, canDeleteRecords, canAssignLeads,
-    commissionRates, isManagerOrSama, branches, fetchClientDetails
+    commissionRates, isManagerOrSama, branches, fetchClientDetails, createClientAccount
   ]);
 
   return (

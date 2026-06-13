@@ -300,6 +300,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role: 'client',
       clientRecordId: memberId,
       phone,
+      mustChangePassword: true,
     };
     await setDoc(doc(db, 'users', uid), newUser);
     // Update the client record to flag portal access
