@@ -293,12 +293,12 @@ service cloud.firestore {
       allow delete: if isStrikeAdmin() || isMatchAdmin();
     }
 
-    match /{path=**}/interactions/{interactionId} {
+    match /clients/{clientId}/interactions/{interactionId} {
       allow read, create: if isAuthenticated();
       allow delete: if isStrikeAdmin() || isMatchAdmin();
     }
 
-    match /{path=**}/attendance/{attendanceId} {
+    match /attendance/{attendanceId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && isValidAttendance(request.resource.data);
     }
