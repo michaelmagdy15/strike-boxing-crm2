@@ -536,7 +536,7 @@ service cloud.firestore {
     // ===============================================================
 
     match /gamen_orders/{orderId} {
-      allow create: if request.resource.data.keys().hasAll(['orderRef', 'status', 'customer', 'items', 'totalPrice'])
+      allow create: if request.resource.data.keys().hasAll(['orderRef', 'status', 'customer', 'items', 'totalPrice', 'paymentMethod', 'paymentStatus'])
                     && request.resource.data.status == 'pending'
                     && request.resource.data.totalPrice is number
                     && request.resource.data.totalPrice > 0
@@ -548,7 +548,20 @@ service cloud.firestore {
                     && request.resource.data.customer.email.matches('.+@.+')
                     && request.resource.data.customer.phone is string
                     && request.resource.data.customer.phone.size() >= 10;
-      allow read, update, delete: if isGamenAdmin();
+      allow read, delete: if isGamenAdmin();
+      allow update: if isGamenAdmin() || (
+                      // Allow client-side status updates on card transactions
+                      resource.data.status == 'pending'
+                      && (request.resource.data.status == 'confirmed' || request.resource.data.status == 'pending')
+                      && (request.resource.data.paymentStatus == 'paid' || request.resource.data.paymentStatus == 'failed')
+                      && request.resource.data.paymentMethod == 'paymob'
+                      // Prevent modification of vital order details
+                      && request.resource.data.orderRef == resource.data.orderRef
+                      && request.resource.data.totalPrice == resource.data.totalPrice
+                      && request.resource.data.items == resource.data.items
+                      && request.resource.data.customer.email == resource.data.customer.email
+                      && request.resource.data.customer.phone == resource.data.customer.phone
+                    );
     }
 
     match /gamen_products/{productId} {

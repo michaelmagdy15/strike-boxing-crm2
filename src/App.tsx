@@ -34,7 +34,6 @@ import { NotificationCenter } from './components/NotificationCenter';
 import BuildVersionFooter from './components/BuildVersionFooter';
 import CoachPortal from './coach/CoachPortal';
 import { ForcePasswordChangeDialog } from './components/ForcePasswordChangeDialog';
-import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { QRCodePage } from './components/QRCodePage';
 import QuoteGenerator from './QuoteGenerator';
 
@@ -610,7 +609,6 @@ export default function App() {
             <AppProvider>
               <ThemeProvider>
                 <AppContent />
-                <PWAInstallBanner />
                 <BuildVersionFooter />
               </ThemeProvider>
             </AppProvider>

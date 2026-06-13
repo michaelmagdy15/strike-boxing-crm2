@@ -200,7 +200,7 @@ export function NotificationCenter() {
       </Button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-md border bg-card shadow-lg z-50 overflow-hidden animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95">
+        <div className="fixed top-[70px] left-4 right-4 w-auto md:absolute md:top-full md:left-auto md:right-0 md:w-80 sm:md:w-96 md:mt-2 rounded-md border bg-card shadow-lg z-50 overflow-hidden animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95">
           <div className="flex items-center justify-between p-4 border-b bg-muted/30">
             <h3 className="font-semibold text-sm">Notifications</h3>
             {activeNotifications.length > 0 && (

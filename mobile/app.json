@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Strike Boxing CRM",
+    "slug": "strike-boxing-crm",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.strikeboxing.crm",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app requires access to the camera to scan member QR codes for attendance and check-in."
+      }
+    },
+    "android": {
+      "package": "com.strikeboxing.crm",
+      "adaptiveIcon": {
+        "backgroundColor": "#0a0a0a",
+        "foregroundImage": "./assets/icon.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "91ff5ffa-407c-49c6-9a0e-c1edc54db1fb"
+      }
+    }
+  }
+}

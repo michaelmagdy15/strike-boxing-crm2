@@ -808,15 +808,15 @@ export default function Payments() {
           <DialogTrigger render={<Button />}>
             <Plus className="mr-2 h-4 w-4" /> Record Payment
           </DialogTrigger>
-          <DialogContent className="!w-full !max-w-[1400px] max-h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl rounded-3xl bg-background/95 backdrop-blur-xl">
-            <DialogHeader className="p-10 pb-6 bg-muted/30 border-b">
-              <DialogTitle className="text-3xl font-extrabold tracking-tight flex items-center gap-3">
-                <CreditCard className="h-8 w-8 text-primary" />
+          <DialogContent className="w-full max-w-full md:max-w-[1400px] h-[100dvh] md:h-auto md:max-h-[90vh] overflow-hidden flex flex-col p-0 border-none shadow-2xl rounded-none md:rounded-3xl bg-background/95 backdrop-blur-xl">
+            <DialogHeader className="p-5 md:p-10 pb-4 md:pb-6 pt-12 md:pt-10 bg-muted/30 border-b">
+              <DialogTitle className="text-xl md:text-3xl font-extrabold tracking-tight flex items-center gap-2 md:gap-3">
+                <CreditCard className="h-6 w-6 md:h-8 md:w-8 text-primary" />
                 Record New Payment
               </DialogTitle>
             </DialogHeader>
-            <div className="flex-1 overflow-y-auto p-10 pt-8 custom-scrollbar">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-8">
+            <div className="flex-1 overflow-y-auto p-5 md:p-10 pt-6 md:pt-8 pb-10 custom-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 md:gap-x-10 gap-y-4 md:gap-y-8">
                 
                 <div className="space-y-3 lg:col-span-2">
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Client / Member</Label>
@@ -824,7 +824,7 @@ export default function Payments() {
                     <div className="relative">
                       <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" />
                       <Input
-                        className="h-14 rounded-2xl bg-background/50 border-white/10 pl-14 pr-5 text-lg focus-visible:ring-primary"
+                        className="h-12 md:h-14 rounded-xl md:rounded-2xl bg-background/50 border-white/10 pl-14 pr-5 text-lg focus-visible:ring-primary"
                         placeholder="Search by name, phone, or member ID..."
                         value={clientSearch}
                         onChange={e => { setClientSearch(e.target.value); setClientDropdownOpen(true); if (!e.target.value) setClientId(''); }}
@@ -906,7 +906,7 @@ export default function Payments() {
                               {clients.filter(c => {
                                 if (!clientSearch) return true;
                                 const t = clientSearch.toLowerCase();
-                                return c.name?.toLowerCase().includes(t) || c.phone?.includes(t) || c.memberId?.toString().includes(t);
+                                  return c.name?.toLowerCase().includes(t) || c.phone?.includes(t) || c.memberId?.toString().includes(t);
                               }).length === 0 && (
                                 <div className="px-5 py-4 text-sm text-muted-foreground text-center">No clients found</div>
                               )}
@@ -922,7 +922,7 @@ export default function Payments() {
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Date</Label>
                   <Input
                     type="date"
-                    className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
+                    className="h-12 md:h-14 rounded-xl md:rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
                     value={paymentDate}
                     max={format(new Date(), 'yyyy-MM-dd')}
                     onChange={(e) => setPaymentDate(e.target.value)}
@@ -933,7 +933,7 @@ export default function Payments() {
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Membership Start Date</Label>
                   <Input
                     type="date"
-                    className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
+                    className="h-12 md:h-14 rounded-xl md:rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
                     value={startDate}
                     onChange={(e) => {
                       setStartDate(e.target.value);
@@ -952,7 +952,7 @@ export default function Payments() {
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Membership End Date</Label>
                   <Input
                     type="date"
-                    className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
+                    className="h-12 md:h-14 rounded-xl md:rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
                   />
@@ -964,7 +964,7 @@ export default function Payments() {
                     <Input 
                       type="number" 
                       placeholder="0.00" 
-                      className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all pl-12 pr-5 text-lg font-bold text-green-600"
+                      className="h-12 md:h-14 rounded-xl md:rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all pl-12 pr-5 text-lg font-bold text-green-600"
                       value={amount} 
                       onChange={(e) => setAmount(e.target.value)} 
                     />
@@ -984,7 +984,7 @@ export default function Payments() {
                         setDiscountType(v as 'percentage' | 'amount');
                       }
                     }}>
-                      <SelectTrigger className="h-14 w-[140px] rounded-2xl bg-background/50 border-white/10 px-4 text-sm font-medium">
+                      <SelectTrigger className="h-12 md:h-14 w-[120px] md:w-[140px] rounded-xl md:rounded-2xl bg-background/50 border-white/10 px-4 text-sm font-medium">
                         <SelectValue placeholder="No Discount" />
                       </SelectTrigger>
                       <SelectContent className="rounded-2xl border-none shadow-2xl">
@@ -998,7 +998,7 @@ export default function Payments() {
                         <Input 
                           type="number" 
                           placeholder={discountType === 'percentage' ? "e.g. 15" : "e.g. 500"} 
-                          className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg font-bold text-amber-500"
+                          className="h-12 md:h-14 rounded-xl md:rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg font-bold text-amber-500"
                           value={discountValue} 
                           onChange={(e) => setDiscountValue(e.target.value)} 
                         />
@@ -1013,7 +1013,7 @@ export default function Payments() {
                 <div className="space-y-3">
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Payment Method</Label>
                   <Select value={method} onValueChange={(v) => v && setMethod(v as Payment['method'])}>
-                    <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                    <SelectTrigger className="h-12 md:h-14 rounded-xl md:rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
                       <SelectValue placeholder="Select method" />
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl border-none shadow-2xl">
@@ -1031,7 +1031,7 @@ export default function Payments() {
                     <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Instapay Ref (12 digits)</Label>
                     <Input 
                       placeholder="123456789012" 
-                      className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg font-mono"
+                      className="h-12 md:h-14 rounded-xl md:rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg font-mono"
                       value={instapayRef} 
                       maxLength={12}
                       onChange={(e) => setInstapayRef(e.target.value.replace(/\D/g, ''))} 
@@ -1042,7 +1042,7 @@ export default function Payments() {
                 <div className="space-y-3">
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Package Type</Label>
                   <Select value={packageType} onValueChange={handlePackageChange}>
-                    <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                    <SelectTrigger className="h-12 md:h-14 rounded-xl md:rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
                       <SelectValue placeholder="Select package" />
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl border-none shadow-2xl">
@@ -1061,7 +1061,7 @@ export default function Payments() {
                     <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Custom Package Name</Label>
                     <Input 
                       placeholder="e.g., 5 S GT Adults" 
-                      className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
+                      className="h-12 md:h-14 rounded-xl md:rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
                       value={customPackage} 
                       onChange={(e) => setCustomPackage(e.target.value)} 
                     />
@@ -1072,7 +1072,7 @@ export default function Payments() {
                   <div className="space-y-3">
                     <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Coach</Label>
                     <Select value={coachName} onValueChange={(v) => { if(!v) return; setCoachName(v); if (v !== '__custom__') setCustomCoachName(''); }}>
-                      <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                      <SelectTrigger className="h-12 md:h-14 rounded-xl md:rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
                         <SelectValue placeholder="Assigned coach" />
                       </SelectTrigger>
                       <SelectContent className="rounded-2xl border-none shadow-2xl">
@@ -1096,7 +1096,7 @@ export default function Payments() {
                 <div className="space-y-3">
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Sales Person</Label>
                   <Select value={salesName} onValueChange={v => v && setSalesName(v)}>
-                    <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                    <SelectTrigger className="h-12 md:h-14 rounded-xl md:rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
                       <SelectValue placeholder="For commission" />
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl border-none shadow-2xl">
@@ -1110,7 +1110,7 @@ export default function Payments() {
                 <div className="space-y-3">
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Recorded By</Label>
                   <Select value={recordedById} onValueChange={v => v && setRecordedById(v)}>
-                    <SelectTrigger className="h-14 rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
+                    <SelectTrigger className="h-12 md:h-14 rounded-xl md:rounded-2xl bg-background/50 border-white/10 px-5 text-lg">
                       <SelectValue placeholder="Staff member">
                          {adminUsers.find(u => u.id === recordedById)?.name || undefined}
                       </SelectValue>
@@ -1127,24 +1127,24 @@ export default function Payments() {
                   <Label className="text-sm font-bold uppercase tracking-widest text-muted-foreground ml-1">Internal Notes (Optional)</Label>
                   <Input
                     placeholder="Add descriptive notes for this transaction..."
-                    className="h-14 rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
+                    className="h-12 md:h-14 rounded-xl md:rounded-2xl bg-background/50 focus-visible:ring-primary border-white/10 transition-all px-5 text-lg"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                   />
                 </div>
               </div>
 
-              <div className="mt-12 flex gap-4">
+              <div className="mt-6 md:mt-12 flex gap-3 pb-safe">
                 <Button 
                   variant="outline" 
-                  className="h-16 px-10 rounded-2xl text-lg font-bold border-white/10 hover:bg-muted/50 transition-all"
+                  className="h-12 md:h-16 px-6 md:px-10 rounded-xl md:rounded-2xl text-sm md:text-lg font-bold border-white/10 hover:bg-muted/50 transition-all"
                   onClick={() => setIsNewPaymentOpen(false)}
                 >
                   Cancel
                 </Button>
                 <Button 
                   onClick={handleAddPayment} 
-                  className="flex-1 h-16 rounded-2xl text-xl font-extrabold shadow-2xl shadow-primary/30 hover:shadow-primary/50 transition-all hover:scale-[1.01] active:scale-[0.99]"
+                  className="flex-1 h-12 md:h-16 rounded-xl md:rounded-2xl text-base md:text-xl font-extrabold shadow-2xl shadow-primary/30 hover:shadow-primary/50 transition-all hover:scale-[1.01] active:scale-[0.99]"
                 >
                   Complete Transaction
                 </Button>
