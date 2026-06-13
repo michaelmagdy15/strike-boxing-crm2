@@ -4,20 +4,22 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { QrCode, CreditCard, Package, History, User, LogOut, Sun, Moon } from 'lucide-react';
+import { QrCode, CreditCard, Package, History, User, LogOut, Sun, Moon, Dumbbell } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { Client } from '../types';
 
 import MemberHome from './MemberHome';
+import MemberSessions from './MemberSessions';
 import MemberPackages from './MemberPackages';
 import MemberAttendance from './MemberAttendance';
 import MemberProfile from './MemberProfile';
 
-type MemberTab = 'home' | 'packages' | 'attendance' | 'profile';
+type MemberTab = 'home' | 'sessions' | 'packages' | 'attendance' | 'profile';
 
 const NAV_ITEMS: { tab: MemberTab; label: string; icon: React.ReactNode }[] = [
   { tab: 'home',       label: 'Card',        icon: <QrCode className="h-5 w-5" /> },
+  { tab: 'sessions',   label: 'Sessions',    icon: <Dumbbell className="h-5 w-5" /> },
   { tab: 'packages',   label: 'Packages',    icon: <Package className="h-5 w-5" /> },
   { tab: 'attendance', label: 'Attendance',  icon: <History className="h-5 w-5" /> },
   { tab: 'profile',    label: 'Profile',     icon: <User className="h-5 w-5" /> },
@@ -98,6 +100,7 @@ export default function MemberPortal() {
 
       <main className="flex-1 container mx-auto px-4 py-6 pb-24 max-w-md">
         {activeTab === 'home'       && <MemberHome client={client} />}
+        {activeTab === 'sessions'   && <MemberSessions client={client} />}
         {activeTab === 'packages'   && <MemberPackages client={client} />}
         {activeTab === 'attendance' && <MemberAttendance client={client} />}
         {activeTab === 'profile'    && <MemberProfile client={client} />}

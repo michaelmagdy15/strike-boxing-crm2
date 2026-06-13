@@ -361,6 +361,11 @@ service cloud.firestore {
       allow write: if isStrikeAdmin();
     }
 
+    match /coachSchedules/{coachId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(coachId) || isStrikeAdmin();
+    }
+
     match /sessions/{sessionId} {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated();

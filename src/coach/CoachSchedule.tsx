@@ -35,12 +35,17 @@ export default function CoachSchedule() {
   useEffect(() => {
     if (!currentUser) return;
     const fetch = async () => {
-      const ref = doc(db, 'coachSchedules', currentUser.id);
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        setSchedule(snap.data().days || DEFAULT_SCHEDULE);
+      try {
+        const ref = doc(db, 'coachSchedules', currentUser.id);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          setSchedule(snap.data().days || DEFAULT_SCHEDULE);
+        }
+      } catch (err) {
+        console.error("Error fetching coach schedule:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetch();
   }, [currentUser?.id]);
