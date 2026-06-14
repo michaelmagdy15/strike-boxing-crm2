@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { User, UserId, UserRole, isSuperAdmin, isAdmin, BrandingSettings, PendingAccount, PasswordResetRequest } from '../types';
+import { User, UserId, UserRole, isSuperAdmin, isAdmin, BrandingSettings, PendingAccount, PasswordResetRequest, Client, Coach } from '../types';
 import { auth, db, signInWithGoogle, signInWithEmail, logOut, createFirebaseUser, sendPasswordReset } from '../firebase';
 import { onAuthStateChanged, updatePassword as fbUpdatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import {
@@ -56,6 +56,7 @@ interface AuthContextType {
   changeMyPassword: (currentPassword: string, newPassword: string) => Promise<void>;
   completeForcedPasswordChange: (newPassword: string) => Promise<void>;
   updateMyProfile: (updates: { photoURL?: string; name?: string }) => Promise<void>;
+  runExistingUsersMigration: () => Promise<{ membersMigrated: number; coachesMigrated: number; errors: string[] }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -257,12 +258,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await signInWithEmail(email, password);
   };
 
-  const loginWithCoachId = async (coachId: string, password: string) => {
-    const q = query(collection(db, 'users'), where('coachId', '==', coachId.toUpperCase().trim()));
-    const snap = await getDocs(q);
-    if (snap.empty) throw new Error('Coach ID not found. Please check and try again.');
+  const loginWithCoachId = async (coachIdOrName: string, password: string) => {
+    const term = coachIdOrName.trim();
+    // 1. Try direct Coach ID lookup
+    let q = query(collection(db, 'users'), where('coachId', '==', term.toUpperCase()));
+    let snap = await getDocs(q);
+
+    // 2. If not found, try name lookup in users with role='coach'
+    if (snap.empty) {
+      q = query(collection(db, 'users'), where('role', '==', 'coach'), where('name', '==', term));
+      snap = await getDocs(q);
+    }
+
+    // 3. Fallback: case-insensitive name match on all users of role coach
+    if (snap.empty) {
+      const allCoachesQ = query(collection(db, 'users'), where('role', '==', 'coach'));
+      const allCoachesSnap = await getDocs(allCoachesQ);
+      const matched = allCoachesSnap.docs.find(d => d.data().name?.toLowerCase() === term.toLowerCase());
+      if (matched) {
+        const coachData = matched.data();
+        if (!coachData.email) throw new Error('No email associated with this Coach account.');
+        await signInWithEmail(coachData.email, password);
+        return;
+      }
+    }
+
+    if (snap.empty) throw new Error('Coach ID or Name not found. Please check and try again.');
     const coachData = snap.docs[0]!.data();
-    if (!coachData.email) throw new Error('No email associated with this Coach ID.');
+    if (!coachData.email) throw new Error('No email associated with this Coach account.');
     await signInWithEmail(coachData.email, password);
   };
 
@@ -514,6 +537,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser(prev => prev ? { ...prev, ...updates } : prev);
   };
 
+  const runExistingUsersMigration = async (): Promise<{ membersMigrated: number; coachesMigrated: number; errors: string[] }> => {
+    let membersMigrated = 0;
+    let coachesMigrated = 0;
+    const errors: string[] = [];
+
+    try {
+      const [usersSnap, clientsSnap, coachesSnap] = await Promise.all([
+        getDocs(collection(db, 'users')),
+        getDocs(collection(db, 'clients')),
+        getDocs(collection(db, 'coaches'))
+      ]);
+
+      const usersList = usersSnap.docs.map(d => d.data() as User);
+      const activeMembers = clientsSnap.docs
+        .map(d => ({ ...d.data(), id: d.id } as Client))
+        .filter(c => c.memberId && c.status === 'Active');
+
+      for (const client of activeMembers) {
+        const hasAccount = usersList.some(u => u.clientRecordId === client.memberId);
+        if (!hasAccount) {
+          try {
+            await createClientAccount(client.id, client.memberId!, client.name, client.phone);
+            membersMigrated++;
+          } catch (err: any) {
+            errors.push(`Member ${client.name} (${client.memberId}): ${err.message || String(err)}`);
+          }
+        }
+      }
+
+      const coachesList = coachesSnap.docs
+        .map(d => ({ ...d.data(), id: d.id } as Coach))
+        .filter(c => c.active);
+
+      for (const coach of coachesList) {
+        const hasAccount = usersList.some(u => u.role === 'coach' && (u.name?.toLowerCase() === coach.name.toLowerCase() || u.coachId === coach.id));
+        if (!hasAccount) {
+          try {
+            const email = `coach-${coach.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@strike-coach.local`;
+            const uid = await createFirebaseUser(email, '12345678');
+            const newUser: User = {
+              id: uid,
+              name: coach.name,
+              email,
+              role: 'coach',
+              coachId: coach.id.startsWith('COACH-') ? coach.id : await generateCoachId(),
+              mustChangePassword: true
+            };
+            await setDoc(doc(db, 'users', uid), newUser);
+            await updateDoc(doc(db, 'coaches', coach.id), { userId: uid });
+            coachesMigrated++;
+          } catch (err: any) {
+            errors.push(`Coach ${coach.name}: ${err.message || String(err)}`);
+          }
+        }
+      }
+    } catch (err: any) {
+      errors.push(`Migration failed: ${err.message || String(err)}`);
+    }
+
+    return { membersMigrated, coachesMigrated, errors };
+  };
+
   const memoizedCurrentUser = useMemo(() => {
     return currentUser ? { ...currentUser, role: effectiveRole || currentUser.role } : null;
   }, [currentUser, effectiveRole]);
@@ -554,6 +639,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     changeMyPassword,
     completeForcedPasswordChange,
     updateMyProfile,
+    runExistingUsersMigration,
   }), [memoizedCurrentUser, users, pendingAccounts, passwordResetRequests, isAuthReady, isSuperUser, effectiveRole, previewRole, authError]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

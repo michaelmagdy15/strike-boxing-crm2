@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Client, User } from '../types';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, addDoc, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, addDoc, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { format, parseISO, addDays, isAfter } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -35,6 +36,13 @@ export default function MemberSessions({ client }: { client: Client | null }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
+
+  // Rescheduling & Cancellation state
+  const [selectedRescheduleSession, setSelectedRescheduleSession] = useState<any | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState<string>('');
+  const [rescheduleTime, setRescheduleTime] = useState<string>('');
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!client?.id) {
@@ -152,15 +160,43 @@ export default function MemberSessions({ client }: { client: Client | null }) {
         }
       }
 
-      // Add a task in firestore as a booking request
+      // 1. Conflict Check: check if coach is already booked within 59 mins
+      const q = query(
+        collection(db, 'sessions'),
+        where('trainerId', '==', selectedCoachId),
+        where('status', '==', 'Scheduled')
+      );
+      const snap = await getDocs(q);
+      const requestedTime = selectedDateTime.getTime();
+      const isBooked = snap.docs.some(d => {
+        const existingTime = new Date(d.data().date).getTime();
+        const differenceMinutes = Math.abs(requestedTime - existingTime) / (1000 * 60);
+        return differenceMinutes < 60;
+      });
+
+      if (isBooked) {
+        throw new Error("This coach is already booked within this hour. Please choose another time.");
+      }
+
+      // 2. Directly add the session
+      await addDoc(collection(db, 'sessions'), {
+        clientId: client.id,
+        date: selectedDateTime.toISOString(),
+        status: 'Scheduled',
+        notes: bookingMessage.trim() || 'Booked via Member Portal',
+        trainerId: selectedCoachId,
+        branch: selectedCoach?.branch || client.branch || 'ALL'
+      });
+
+      // 3. Create a task in firestore to notify coach/admins
       const formattedDate = format(selectedDateTime, 'PPP');
       const formattedTime = format(selectedDateTime, 'p');
 
       await addDoc(collection(db, 'tasks'), {
-        title: `PT Request: ${client.name}`,
-        description: `Member requested a PT session with ${selectedCoach?.name || 'Coach'} on ${formattedDate} at ${formattedTime}.${bookingMessage ? ` Message: ${bookingMessage}` : ''}`,
+        title: `PT Booking: ${client.name}`,
+        description: `Member booked a PT session with ${selectedCoach?.name || 'Coach'} on ${formattedDate} at ${formattedTime}.${bookingMessage ? ` Message: ${bookingMessage}` : ''}`,
         dueDate: bookingDate,
-        status: 'Pending',
+        status: 'Completed',
         priority: 'Medium',
         assignedTo: selectedCoachId,
         clientId: client.id,
@@ -177,6 +213,113 @@ export default function MemberSessions({ client }: { client: Client | null }) {
       setBookingError(err.message || "Failed to submit request. Please try again.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleRescheduleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRescheduleSession || !rescheduleDate || !rescheduleTime) return;
+
+    setIsRescheduling(true);
+    setRescheduleError(null);
+
+    try {
+      const selectedDateTime = new Date(`${rescheduleDate}T${rescheduleTime}`);
+      if (selectedDateTime <= new Date()) {
+        throw new Error("Please select a future date and time.");
+      }
+
+      const coachId = selectedRescheduleSession.trainerId;
+
+      // 1. Fetch coach schedule to validate hours
+      const scheduleRef = doc(db, 'coachSchedules', coachId);
+      const scheduleSnap = await getDoc(scheduleRef);
+      if (scheduleSnap.exists() && scheduleSnap.data().days) {
+        const scheduleDays = scheduleSnap.data().days;
+        const dayOfWeek = format(selectedDateTime, 'eeee').toLowerCase();
+        const dayConfig = scheduleDays[dayOfWeek];
+        if (!dayConfig || !dayConfig.enabled) {
+          throw new Error(`The coach is not available on ${format(selectedDateTime, 'EEEE')}s.`);
+        }
+        // Verify time range
+        const [hours, minutes] = rescheduleTime.split(':').map(Number);
+        const [startHours, startMinutes] = dayConfig.startTime.split(':').map(Number);
+        const [endHours, endMinutes] = dayConfig.endTime.split(':').map(Number);
+        
+        const bookingMinutes = (hours || 0) * 60 + (minutes || 0);
+        const startMinutesTotal = (startHours || 0) * 60 + (startMinutes || 0);
+        const endMinutesTotal = (endHours || 0) * 60 + (endMinutes || 0);
+
+        if (bookingMinutes < startMinutesTotal || bookingMinutes > endMinutesTotal) {
+          throw new Error(`The coach is only available between ${dayConfig.startTime} and ${dayConfig.endTime} on ${format(selectedDateTime, 'EEEE')}s.`);
+        }
+      }
+
+      // 2. Query other scheduled sessions for conflict
+      const q = query(
+        collection(db, 'sessions'),
+        where('trainerId', '==', coachId),
+        where('status', '==', 'Scheduled')
+      );
+      const snap = await getDocs(q);
+      const requestedTime = selectedDateTime.getTime();
+      const isBooked = snap.docs.some(d => {
+        if (d.id === selectedRescheduleSession.id) return false; // ignore this session itself
+        const existingTime = new Date(d.data().date).getTime();
+        const differenceMinutes = Math.abs(requestedTime - existingTime) / (1000 * 60);
+        return differenceMinutes < 60;
+      });
+
+      if (isBooked) {
+        throw new Error("This coach is already booked within this hour. Please choose another time.");
+      }
+
+      // 3. Update session date in firestore
+      const sessionRef = doc(db, 'sessions', selectedRescheduleSession.id);
+      await updateDoc(sessionRef, {
+        date: selectedDateTime.toISOString()
+      });
+
+      // 4. Log in audit logs
+      await addDoc(collection(db, 'auditLogs'), {
+        action: 'UPDATE',
+        entityType: 'SESSION',
+        entityId: selectedRescheduleSession.id,
+        details: `PT Session rescheduled for client ID ${client.id} to ${selectedDateTime.toISOString()}.`,
+        timestamp: new Date().toISOString(),
+        userId: client.portalUserId || client.id,
+        userName: client.name
+      });
+
+      setSelectedRescheduleSession(null);
+    } catch (err: any) {
+      console.error("Error rescheduling session:", err);
+      setRescheduleError(err.message || "Failed to reschedule. Please try again.");
+    } finally {
+      setIsRescheduling(false);
+    }
+  };
+
+  const handleCancelSession = async (sessionId: string) => {
+    if (!window.confirm("Are you sure you want to cancel this PT session?")) return;
+    try {
+      const sessionRef = doc(db, 'sessions', sessionId);
+      await updateDoc(sessionRef, {
+        status: 'Cancelled'
+      });
+
+      await addDoc(collection(db, 'auditLogs'), {
+        action: 'UPDATE',
+        entityType: 'SESSION',
+        entityId: sessionId,
+        details: `PT Session ${sessionId} cancelled by client ID ${client.id}.`,
+        timestamp: new Date().toISOString(),
+        userId: client.portalUserId || client.id,
+        userName: client.name
+      });
+    } catch (err: any) {
+      console.error("Error cancelling session:", err);
+      alert("Failed to cancel session: " + err.message);
     }
   };
 
@@ -215,7 +358,7 @@ export default function MemberSessions({ client }: { client: Client | null }) {
           <form onSubmit={handleRequestBooking} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="coachSelect" className="text-xs font-bold text-muted-foreground">Select Coach</Label>
-              <Select value={selectedCoachId} onValueChange={setSelectedCoachId}>
+              <Select value={selectedCoachId} onValueChange={(val) => setSelectedCoachId(val || '')}>
                 <SelectTrigger id="coachSelect" className="bg-background">
                   <SelectValue placeholder="Choose a trainer" />
                 </SelectTrigger>
@@ -327,7 +470,7 @@ export default function MemberSessions({ client }: { client: Client | null }) {
         {upcomingSessions.length > 0 ? (
           upcomingSessions.map(session => {
             const dateObj = parseISO(session.date);
-            const style = STATUS_STYLES[session.status] || STATUS_STYLES.Scheduled;
+            const style = STATUS_STYLES[session.status] || { badge: 'bg-blue-500/10 text-blue-600 border-blue-200/50', text: 'Scheduled' };
             return (
               <Card key={session.id} className="border bg-card/40 hover:bg-card/75 transition-colors shadow-sm">
                 <CardContent className="p-4 flex justify-between items-center gap-4">
@@ -358,8 +501,34 @@ export default function MemberSessions({ client }: { client: Client | null }) {
                         "{session.notes}"
                       </p>
                     )}
+
+                    <div className="flex gap-2 mt-3 pt-2.5 border-t border-border/40 justify-start">
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        type="button"
+                        className="text-[10px] text-primary border-primary/20 h-7 font-bold px-2.5"
+                        onClick={() => {
+                          setSelectedRescheduleSession(session);
+                          setRescheduleDate(format(dateObj, 'yyyy-MM-dd'));
+                          setRescheduleTime(format(dateObj, 'HH:mm'));
+                          setRescheduleError(null);
+                        }}
+                      >
+                        Reschedule
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        type="button"
+                        className="text-[10px] text-destructive border-destructive/20 hover:bg-destructive hover:text-white h-7 font-bold px-2.5"
+                        onClick={() => handleCancelSession(session.id)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
-                  <Badge className={`border text-xs px-2.5 py-0.5 rounded-full ${style.badge}`} variant="outline">
+                  <Badge className={`border text-xs px-2.5 py-0.5 rounded-full shrink-0 ${style.badge}`} variant="outline">
                     {style.text}
                   </Badge>
                 </CardContent>
@@ -404,6 +573,56 @@ export default function MemberSessions({ client }: { client: Client | null }) {
           </div>
         </div>
       )}
+      {/* Reschedule Dialog */}
+      <Dialog open={selectedRescheduleSession !== null} onOpenChange={open => { if (!open) setSelectedRescheduleSession(null); }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Reschedule Session</DialogTitle>
+            <DialogDescription>
+              Select a new date and time for your session with {selectedRescheduleSession && getTrainerName(selectedRescheduleSession.trainerId)}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleRescheduleSubmit} className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="reschedule-date">New Date</Label>
+              <Input
+                id="reschedule-date"
+                type="date"
+                value={rescheduleDate}
+                onChange={e => setRescheduleDate(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="reschedule-time">New Time</Label>
+              <Input
+                id="reschedule-time"
+                type="time"
+                value={rescheduleTime}
+                onChange={e => setRescheduleTime(e.target.value)}
+                required
+              />
+            </div>
+
+            {rescheduleError && (
+              <div className="bg-destructive/10 border border-destructive/20 text-destructive p-3 rounded-lg text-xs font-semibold">
+                {rescheduleError}
+              </div>
+            )}
+
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={() => setSelectedRescheduleSession(null)} disabled={isRescheduling}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isRescheduling} className="font-bold">
+                {isRescheduling ? 'Rescheduling...' : 'Confirm'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

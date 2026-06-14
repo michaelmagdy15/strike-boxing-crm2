@@ -33,7 +33,7 @@ export default function Leads() {
   } = useAppContext();
 
   // Debounce timers for lead name/phone edits
-  const debounceTimers = useRef<{ [key: string]: NodeJS.Timeout }>({});
+  const debounceTimers = useRef<{ [key: string]: any }>({});
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
   const [selectedLead, setSelectedLead] = useState<Client | null>(null);
   const [newComment, setNewComment] = useState('');

@@ -4,9 +4,10 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { QrCode, CreditCard, Package, History, User, LogOut, Sun, Moon, Dumbbell } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { QrCode, Lock, Globe, UserPlus, User, LogOut, Sun, Moon, Calendar, Users, History, TrendingUp, Package } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, documentId } from 'firebase/firestore';
 import { Client } from '../types';
 
 import MemberHome from './MemberHome';
@@ -14,41 +15,60 @@ import MemberSessions from './MemberSessions';
 import MemberPackages from './MemberPackages';
 import MemberAttendance from './MemberAttendance';
 import MemberProfile from './MemberProfile';
+import MemberClasses from './MemberClasses';
+import MemberSubscription from './MemberSubscription';
+import MemberProgress from './MemberProgress';
+import MemberLocker from './MemberLocker';
+import MemberJuiceBar from './MemberJuiceBar';
+import MemberInvites from './MemberInvites';
 
-type MemberTab = 'home' | 'sessions' | 'packages' | 'attendance' | 'profile';
+type MemberTab = 'home' | 'booking' | 'juicebar' | 'locker' | 'invites' | 'profile';
 
 const NAV_ITEMS: { tab: MemberTab; label: string; icon: React.ReactNode }[] = [
-  { tab: 'home',       label: 'Card',        icon: <QrCode className="h-5 w-5" /> },
-  { tab: 'sessions',   label: 'Sessions',    icon: <Dumbbell className="h-5 w-5" /> },
-  { tab: 'packages',   label: 'Packages',    icon: <Package className="h-5 w-5" /> },
-  { tab: 'attendance', label: 'Attendance',  icon: <History className="h-5 w-5" /> },
-  { tab: 'profile',    label: 'Profile',     icon: <User className="h-5 w-5" /> },
+  { tab: 'home',     label: 'Pass',       icon: <QrCode className="h-5 w-5" /> },
+  { tab: 'booking',  label: 'Bookings',   icon: <Calendar className="h-5 w-5" /> },
+  { tab: 'juicebar', label: 'Juice Bar',  icon: <Globe className="h-5 w-5" /> },
+  { tab: 'locker',   label: 'Locker',     icon: <Lock className="h-5 w-5" /> },
+  { tab: 'invites',  label: 'Invites',    icon: <UserPlus className="h-5 w-5" /> },
+  { tab: 'profile',  label: 'Profile',    icon: <User className="h-5 w-5" /> },
 ];
 
 export default function MemberPortal() {
   const { currentUser, logout } = useAuth();
   const { branding } = useSettings();
   const { theme, toggleTheme } = useTheme();
+  
   const [activeTab, setActiveTab] = useState<MemberTab>('home');
-  const [client, setClient] = useState<Client | null>(null);
+  const [primaryClient, setPrimaryClient] = useState<Client | null>(null);
+  const [activeClient, setActiveClient] = useState<Client | null>(null);
+  const [linkedClients, setLinkedClients] = useState<Client[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
+  // Booking and Profile Sub-tabs state
+  const [bookingSubTab, setBookingSubTab] = useState<'pt' | 'group'>('pt');
+  const [profileSubTab, setProfileSubTab] = useState<'settings' | 'progress' | 'membership' | 'attendance'>('settings');
+
+  // 1. Subscribe to primary client record
   useEffect(() => {
     if (!currentUser?.clientRecordId) {
       setLoading(false);
       return;
     }
 
-    // Query clients collection where memberId matches the currentUser's clientRecordId
     const q = query(
       collection(db, 'clients'),
       where('memberId', '==', currentUser.clientRecordId.trim())
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
+      if (!snapshot.empty && snapshot.docs[0]) {
         const docSnap = snapshot.docs[0];
-        setClient({ ...docSnap.data(), id: docSnap.id } as Client);
+        const pClient = { ...docSnap.data(), id: docSnap.id } as Client;
+        setPrimaryClient(pClient);
+        
+        // Default selected client to primary if not yet set
+        setSelectedClientId(prev => prev || pClient.id);
       } else {
         console.warn("No client document found matching member ID:", currentUser.clientRecordId);
       }
@@ -58,8 +78,55 @@ export default function MemberPortal() {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return unsubscribe;
   }, [currentUser?.clientRecordId]);
+
+  // 2. Subscribe to active client record (handles switched profiles)
+  useEffect(() => {
+    if (!selectedClientId) return;
+
+    const docRef = doc(db, 'clients', selectedClientId);
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setActiveClient({ ...docSnap.data(), id: docSnap.id } as Client);
+      }
+    }, (err) => {
+      console.error("Error subscribing to active client:", err);
+    });
+
+    return unsubscribe;
+  }, [selectedClientId]);
+
+  // 3. Subscribe to linked clients (family members)
+  useEffect(() => {
+    if (!primaryClient) {
+      setLinkedClients([]);
+      return;
+    }
+
+    const linkedIds = primaryClient.linkedClientIds || [];
+    if (linkedIds.length === 0) {
+      setLinkedClients([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'clients'),
+      where(documentId(), 'in', linkedIds)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(docSnap => ({
+        ...docSnap.data(),
+        id: docSnap.id
+      } as Client));
+      setLinkedClients(list);
+    }, (err) => {
+      console.error("Error subscribing to linked clients:", err);
+    });
+
+    return unsubscribe;
+  }, [primaryClient?.linkedClientIds]);
 
   if (loading) {
     return (
@@ -78,32 +145,110 @@ export default function MemberPortal() {
           ) : (
             <h1 className="text-lg font-extralight tracking-[0.2em] uppercase text-primary font-logo">{branding.companyName}</h1>
           )}
-          <Badge variant="outline" className="text-[10px] font-bold tracking-widest uppercase text-primary border-primary/30">
-            Member Portal
+          <Badge variant="outline" className="text-[10px] font-bold tracking-widest uppercase text-primary border-primary/30 hidden sm:inline-flex">
+            Member
           </Badge>
         </div>
+
+        {/* Profile Switcher dropdown next to theme toggle */}
         <div className="flex items-center gap-2">
+          {primaryClient && linkedClients.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <Users className="h-4 w-4 text-zinc-400 shrink-0" />
+              <Select value={selectedClientId} onValueChange={(val) => setSelectedClientId(val || '')}>
+                <SelectTrigger className="h-8 text-[11px] font-bold bg-background border-zinc-800 w-32 sm:w-40">
+                  <SelectValue placeholder="Select Profile" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={primaryClient.id}>
+                    {primaryClient.name} (You)
+                  </SelectItem>
+                  {linkedClients.map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-8 w-8">
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
-          <div className="text-right hidden sm:block">
-            <p className="text-sm font-semibold leading-tight">{currentUser?.name}</p>
-            {currentUser?.clientRecordId && (
-              <p className="text-xs font-mono text-primary">ID: {currentUser.clientRecordId}</p>
-            )}
-          </div>
-          <Button variant="ghost" size="icon" onClick={logout} title="Logout" className="h-8 w-8">
+
+          <Button variant="ghost" size="icon" onClick={logout} title="Logout" className="h-8 w-8 text-zinc-400 hover:text-white">
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </header>
 
       <main className="flex-1 container mx-auto px-4 py-6 pb-24 max-w-md">
-        {activeTab === 'home'       && <MemberHome client={client} />}
-        {activeTab === 'sessions'   && <MemberSessions client={client} />}
-        {activeTab === 'packages'   && <MemberPackages client={client} />}
-        {activeTab === 'attendance' && <MemberAttendance client={client} />}
-        {activeTab === 'profile'    && <MemberProfile client={client} />}
+        {activeTab === 'home' && <MemberHome client={activeClient} />}
+        
+        {activeTab === 'booking' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 p-1 bg-muted/60 rounded-xl border">
+              <button 
+                onClick={() => setBookingSubTab('pt')} 
+                className={`py-1.5 text-xs font-bold rounded-lg transition-colors ${bookingSubTab === 'pt' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+              >
+                PT Sessions
+              </button>
+              <button 
+                onClick={() => setBookingSubTab('group')} 
+                className={`py-1.5 text-xs font-bold rounded-lg transition-colors ${bookingSubTab === 'group' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+              >
+                Group Classes
+              </button>
+            </div>
+            {bookingSubTab === 'pt' ? <MemberSessions client={activeClient} /> : <MemberClasses client={activeClient} />}
+          </div>
+        )}
+
+        {activeTab === 'juicebar' && <MemberJuiceBar client={activeClient} />}
+        {activeTab === 'locker' && <MemberLocker client={activeClient} />}
+        {activeTab === 'invites' && <MemberInvites client={activeClient} />}
+        
+        {activeTab === 'profile' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-4 p-1 bg-muted/60 rounded-xl border">
+              <button 
+                onClick={() => setProfileSubTab('settings')} 
+                className={`py-1.5 text-[10px] font-bold rounded-lg transition-colors truncate ${profileSubTab === 'settings' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+              >
+                Settings
+              </button>
+              <button 
+                onClick={() => setProfileSubTab('progress')} 
+                className={`py-1.5 text-[10px] font-bold rounded-lg transition-colors truncate ${profileSubTab === 'progress' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+              >
+                Progress
+              </button>
+              <button 
+                onClick={() => setProfileSubTab('membership')} 
+                className={`py-1.5 text-[10px] font-bold rounded-lg transition-colors truncate ${profileSubTab === 'membership' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+              >
+                Membership
+              </button>
+              <button 
+                onClick={() => setProfileSubTab('attendance')} 
+                className={`py-1.5 text-[10px] font-bold rounded-lg transition-colors truncate ${profileSubTab === 'attendance' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}
+              >
+                History
+              </button>
+            </div>
+            {profileSubTab === 'settings' && <MemberProfile client={activeClient} />}
+            {profileSubTab === 'progress' && <MemberProgress client={activeClient} />}
+            {profileSubTab === 'membership' && (
+              <div className="space-y-6 animate-in fade-in">
+                <MemberPackages client={activeClient} />
+                <MemberSubscription client={activeClient} />
+              </div>
+            )}
+            {profileSubTab === 'attendance' && <MemberAttendance client={activeClient} />}
+          </div>
+        )}
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-card border-t z-50 flex justify-around py-1.5 shadow-lg backdrop-blur-md bg-opacity-90">
@@ -111,12 +256,12 @@ export default function MemberPortal() {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[64px] transition-colors rounded-xl ${
-              activeTab === tab ? 'text-primary' : 'text-muted-foreground'
+            className={`flex flex-col items-center gap-0.5 px-2.5 py-1.5 min-w-[56px] transition-colors rounded-xl ${
+              activeTab === tab ? 'text-primary font-bold' : 'text-muted-foreground font-semibold'
             }`}
           >
             {icon}
-            <span className="text-[10px] font-bold tracking-wide">{label}</span>
+            <span className="text-[9px] tracking-wide">{label}</span>
           </button>
         ))}
       </nav>

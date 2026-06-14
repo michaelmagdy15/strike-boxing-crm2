@@ -1,15 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Client } from '../types';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { QRCodeSVG } from 'qrcode.react';
 import { db } from '../firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { format, parseISO } from 'date-fns';
-import { Sparkles, Calendar, CheckCircle2, Trophy } from 'lucide-react';
-
+import { Sparkles, Calendar, CheckCircle2, Trophy, Activity, Dumbbell, Award, Users } from 'lucide-react';
+import { useTheme } from '../contexts/ThemeContext';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 export default function MemberHome({ client }: { client: Client | null }) {
+  const { theme } = useTheme();
   const [lastCheckIn, setLastCheckIn] = useState<string | null>(null);
+  const [performanceLogs, setPerformanceLogs] = useState<any[]>([]);
+  const [loadingPerformance, setLoadingPerformance] = useState(true);
+  const [trafficData, setTrafficData] = useState<any[]>([]);
+  const [loadingTraffic, setLoadingTraffic] = useState(true);
 
   useEffect(() => {
     if (!client?.id) return;
@@ -24,7 +30,7 @@ export default function MemberHome({ client }: { client: Client | null }) {
           const records = snapshot.docs.map(doc => doc.data());
           // Sort by date descending
           records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-          setLastCheckIn(records[0].date);
+          setLastCheckIn(records[0]?.date || null);
         } else {
           setLastCheckIn(null);
         }
@@ -33,6 +39,92 @@ export default function MemberHome({ client }: { client: Client | null }) {
         console.error("Error fetching last check-in:", err);
       });
   }, [client?.id]);
+
+  useEffect(() => {
+    if (!client?.id) {
+      setLoadingPerformance(false);
+      return;
+    }
+    const q = query(collection(db, 'clientPerformance'), where('clientId', '==', client.id));
+    const unsub = onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      list.sort((a: any, b: any) => b.date.localeCompare(a.date));
+      setPerformanceLogs(list);
+      setLoadingPerformance(false);
+    }, (err) => {
+      console.error("Error loading performance logs:", err);
+      setLoadingPerformance(false);
+    });
+    return unsub;
+  }, [client?.id]);
+
+  useEffect(() => {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const attendanceRef = collection(db, 'attendance');
+    const q = query(
+      attendanceRef,
+      where('date', '>=', thirtyDaysAgo.toISOString())
+    );
+
+    getDocs(q)
+      .then((snapshot) => {
+        const records = snapshot.docs.map(doc => doc.data());
+        const hourLabels: Record<number, string> = {
+          6: '6am', 7: '7am', 8: '8am', 9: '9am', 10: '10am', 11: '11am',
+          12: '12pm', 13: '1pm', 14: '2pm', 15: '3pm', 16: '4pm', 17: '5pm',
+          18: '6pm', 19: '7pm', 20: '8pm', 21: '9pm', 22: '10pm'
+        };
+        const hoursMap = Array.from({ length: 17 }, (_, i) => {
+          const h = i + 6;
+          return {
+            hour: h,
+            label: hourLabels[h] || `${h}:00`,
+            count: 0
+          };
+        });
+
+        records.forEach(r => {
+          try {
+            if (r.date) {
+              const hr = new Date(r.date).getHours();
+              const entry = hoursMap.find(d => d.hour === hr);
+              if (entry) {
+                entry.count += 1;
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing attendance date:", e);
+          }
+        });
+
+        setTrafficData(hoursMap);
+        setLoadingTraffic(false);
+      })
+      .catch((err) => {
+        console.error("Error fetching traffic data:", err);
+        setLoadingTraffic(false);
+      });
+  }, []);
+
+  // Extract all PRs
+  const prsMap = new Map<string, { weight: number; reps: number; date: string }>();
+  performanceLogs.forEach(log => {
+    if (log.prs && Array.isArray(log.prs)) {
+      log.prs.forEach((pr: any) => {
+        const key = pr.exercise.trim().toLowerCase();
+        const existing = prsMap.get(key);
+        if (!existing || pr.weight > existing.weight) {
+          prsMap.set(key, { weight: pr.weight, reps: pr.reps, date: log.date });
+        }
+      });
+    }
+  });
+  const prsList = Array.from(prsMap.entries()).map(([exercise, data]) => ({
+    exercise: exercise.toUpperCase(),
+    ...data
+  }));
 
   if (!client) {
     return (
@@ -178,6 +270,151 @@ export default function MemberHome({ client }: { client: Client | null }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Gym Peak Hours Traffic Widget */}
+      <Card className="border bg-card/40 shadow-sm overflow-hidden">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-bold flex items-center gap-2">
+            <Users className="h-4 w-4 text-primary animate-pulse" /> Gym Peak Hours
+          </CardTitle>
+          <CardDescription className="text-[11px]">
+            Hourly gym occupancy based on check-ins over the past 30 days.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-1">
+          {loadingTraffic ? (
+            <div className="flex items-center justify-center py-6">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary" />
+            </div>
+          ) : trafficData.some(d => d.count > 0) ? (
+            <div className="h-32 w-full -ml-6">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={trafficData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'} vertical={false} />
+                  <XAxis 
+                    dataKey="label" 
+                    stroke={theme === 'dark' ? '#a1a1aa' : '#71717a'} 
+                    fontSize={8} 
+                    tickLine={false} 
+                    axisLine={false} 
+                  />
+                  <YAxis 
+                    stroke={theme === 'dark' ? '#a1a1aa' : '#71717a'} 
+                    fontSize={8} 
+                    tickLine={false} 
+                    axisLine={false}
+                    allowDecimals={false}
+                  />
+                  <Tooltip 
+                    cursor={{ fill: 'rgba(255, 255, 255, 0.04)' }}
+                    contentStyle={{ 
+                      backgroundColor: theme === 'dark' ? '#18181b' : '#ffffff', 
+                      borderColor: theme === 'dark' ? '#27272a' : '#e4e4e7',
+                      color: theme === 'dark' ? '#ffffff' : '#000000',
+                      borderRadius: '8px',
+                      fontSize: '10px'
+                    }}
+                    formatter={(value) => [`${value} check-ins`, 'Volume']}
+                  />
+                  <Bar 
+                    dataKey="count" 
+                    fill={theme === 'dark' ? '#ffffff' : '#09090b'} 
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="py-6 text-center text-xs text-muted-foreground italic">
+              No recent attendance data available to forecast peak hours.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Fitness & Performance Logs */}
+      <div className="space-y-3 pt-2">
+        <h3 className="text-xs font-extrabold uppercase tracking-widest text-primary flex items-center gap-1.5">
+          <Activity className="h-4 w-4 text-primary" /> My Fitness Progress
+        </h3>
+
+        {/* Personal Records Card */}
+        {prsList.length > 0 && (
+          <Card className="border bg-card/50 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                <Award className="h-3.5 w-3.5 text-primary" /> Personal Records (PRs)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2 pt-0">
+              {prsList.map((pr, idx) => (
+                <Badge key={idx} variant="outline" className="bg-primary/5 text-primary border-primary/20 text-[10px] py-1 px-2.5 rounded-lg flex flex-col items-start gap-0.5">
+                  <span className="font-bold">{pr.exercise}</span>
+                  <span className="font-mono text-xs">{pr.weight} kg x {pr.reps} reps</span>
+                </Badge>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Historical Logs List */}
+        {performanceLogs.length > 0 ? (
+          <div className="space-y-3">
+            {performanceLogs.map(log => (
+              <Card key={log.id} className="border bg-card/40 hover:bg-card/75 transition-colors shadow-sm">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex justify-between items-center text-[10px] font-mono text-muted-foreground border-b pb-2">
+                    <span className="font-bold text-foreground">Logged by Coach {log.coachName}</span>
+                    <span>{format(parseISO(log.date), 'dd MMM yyyy')}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {log.weight && (
+                      <div className="bg-muted/40 p-2.5 rounded-xl border">
+                        <span className="text-[9px] text-muted-foreground block uppercase font-bold">Weight</span>
+                        <strong className="text-sm font-bold text-foreground">{log.weight} kg</strong>
+                      </div>
+                    )}
+                  </div>
+
+                  {log.workoutNotes && (
+                    <div className="text-xs">
+                      <span className="text-[9px] text-muted-foreground block uppercase font-bold">Coach Workout Notes</span>
+                      <p className="mt-1 text-muted-foreground leading-relaxed bg-muted/20 p-2 rounded-lg border">"{log.workoutNotes}"</p>
+                    </div>
+                  )}
+
+                  {log.nutritionNotes && (
+                    <div className="text-xs">
+                      <span className="text-[9px] text-muted-foreground block uppercase font-bold">Coach Nutrition Notes</span>
+                      <p className="mt-1 text-muted-foreground leading-relaxed bg-muted/20 p-2 rounded-lg border">"{log.nutritionNotes}"</p>
+                    </div>
+                  )}
+
+                  {log.prs && log.prs.length > 0 && (
+                    <div className="text-xs pt-1">
+                      <span className="text-[9px] text-muted-foreground block uppercase font-bold">PRs Registered</span>
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {log.prs.map((pr: any, i: number) => (
+                          <Badge key={i} variant="outline" className="bg-primary/5 text-primary border-primary/20 text-[9px] font-medium">
+                            {pr.exercise}: {pr.weight} kg x {pr.reps} reps
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card className="border-dashed bg-muted/20">
+            <CardContent className="py-8 text-center text-muted-foreground text-xs italic">
+              No fitness logs recorded yet. Ask your coach to log your stats during your next session!
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

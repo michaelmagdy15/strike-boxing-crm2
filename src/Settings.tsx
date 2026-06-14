@@ -21,7 +21,7 @@ import type { BackupProgressCallback } from './services/backupService';
 
 export default function Settings() {
   const { branding, updateBranding, currentUser, wipeSystem, canAccessSettings, branches, updateBranches } = useAppContext();
-  const { changeMyPassword } = useAuth();
+  const { changeMyPassword, runExistingUsersMigration } = useAuth();
   const [companyName, setCompanyName] = useState(branding.companyName);
   const [logoUrl, setLogoUrl] = useState(branding.logoUrl);
   const [kioskPin, setKioskPin] = useState(branding.kioskPin || '');
@@ -37,6 +37,23 @@ export default function Settings() {
   const [showPwd, setShowPwd] = useState(false);
   const [pwdStatus, setPwdStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isChangingPwd, setIsChangingPwd] = useState(false);
+
+  // Migration state
+  const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<{ membersMigrated: number; coachesMigrated: number; errors: string[] } | null>(null);
+
+  const handleRunMigration = async () => {
+    setIsMigrating(true);
+    setMigrationResult(null);
+    try {
+      const result = await runExistingUsersMigration();
+      setMigrationResult(result);
+    } catch (err: any) {
+      setMigrationResult({ membersMigrated: 0, coachesMigrated: 0, errors: [err.message || String(err)] });
+    } finally {
+      setIsMigrating(false);
+    }
+  };
 
   const [isWipeDialogOpen, setIsWipeDialogOpen] = useState(false);
   const [wipeStep, setWipeStep] = useState(1);
@@ -664,16 +681,42 @@ export default function Settings() {
                   </Button>
                 </div>
 
-                <div className="p-4 border border-muted/40 rounded-lg bg-background/50 space-y-3 opacity-60">
-                  <h4 className="font-bold text-muted-foreground flex items-center gap-2">
-                    <ShieldAlert className="h-4 w-4" />
-                    Standardize ID System
+                <div className="p-4 border border-border rounded-lg bg-background/50 space-y-3">
+                  <h4 className="font-bold text-foreground flex items-center gap-2">
+                    <KeyRound className="h-4 w-4 text-primary" />
+                    Migrate Existing Members & Coaches
                   </h4>
                   <p className="text-sm text-muted-foreground">
-                    Assign a permanent, sequential Member ID to all existing records that don't have one yet.
-                    Required for self check-in by member ID.
+                    Loops through all active members and coaches in the database. Generates portal user accounts with a default password <code className="font-mono bg-muted px-1 rounded">12345678</code> and marks them as requiring a password change on first login.
                   </p>
-                  <p className="text-xs text-muted-foreground italic">This feature is not yet implemented.</p>
+                  <Button
+                    variant="outline"
+                    className="font-bold border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+                    onClick={handleRunMigration}
+                    disabled={isMigrating}
+                  >
+                    {isMigrating ? 'Migrating Accounts...' : 'Run Auth Migration'}
+                  </Button>
+                  {migrationResult && (
+                    <div className="mt-3 p-3 rounded-lg bg-card border text-sm space-y-2">
+                      <p className="font-semibold text-green-600">Migration Completed!</p>
+                      <ul className="list-disc pl-5 text-xs space-y-1 text-muted-foreground">
+                        <li>Members Migrated: <strong>{migrationResult.membersMigrated}</strong></li>
+                        <li>Coaches Migrated: <strong>{migrationResult.coachesMigrated}</strong></li>
+                      </ul>
+                      {migrationResult.errors.length > 0 && (
+                        <div className="text-xs text-destructive mt-2">
+                          <p className="font-bold">Errors encountered ({migrationResult.errors.length}):</p>
+                          <ul className="list-disc pl-5 space-y-1">
+                            {migrationResult.errors.slice(0, 5).map((err, idx) => (
+                              <li key={idx} className="break-all">{err}</li>
+                            ))}
+                            {migrationResult.errors.length > 5 && <li>And {migrationResult.errors.length - 5} more...</li>}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

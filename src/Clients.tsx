@@ -104,7 +104,7 @@ export default function Clients() {
   const deferredFilterBranch = useDeferredValue(filterBranch);
 
   // Debounce timers for member name/phone updates
-  const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
+  const debounceTimers = useRef<Record<string, any>>({});
   const debouncedUpdate = (clientId: string, updates: any, delayMs = 500) => {
     const key = `${clientId}-${Object.keys(updates)[0]}`;
     if (debounceTimers.current[key]) {
@@ -908,7 +908,7 @@ export default function Clients() {
                                             if (window.confirm(`Enable portal access for ${client.name}?`)) {
                                               setIsActivatingPortal(client.id);
                                               try {
-                                                await createClientAccount(client.id, client.memberId, client.name, client.phone);
+                                                await createClientAccount(client.id, client.memberId!, client.name, client.phone);
                                                 alert("Portal access enabled! Default password is: 12345678");
                                               } catch (err: any) {
                                                 alert("Failed to enable portal access: " + err.message);

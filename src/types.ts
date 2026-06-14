@@ -165,6 +165,8 @@ export interface Client {
   assignedTo?: string; // userId
   branch?: Branch;
   memberId?: string; // Sequential ID for members
+  portalUserId?: string; // Link to the user portal record
+  linkedClientIds?: string[]; // Array of linked client record IDs (family members)
   importBatchId?: string; // ID of the import batch this client was created in
   
   // Lead specific
@@ -280,3 +282,49 @@ export type ClientUpdates = Partial<Client>;
 
 export const isSuperAdmin = (role?: UserRole): boolean => role === 'super_admin' || role === 'crm_admin';
 export const isAdmin = (role?: UserRole): boolean => role === 'manager' || role === 'super_admin' || role === 'crm_admin';
+
+export interface Locker {
+  id: string;
+  number: string;
+  branch: string;
+  status: 'Available' | 'Assigned' | 'Maintenance';
+  assignedTo?: string; // clientId
+  assignedToName?: string;
+  code?: string; // lock PIN
+  updatedAt: string;
+}
+
+export interface LockerRequest {
+  id: string;
+  clientId: string;
+  clientName: string;
+  branch: string;
+  status: 'Pending' | 'Approved' | 'Denied';
+  requestedAt: string;
+}
+
+export interface JuiceBarOrder {
+  id: string;
+  clientId: string;
+  clientName: string;
+  items: {
+    name: string;
+    quantity: number;
+    price: number;
+  }[];
+  totalAmount: number;
+  pickupTime: string;
+  status: 'Pending' | 'Preparing' | 'Ready' | 'Completed' | 'Cancelled';
+  orderedAt: string;
+}
+
+export interface GuestInvite {
+  id: string;
+  hostClientId: string;
+  hostName: string;
+  guestName: string;
+  guestPhone: string;
+  inviteCode: string;
+  status: 'Pending' | 'Attended' | 'Expired';
+  createdAt: string;
+}

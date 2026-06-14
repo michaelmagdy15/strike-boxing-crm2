@@ -25,7 +25,7 @@ import Login from './Login';
 import Reports from './Reports';
 import MemberCheckin from './MemberCheckin';
 import HelpPage from './HelpPage';
-import { Activity, Users, UserPlus, CreditCard, LogOut, Calendar as CalendarIcon, ShieldAlert, Settings as SettingsIcon, Eye, EyeOff, CheckSquare, Package, Search, Scan, History, BarChart3, LayoutDashboard, MoreHorizontal, X, Sun, Moon, Smartphone, FileText } from 'lucide-react';
+import { Activity, Users, UserPlus, CreditCard, LogOut, Calendar as CalendarIcon, ShieldAlert, Settings as SettingsIcon, Eye, EyeOff, CheckSquare, Package, Search, Scan, History, BarChart3, LayoutDashboard, MoreHorizontal, X, Sun, Moon, Smartphone, FileText, Coffee } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,6 +37,7 @@ import MemberPortal from './member/MemberPortal';
 import { ForcePasswordChangeDialog } from './components/ForcePasswordChangeDialog';
 import { QRCodePage } from './components/QRCodePage';
 import QuoteGenerator from './QuoteGenerator';
+import ClubOperations from './ClubOperations';
 
 const QUOTE_GENERATOR_EMAILS = ['magd.gallab@gmail.com', 'michaelmitry13@gmail.com'];
 
@@ -384,6 +385,13 @@ function AppContent() {
                   Quotes
                 </TabsTrigger>
               )}
+
+              {(currentUser.role === 'manager' || currentUser.role === 'rep' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') && (
+                <TabsTrigger value="operations" className="data-[state=active]:bg-background data-[state=active]:shadow-sm px-4 text-sm">
+                  <Coffee className="h-4 w-4 mr-2" />
+                  Operations
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
 
@@ -443,6 +451,12 @@ function AppContent() {
           {canUseQuoteGenerator && (
             <TabsContent value="quotes" className="m-0 animate-in fade-in-50 duration-300">
               <QuoteGenerator />
+            </TabsContent>
+          )}
+
+          {(currentUser.role === 'manager' || currentUser.role === 'rep' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') && (
+            <TabsContent value="operations" className="m-0 animate-in fade-in-50 duration-300">
+              <ClubOperations />
             </TabsContent>
           )}
         </Tabs>
@@ -518,6 +532,17 @@ function AppContent() {
               </button>
             </div>
             <div className="grid grid-cols-4 gap-2">
+              {(currentUser.role === 'manager' || currentUser.role === 'rep' || currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'crm_admin') && (
+                <button
+                  onClick={() => { setActiveTab('operations'); setShowMoreMenu(false); }}
+                  className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-colors ${
+                    activeTab === 'operations' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'
+                  }`}
+                >
+                  <Coffee className="h-5 w-5" />
+                  <span className="text-[10px] font-semibold">Operations</span>
+                </button>
+              )}
               {currentUser.role !== 'admin' && (
                 <button
                   onClick={() => { setActiveTab('tasks'); setShowMoreMenu(false); }}
