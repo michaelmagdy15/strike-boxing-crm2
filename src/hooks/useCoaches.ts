@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../firebase';
-import { Coach } from '../types';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, query, where, getDocs } from 'firebase/firestore';
+import { db, createFirebaseUser } from '../firebase';
+import { Coach, User } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandler';
 import { cleanData } from '../utils';
 import { addAuditLog } from '../services/auditService';
@@ -28,9 +28,46 @@ export const useCoaches = () => {
     return () => unsub();
   }, [currentUser]);
 
+  const generateCoachId = async (): Promise<string> => {
+    const q = query(collection(db, 'users'), where('role', '==', 'coach'));
+    const snap = await getDocs(q);
+    const nums = snap.docs
+      .map(d => (d.data().coachId as string) || '')
+      .filter(id => id.startsWith('COACH-'))
+      .map(id => parseInt(id.split('-')[1] || '0', 10))
+      .filter(n => !isNaN(n));
+    const maxNum = nums.length > 0 ? Math.max(...nums) : 0;
+    return `COACH-${String(maxNum + 1).padStart(3, '0')}`;
+  };
+
   const addCoach = async (coach: Omit<Coach, 'id'>) => {
     try {
       const docRef = await addDoc(collection(db, 'coaches'), cleanData(coach));
+      
+      // Auto create portal account if active
+      if (coach.active) {
+        try {
+          const firstName = (coach.name || '').split(' ')[0]?.replace(/[^a-zA-Z0-9]/g, '') || 'coach';
+          const email = `coach-${firstName.toLowerCase()}@strike-coach.local`;
+          const coachId = await generateCoachId();
+          const uid = await createFirebaseUser(email, '12345678');
+
+          const newUser: User = {
+            id: uid,
+            name: coach.name,
+            email,
+            role: 'coach',
+            coachId,
+            mustChangePassword: true
+          };
+
+          await setDoc(doc(db, 'users', uid), newUser);
+          await updateDoc(docRef, { userId: uid });
+        } catch (authErr) {
+          console.error("Auto coach portal account creation failed:", authErr);
+        }
+      }
+
       await addAuditLog('CREATE', 'COACH', docRef.id, `Created coach: ${coach.name}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'coaches');
@@ -40,6 +77,35 @@ export const useCoaches = () => {
   const updateCoach = async (id: string, updates: Partial<Coach>) => {
     try {
       await updateDoc(doc(db, 'coaches', id), cleanData(updates));
+      
+      const existing = coaches.find(c => c.id === id);
+      const isNowActive = updates.active === true || (existing?.active === true && updates.active === undefined);
+      const hasNoUser = !existing?.userId && !updates.userId;
+
+      if (isNowActive && hasNoUser) {
+        try {
+          const coachName = updates.name || existing?.name || '';
+          const firstName = coachName.split(' ')[0]?.replace(/[^a-zA-Z0-9]/g, '') || 'coach';
+          const email = `coach-${firstName.toLowerCase()}@strike-coach.local`;
+          const coachId = await generateCoachId();
+          const uid = await createFirebaseUser(email, '12345678');
+
+          const newUser: User = {
+            id: uid,
+            name: coachName,
+            email,
+            role: 'coach',
+            coachId,
+            mustChangePassword: true
+          };
+
+          await setDoc(doc(db, 'users', uid), newUser);
+          await updateDoc(doc(db, 'coaches', id), { userId: uid });
+        } catch (authErr) {
+          console.error("Auto coach portal account creation on update failed:", authErr);
+        }
+      }
+
       const coachName = coaches.find(c => c.id === id)?.name || id;
       await addAuditLog('UPDATE', 'COACH', id, `Updated coach: ${coachName}`);
     } catch (error) {

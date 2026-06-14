@@ -11,7 +11,7 @@ import {
   writeBatch,
   getDocs,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, createFirebaseUser } from '../firebase';
 import { Client, CRMComment, InteractionLog, User } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandler';
 import { cleanData } from '../utils';
@@ -99,13 +99,34 @@ export const useClients = (currentUser: User | null) => {
         clientData.memberId = await generateMemberId();
       }
 
-
       const docRef = doc(collection(db, 'clients'));
       const finalData = {
         ...cleanData(clientData),
         id: docRef.id,
         createdAt: new Date().toISOString(),
       };
+
+      // Auto-create portal account if active
+      if (finalData.status === 'Active') {
+        try {
+          const email = `member-${finalData.memberId.toLowerCase()}@strike-member.local`;
+          const uid = await createFirebaseUser(email, '12345678');
+          const newUser: User = {
+            id: uid,
+            name: finalData.name,
+            email,
+            role: 'client',
+            clientRecordId: finalData.memberId,
+            phone: finalData.phone || '',
+            mustChangePassword: true
+          };
+          await setDoc(doc(db, 'users', uid), newUser);
+          finalData.portalUserId = uid;
+        } catch (authErr) {
+          console.error("Auto portal account creation failed:", authErr);
+        }
+      }
+
       await setDoc(docRef, finalData);
       await addAuditLog(
         'CREATE',
@@ -178,11 +199,35 @@ export const useClients = (currentUser: User | null) => {
         if (clientData.paid === undefined) clientData.paid = false;
 
         const docRef = id ? doc(db, 'clients', id) : doc(collection(db, 'clients'));
-        batch.set(docRef, {
+        const finalClient = {
           ...cleanData(clientData),
           id: docRef.id,
           createdAt: new Date().toISOString(),
-        });
+          portalUserId: ''
+        };
+
+        // Auto-create portal account in bulk
+        if (finalClient.status === 'Active') {
+          try {
+            const email = `member-${finalClient.memberId.toLowerCase()}@strike-member.local`;
+            const uid = await createFirebaseUser(email, '12345678');
+            const newUser: User = {
+              id: uid,
+              name: finalClient.name,
+              email,
+              role: 'client',
+              clientRecordId: finalClient.memberId,
+              phone: finalClient.phone || '',
+              mustChangePassword: true
+            };
+            await setDoc(doc(db, 'users', uid), newUser);
+            finalClient.portalUserId = uid;
+          } catch (authErr) {
+            console.error("Auto bulk portal account creation failed:", authErr);
+          }
+        }
+
+        batch.set(docRef, finalClient);
         operationCount++;
 
         if (operationCount === 500) {
@@ -215,6 +260,33 @@ export const useClients = (currentUser: User | null) => {
           updateData.memberId = await generateMemberId();
         }
       }
+
+      // Auto-create portal account on status update to Active
+      const existing = baseClients.find(c => c.id === id);
+      const isNowActive = updateData.status === 'Active' || (existing?.status === 'Active' && updateData.status === undefined);
+      const hasNoPortal = !existing?.portalUserId && !updateData.portalUserId;
+      const memberId = updateData.memberId || existing?.memberId;
+
+      if (isNowActive && hasNoPortal && memberId) {
+        try {
+          const email = `member-${memberId.toLowerCase()}@strike-member.local`;
+          const uid = await createFirebaseUser(email, '12345678');
+          const newUser: User = {
+            id: uid,
+            name: updateData.name || existing?.name || '',
+            email,
+            role: 'client',
+            clientRecordId: memberId,
+            phone: updateData.phone || existing?.phone || '',
+            mustChangePassword: true
+          };
+          await setDoc(doc(db, 'users', uid), newUser);
+          updateData.portalUserId = uid;
+        } catch (authErr) {
+          console.error("Auto portal account creation on status change failed:", authErr);
+        }
+      }
+
       await updateDoc(doc(db, 'clients', id), cleanData(updateData));
       const clientName = baseClients.find(c => c.id === id)?.name || id;
       addAuditLog('UPDATE', 'CLIENT', id, `Updated client/lead: ${clientName}`, currentUser?.name);
