@@ -106,8 +106,8 @@ export const useClients = (currentUser: User | null) => {
         createdAt: new Date().toISOString(),
       };
 
-      // Auto-create portal account if active
-      if (finalData.status === 'Active') {
+      // Auto-create portal account
+      if (finalData.memberId) {
         try {
           const email = `member-${finalData.memberId.toLowerCase()}@strike-member.local`;
           const uid = await createFirebaseUser(email, '12345678');
@@ -207,7 +207,7 @@ export const useClients = (currentUser: User | null) => {
         };
 
         // Auto-create portal account in bulk
-        if (finalClient.status === 'Active') {
+        if (finalClient.memberId) {
           try {
             const email = `member-${finalClient.memberId.toLowerCase()}@strike-member.local`;
             const uid = await createFirebaseUser(email, '12345678');
@@ -261,13 +261,12 @@ export const useClients = (currentUser: User | null) => {
         }
       }
 
-      // Auto-create portal account on status update to Active
+      // Auto-create portal account if they don't have one yet
       const existing = baseClients.find(c => c.id === id);
-      const isNowActive = updateData.status === 'Active' || (existing?.status === 'Active' && updateData.status === undefined);
       const hasNoPortal = !existing?.portalUserId && !updateData.portalUserId;
       const memberId = updateData.memberId || existing?.memberId;
 
-      if (isNowActive && hasNoPortal && memberId) {
+      if (hasNoPortal && memberId) {
         try {
           const email = `member-${memberId.toLowerCase()}@strike-member.local`;
           const uid = await createFirebaseUser(email, '12345678');
