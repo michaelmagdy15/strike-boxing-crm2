@@ -47,9 +47,10 @@ export const useCoaches = () => {
       // Auto create portal account if active
       if (coach.active) {
         try {
-          const firstName = (coach.name || '').split(' ')[0]?.replace(/[^a-zA-Z0-9]/g, '') || 'coach';
-          const email = `coach-${firstName.toLowerCase()}@strike-coach.local`;
           const coachId = await generateCoachId();
+          const coachNum = coachId.split('-')[1] || '000';
+          const firstName = (coach.name || '').split(' ')[0]?.replace(/[^a-zA-Z0-9]/g, '') || 'coach';
+          const email = `coach-${firstName.toLowerCase()}-${coachNum}@strike-coach.local`;
           const uid = await createFirebaseUser(email, '12345678');
 
           const newUser: User = {
@@ -84,10 +85,11 @@ export const useCoaches = () => {
 
       if (isNowActive && hasNoUser) {
         try {
+          const coachId = await generateCoachId();
+          const coachNum = coachId.split('-')[1] || '000';
           const coachName = updates.name || existing?.name || '';
           const firstName = coachName.split(' ')[0]?.replace(/[^a-zA-Z0-9]/g, '') || 'coach';
-          const email = `coach-${firstName.toLowerCase()}@strike-coach.local`;
-          const coachId = await generateCoachId();
+          const email = `coach-${firstName.toLowerCase()}-${coachNum}@strike-coach.local`;
           const uid = await createFirebaseUser(email, '12345678');
 
           const newUser: User = {

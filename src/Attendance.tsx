@@ -150,6 +150,8 @@ export default function Attendance({ isKiosk = false }: { isKiosk?: boolean }) {
     if (!lastScannedMember || isRecording) return;
     
     setIsRecording(true);
+    setError(null);
+    setSuccessMessage(null);
     try {
       await recordAttendance(lastScannedMember.id, selectedBranch);
       setSuccessMessage(`Attendance recorded for ${lastScannedMember.name}!`);
@@ -157,8 +159,8 @@ export default function Attendance({ isKiosk = false }: { isKiosk?: boolean }) {
         setLastScannedMember(null);
         setSuccessMessage(null);
       }, 3000);
-    } catch (err) {
-      setError("Failed to record attendance. Please try again.");
+    } catch (err: any) {
+      setError(err instanceof Error ? err.message : "Failed to record attendance. Please try again.");
     } finally {
       setIsRecording(false);
     }

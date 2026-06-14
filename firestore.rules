@@ -54,6 +54,25 @@ service cloud.firestore {
       );
     }
 
+    function isStrikeStaff() {
+      return isStrikeAdmin() || (userExists() && getUserRole() in ['rep', 'sales_rep', 'coach']);
+    }
+
+    function isOwnClientRecord(clientId) {
+      return isAuthenticated() && (
+        (resource != null && resource.data.portalUserId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/clients/$(clientId)) && 
+         get(/databases/$(database)/documents/clients/$(clientId)).data.portalUserId == request.auth.uid)
+      );
+    }
+
+    function isSafeClientSelfEdit() {
+      let allowed = ['name', 'phone', 'portalUserId'];
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed) &&
+             (!('portalUserId' in request.resource.data) || request.resource.data.portalUserId == request.auth.uid) &&
+             (!('portalUserId' in resource.data) || resource.data.portalUserId == request.auth.uid);
+    }
+
     function canStrikeDeletePayments() {
       return isAuthenticated() && (
         request.auth.token.email in ["michaelmitry13@gmail.com", "magd.gallab@gmail.com", "admin@strike.eg"] ||
@@ -289,18 +308,21 @@ service cloud.firestore {
     // ===============================================================
 
     match /{path=**}/comments/{commentId} {
-      allow read, create: if isAuthenticated();
+      allow read, create: if isStrikeStaff() || isMatchAdmin();
       allow delete: if isStrikeAdmin() || isMatchAdmin();
+    }
+
+    match /clients/{clientId}/comments/{commentId} {
+      allow read, write: if isStrikeStaff();
     }
 
     match /clients/{clientId}/interactions/{interactionId} {
-      allow read, create: if isAuthenticated();
-      allow delete: if isStrikeAdmin() || isMatchAdmin();
+      allow read, write: if isStrikeStaff();
     }
 
     match /attendance/{attendanceId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isValidAttendance(request.resource.data);
+      allow read: if isStrikeStaff() || (isAuthenticated() && resource.data.clientId != null && isOwnClientRecord(resource.data.clientId));
+      allow write: if isStrikeStaff() && isValidAttendance(request.resource.data);
     }
 
     // ===============================================================
@@ -309,8 +331,8 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if true;
-      allow create: if isOwner(userId) || isStrikeAdmin();
-      allow update: if isOwner(userId) || isStrikeAdmin();
+      allow create: if isStrikeAdmin() || (isOwner(userId) && request.resource.data.role in ['client', 'coach']);
+      allow update: if isStrikeAdmin() || (isOwner(userId) && isSafeUserSelfEdit());
       allow delete: if isStrikeSuperAdmin();
     }
 
@@ -334,7 +356,7 @@ service cloud.firestore {
     }
 
     match /settings/{settingId} {
-      allow read: if settingId == 'branding' || canStrikeAccessSettings();
+      allow read: if (settingId == 'branding' && isAuthenticated()) || canStrikeAccessSettings();
       allow write: if canStrikeAccessSettings() && (settingId != 'branding' || isValidBranding(request.resource.data));
     }
 
@@ -345,9 +367,13 @@ service cloud.firestore {
     }
 
     match /clients/{clientId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidClient(request.resource.data);
-      allow update: if isAuthenticated();
+      allow get: if isStrikeStaff() || isOwnClientRecord(clientId);
+      allow list: if isStrikeStaff() || (isAuthenticated() && (
+        resource.data.portalUserId == request.auth.uid ||
+        resource.data.memberId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clientRecordId
+      ));
+      allow create: if isStrikeStaff() || (isAuthenticated() && request.resource.data.portalUserId == request.auth.uid);
+      allow update: if isStrikeStaff() || (isOwnClientRecord(clientId) && isSafeClientSelfEdit());
       allow delete: if isStrikeAdmin();
     }
 
@@ -367,13 +393,20 @@ service cloud.firestore {
     }
 
     match /sessions/{sessionId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
+      allow read: if isStrikeStaff() || (isAuthenticated() && resource.data.clientId != null && isOwnClientRecord(resource.data.clientId));
+      allow create: if isStrikeStaff() || (isAuthenticated() && request.resource.data.clientId != null && isOwnClientRecord(request.resource.data.clientId));
+      allow update: if isStrikeStaff() || (
+        isAuthenticated() && resource.data.clientId != null && isOwnClientRecord(resource.data.clientId) &&
+        request.resource.data.clientId == resource.data.clientId
+      );
       allow delete: if isStrikeAdmin();
     }
 
     match /tasks/{taskId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isStrikeStaff() || (isAuthenticated() && (resource.data.clientId != null && isOwnClientRecord(resource.data.clientId) || resource.data.assignedTo == request.auth.uid));
+      allow create: if isAuthenticated();
+      allow update: if isStrikeStaff() || (isAuthenticated() && resource.data.clientId != null && isOwnClientRecord(resource.data.clientId));
+      allow delete: if isStrikeAdmin();
     }
 
     match /counters/{counterId} {
@@ -382,6 +415,45 @@ service cloud.firestore {
 
     match /importBatches/{batchId} {
       allow read, write: if isStrikeAdmin();
+    }
+
+    match /juiceBarOrders/{orderId} {
+      allow read: if isStrikeStaff() || (isAuthenticated() && resource.data.clientId != null && isOwnClientRecord(resource.data.clientId));
+      allow create: if isAuthenticated() && request.resource.data.clientId != null && isOwnClientRecord(request.resource.data.clientId);
+      allow update: if isStrikeStaff() || (
+        isAuthenticated() && resource.data.clientId != null && isOwnClientRecord(resource.data.clientId) &&
+        request.resource.data.status == 'Cancelled' &&
+        resource.data.status == 'Pending'
+      );
+      allow delete: if isStrikeAdmin();
+    }
+
+    match /lockers/{lockerId} {
+      allow read: if isStrikeStaff() || (isAuthenticated() && resource.data.assignedTo != null && isOwnClientRecord(resource.data.assignedTo));
+      allow write: if isStrikeStaff();
+    }
+
+    match /lockerRequests/{requestId} {
+      allow read: if isStrikeStaff() || (isAuthenticated() && resource.data.clientId != null && isOwnClientRecord(resource.data.clientId));
+      allow create: if isAuthenticated() && request.resource.data.clientId != null && isOwnClientRecord(request.resource.data.clientId);
+      allow update, delete: if isStrikeStaff();
+    }
+
+    match /guestInvites/{inviteId} {
+      allow read: if isStrikeStaff() || (isAuthenticated() && resource.data.hostId != null && isOwnClientRecord(resource.data.hostId));
+      allow create: if isAuthenticated() && request.resource.data.hostId != null && isOwnClientRecord(request.resource.data.hostId);
+      allow update, delete: if isStrikeStaff();
+    }
+
+    match /clientPerformance/{performanceId} {
+      allow read: if isStrikeStaff() || (isAuthenticated() && resource.data.clientId != null && isOwnClientRecord(resource.data.clientId));
+      allow write: if isStrikeStaff();
+    }
+
+    match /subscriptionRequests/{requestId} {
+      allow read: if isStrikeStaff() || (isAuthenticated() && resource.data.clientId != null && isOwnClientRecord(resource.data.clientId));
+      allow create: if isAuthenticated() && request.resource.data.clientId != null && isOwnClientRecord(request.resource.data.clientId);
+      allow update, delete: if isStrikeStaff();
     }
 
     match /pendingAccounts/{docId} {
@@ -399,60 +471,61 @@ service cloud.firestore {
     // ===============================================================
 
     match /match_users/{userId} {
-      allow read, write: if true;
+      allow read, write: if isMatchAdmin() || isOwner(userId);
     }
 
     match /match_profiles/{profileId} {
-      allow read, write: if true;
+      allow read, write: if isMatchAdmin() || isOwner(profileId);
     }
 
     match /match_clients/{clientId} {
-      allow read, write: if true;
+      allow read, write: if isMatchAdmin();
     }
 
     match /match_matches/{matchId} {
-      allow read, write: if true;
+      allow read, write: if isMatchAdmin();
     }
 
     match /{path=**}/match_comments/{commentId} {
-      allow read, write: if true;
+      allow read, write: if isMatchAdmin();
     }
 
     match /{path=**}/match_interactions/{interactionId} {
-      allow read, write: if true;
+      allow read, write: if isMatchAdmin();
     }
 
     match /match_tasks/{taskId} {
-      allow read, write: if true;
+      allow read, write: if isMatchAdmin();
     }
 
     // Match both camelCase and snake_case versions
     match /match_audit_logs/{logId} {
-      allow read, write: if true;
+      allow read, write: if isMatchAdmin();
     }
 
     match /match_auditLogs/{logId} {
-      allow read, write: if true;
+      allow read, write: if isMatchAdmin();
     }
 
     match /match_importBatches/{batchId} {
-      allow read, write: if true;
+      allow read, write: if isMatchAdmin();
     }
 
     match /match_counters/{counterId} {
-      allow read, write: if true;
+      allow read, write: if isMatchAdmin();
     }
 
     match /match_favorites/{favId} {
-      allow read, write: if true;
+      allow read, write: if isMatchAdmin() || isAuthenticated();
     }
 
     match /match_announcements/{annId} {
-      allow read, write: if true;
+      allow read: if isAuthenticated();
+      allow write: if isMatchAdmin();
     }
 
     match /match_messages/{msgId} {
-      allow read, write: if true;
+      allow read, write: if isMatchAdmin() || isAuthenticated();
     }
 
 
@@ -462,17 +535,17 @@ service cloud.firestore {
 
     // Common root models for ATPL Vector
     match /profiles/{userId} {
-      allow read: if isOwner(userId) || isAtplAdmin() || request.auth == null;
-      allow create: if (isOwner(userId) && (!('is_admin' in request.resource.data) || request.resource.data.is_admin == false)) || request.auth == null;
-      allow update: if (isOwner(userId) && (!('is_admin' in request.resource.data) || request.resource.data.is_admin == resource.data.is_admin)) || isAtplAdmin() || request.auth == null;
-      allow delete: if isAtplAdmin() || request.auth == null;
+      allow read: if isOwner(userId) || isAtplAdmin();
+      allow create: if (isOwner(userId) && (!('is_admin' in request.resource.data) || request.resource.data.is_admin == false));
+      allow update: if (isOwner(userId) && (!('is_admin' in request.resource.data) || request.resource.data.is_admin == resource.data.is_admin)) || isAtplAdmin();
+      allow delete: if isAtplAdmin();
     }
     
     match /subscriptions/{subscriptionId} {
-      allow read: if isOwner(subscriptionId) || isAtplAdmin() || request.auth == null;
-      allow create: if (isOwner(subscriptionId) && (!('plan' in request.resource.data) || (request.resource.data.plan != 'PRO' && request.resource.data.plan != 'PREMIUM'))) || request.auth == null;
-      allow update: if (isOwner(subscriptionId) && (!('plan' in request.resource.data) || request.resource.data.plan == resource.data.plan || (request.resource.data.plan != 'PRO' && request.resource.data.plan != 'PREMIUM'))) || isAtplAdmin() || request.auth == null;
-      allow delete: if isAtplAdmin() || request.auth == null;
+      allow read: if isOwner(subscriptionId) || isAtplAdmin();
+      allow create: if (isOwner(subscriptionId) && (!('plan' in request.resource.data) || (request.resource.data.plan != 'PRO' && request.resource.data.plan != 'PREMIUM')));
+      allow update: if (isOwner(subscriptionId) && (!('plan' in request.resource.data) || request.resource.data.plan == resource.data.plan || (request.resource.data.plan != 'PRO' && request.resource.data.plan != 'PREMIUM'))) || isAtplAdmin();
+      allow delete: if isAtplAdmin();
     }
 
     match /interactions/{interactionId} {
@@ -483,57 +556,58 @@ service cloud.firestore {
 
     // Prefixed collections
     match /atpl_profiles/{userId} {
-      allow read: if isOwner(userId) || isAtplAdmin() || request.auth == null;
-      allow create: if (isOwner(userId) && (!('is_admin' in request.resource.data) || request.resource.data.is_admin == false)) || request.auth == null;
-      allow update: if (isOwner(userId) && (!('is_admin' in request.resource.data) || request.resource.data.is_admin == resource.data.is_admin)) || isAtplAdmin() || request.auth == null;
-      allow delete: if isAtplAdmin() || request.auth == null;
+      allow read: if isOwner(userId) || isAtplAdmin();
+      allow create: if (isOwner(userId) && (!('is_admin' in request.resource.data) || request.resource.data.is_admin == false));
+      allow update: if (isOwner(userId) && (!('is_admin' in request.resource.data) || request.resource.data.is_admin == resource.data.is_admin)) || isAtplAdmin();
+      allow delete: if isAtplAdmin();
     }
     
     match /atpl_subscriptions/{subscriptionId} {
-      allow read: if isOwner(subscriptionId) || isAtplAdmin() || request.auth == null;
-      allow create: if (isOwner(subscriptionId) && (!('plan' in request.resource.data) || (request.resource.data.plan != 'PRO' && request.resource.data.plan != 'PREMIUM'))) || request.auth == null;
-      allow update: if (isOwner(subscriptionId) && (!('plan' in request.resource.data) || request.resource.data.plan == resource.data.plan || (request.resource.data.plan != 'PRO' && request.resource.data.plan != 'PREMIUM'))) || isAtplAdmin() || request.auth == null;
-      allow delete: if isAtplAdmin() || request.auth == null;
+      allow read: if isOwner(subscriptionId) || isAtplAdmin();
+      allow create: if (isOwner(subscriptionId) && (!('plan' in request.resource.data) || (request.resource.data.plan != 'PRO' && request.resource.data.plan != 'PREMIUM')));
+      allow update: if (isOwner(subscriptionId) && (!('plan' in request.resource.data) || request.resource.data.plan == resource.data.plan || (request.resource.data.plan != 'PRO' && request.resource.data.plan != 'PREMIUM'))) || isAtplAdmin();
+      allow delete: if isAtplAdmin();
     }
 
     match /atpl_counters/{counterId} {
-      allow read: if isAuthenticated() || request.auth == null;
-      allow write: if isAtplAdmin() || request.auth == null;
+      allow read: if isAuthenticated();
+      allow write: if isAtplAdmin();
     }
 
     match /atpl_interactions/{interactionId} {
-      allow read: if isOwner(resource.data.userId) || isAtplAdmin() || request.auth == null;
-      allow create: if isOwner(request.resource.data.userId) || request.auth == null;
-      allow update, delete: if isOwner(resource.data.userId) || isAtplAdmin() || request.auth == null;
+      allow read: if isOwner(resource.data.userId) || isAtplAdmin();
+      allow create: if isOwner(request.resource.data.userId);
+      allow update, delete: if isOwner(resource.data.userId) || isAtplAdmin();
     }
     
     match /atpl_settings/{settingId} {
-      allow read: if isAuthenticated() || request.auth == null;
-      allow write: if isAtplAdmin() || request.auth == null;
+      allow read: if isAuthenticated();
+      allow write: if isAtplAdmin();
     }
 
     match /atpl_packages/{packageId} {
-      allow read: if isAuthenticated() || request.auth == null;
-      allow write: if isAtplAdmin() || request.auth == null;
+      allow read: if isAuthenticated();
+      allow write: if isAtplAdmin();
     }
     
     match /atpl_tasks/{taskId} {
-      allow read: if isAuthenticated() || request.auth == null;
-      allow write: if isAtplAdmin() || request.auth == null;
+      allow read: if isAuthenticated();
+      allow write: if isAtplAdmin();
     }
 
     match /atpl_testimonials/{testimonialId} {
       allow read: if true;
-      allow write: if request.auth == null || isAuthenticated() || isAtplAdmin();
+      allow write: if isAuthenticated() || isAtplAdmin();
     }
 
     match /atpl_access_codes/{codeId} {
-      allow read, write: if true;
+      allow get: if isAuthenticated();
+      allow list, write: if isAtplAdmin();
     }
 
     match /atpl_flashcards/{cardId} {
       allow read: if true;
-      allow write: if request.auth == null || isAuthenticated() || isAtplAdmin();
+      allow write: if isAtplAdmin();
     }
 
     // ===============================================================
