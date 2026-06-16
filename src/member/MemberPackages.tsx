@@ -2,11 +2,12 @@ import React from 'react';
 import { Client } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { format, parseISO, differenceInDays } from 'date-fns';
-import { Calendar, CheckCircle2, AlertTriangle, PlayCircle, PauseCircle, Package } from 'lucide-react';
+import { Calendar, CheckCircle2, AlertTriangle, PlayCircle, PauseCircle, Package, ShoppingBag } from 'lucide-react';
 
-export default function MemberPackages({ client }: { client: Client | null }) {
+export default function MemberPackages({ client, onSwitchToStore }: { client: Client | null, onSwitchToStore?: () => void }) {
   if (!client) return null;
 
   const packages = client.packages || [];
@@ -166,11 +167,32 @@ export default function MemberPackages({ client }: { client: Client | null }) {
           <Package className="h-4 w-4 text-primary" /> Active Subscriptions
         </h3>
         {activePkgs.length > 0 ? (
-          activePkgs.map(renderPackageCard)
+          <div className="space-y-3">
+            {activePkgs.map(renderPackageCard)}
+            {onSwitchToStore && (
+              <Button 
+                onClick={onSwitchToStore}
+                variant="outline" 
+                className="w-full border-dashed border-primary/30 text-primary hover:bg-primary/5 flex items-center justify-center gap-2 h-11 rounded-xl text-xs font-bold uppercase tracking-wider"
+              >
+                <ShoppingBag className="h-4 w-4" /> Buy Another Session Package
+              </Button>
+            )}
+          </div>
         ) : (
           <Card className="border-dashed bg-muted/20">
-            <CardContent className="py-8 text-center text-muted-foreground text-xs italic">
-              No active packages found. Speak to our staff to purchase or renew a subscription.
+            <CardContent className="py-8 flex flex-col items-center gap-4 text-center">
+              <p className="text-muted-foreground text-xs italic">
+                No active packages found. Purchase or renew a package online or at the branch.
+              </p>
+              {onSwitchToStore && (
+                <Button 
+                  onClick={onSwitchToStore}
+                  className="bg-primary text-primary-foreground font-extrabold uppercase tracking-wider rounded-xl h-10 px-6 text-xs flex items-center gap-2 shadow-md shadow-primary/10"
+                >
+                  <ShoppingBag className="h-4 w-4" /> Shop Session Packages
+                </Button>
+              )}
             </CardContent>
           </Card>
         )}

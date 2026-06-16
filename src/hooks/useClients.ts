@@ -16,8 +16,10 @@ import { Client, CRMComment, InteractionLog, User } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandler';
 import { cleanData } from '../utils';
 import { addAuditLog } from '../services/auditService';
+import { useAuth } from '../contexts/AuthContext';
 
 export const useClients = (currentUser: User | null) => {
+  const { effectiveRole } = useAuth();
   const [baseClients, setBaseClients] = useState<Omit<Client, 'comments' | 'interactions'>[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -31,6 +33,11 @@ export const useClients = (currentUser: User | null) => {
 
   useEffect(() => {
     if (!currentUser) return;
+    // Members can only read their own client record — skip the global listener
+    if (effectiveRole === 'client' || effectiveRole === 'coach') {
+      setLoading(false);
+      return;
+    }
 
     const unsubClients = onSnapshot(
       collection(db, 'clients'),
@@ -47,7 +54,7 @@ export const useClients = (currentUser: User | null) => {
     );
 
     return () => unsubClients();
-  }, [currentUser]);
+  }, [currentUser, effectiveRole]);
 
   const fetchClientDetails = async (clientId: string) => {
     try {

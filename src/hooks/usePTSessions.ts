@@ -5,13 +5,20 @@ import { PTPackageRecord, Client, User } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandler';
 import { cleanData } from '../utils';
 import { addAuditLog } from '../services/auditService';
+import { useAuth } from '../contexts/AuthContext';
 
 export const usePTSessions = (currentUser: User | null, clients: Client[]) => {
+  const { effectiveRole } = useAuth();
   const [ptPackageRecords, setPTPackageRecords] = useState<PTPackageRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!currentUser) return;
+    // Members can't list all sessions — skip the global listener
+    if (effectiveRole === 'client' || effectiveRole === 'coach') {
+      setLoading(false);
+      return;
+    }
     const unsub = onSnapshot(
       collection(db, 'sessions'),
       (snapshot) => {
@@ -24,7 +31,7 @@ export const usePTSessions = (currentUser: User | null, clients: Client[]) => {
       }
     );
     return () => unsub();
-  }, [currentUser]);
+  }, [currentUser, effectiveRole]);
 
   const addPTPackageRecord = async (session: Omit<PTPackageRecord, 'id'>) => {
     try {

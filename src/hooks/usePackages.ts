@@ -9,13 +9,18 @@ import { PACKAGES } from '../constants';
 import { useAuth } from '../contexts/AuthContext';
 
 export const usePackages = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, effectiveRole } = useAuth();
   const [packages, setPackages] = useState<Package[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!currentUser) {
       setPackages([]);
+      setLoading(false);
+      return;
+    }
+    // Members/coaches can't list all packages — skip the global listener
+    if (effectiveRole === 'client' || effectiveRole === 'coach') {
       setLoading(false);
       return;
     }
@@ -27,7 +32,7 @@ export const usePackages = () => {
       setLoading(false);
     });
     return () => unsub();
-  }, [currentUser]);
+  }, [currentUser, effectiveRole]);
 
   const addPackage = async (pkg: Omit<Package, 'id'>) => {
     try {

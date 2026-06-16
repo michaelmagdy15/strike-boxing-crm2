@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '../contexts/AuthContext';
-import { useAppContext } from '../context';
 import { CheckCircle2, Eye, EyeOff, Dumbbell, Flame, Target, Activity, Key, Phone, Mail, ShieldAlert } from 'lucide-react';
 import { addDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -18,7 +17,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 export default function Checkout({ open, onOpenChange }: { open: boolean, onOpenChange: (open: boolean) => void }) {
   const { items, totalPrice, clearCart } = useCart();
   const { currentUser, loginWithEmail, loginWithMemberId, registerFreeUser } = useAuth();
-  const { addTask } = useAppContext();
 
   // Dialog Navigation steps
   // If not logged in, we start at 'auth'. Otherwise, we go straight to 'details' or 'payment'.
@@ -33,22 +31,10 @@ export default function Checkout({ open, onOpenChange }: { open: boolean, onOpen
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Registration form states
-  const [signupStep, setSignupStep] = useState(1);
   const [regName, setRegName] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
-  
-  const [regAge, setRegAge] = useState('');
-  const [regGender, setRegGender] = useState('Prefer not to say');
-  const [regHeight, setRegHeight] = useState('');
-  const [regWeight, setRegWeight] = useState('');
-  const [regActivityLevel, setRegActivityLevel] = useState('Moderately Active');
-  
-  const [regWorkoutTimes, setRegWorkoutTimes] = useState<string[]>([]);
-  const [regFitnessTarget, setRegFitnessTarget] = useState('Improve Lifestyle');
-
-  const timeOptions = ['Morning', 'Afternoon', 'Evening', 'Late Night'];
 
   // Purchase details form state
   const [name, setName] = useState('');
@@ -56,6 +42,7 @@ export default function Checkout({ open, onOpenChange }: { open: boolean, onOpen
   const [email, setEmail] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'Instapay' | 'Cash'>('Cash');
   const [instapayRef, setInstapayRef] = useState('');
+  const [clientDocId, setClientDocId] = useState<string | null>(null);
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -76,15 +63,21 @@ export default function Checkout({ open, onOpenChange }: { open: boolean, onOpen
     if (currentUser) {
       setName(currentUser.name || '');
       setEmail(currentUser.email || '');
+      if (currentUser.clientDocId) {
+        setClientDocId(currentUser.clientDocId);
+      }
       if (currentUser.clientRecordId) {
         const q = query(collection(db, 'clients'), where('memberId', '==', currentUser.clientRecordId.trim()));
         getDocs(q).then(snap => {
-          if (!snap.empty) {
+          if (!snap.empty && snap.docs[0]) {
             const clientData = snap.docs[0].data();
             if (clientData.phone) setPhone(clientData.phone);
+            setClientDocId(snap.docs[0].id);
           }
         }).catch(err => console.error("Error fetching client phone:", err));
       }
+    } else {
+      setClientDocId(null);
     }
   }, [currentUser]);
 
@@ -108,23 +101,10 @@ export default function Checkout({ open, onOpenChange }: { open: boolean, onOpen
     }
   };
 
-  const handleRegisterNext = () => {
-    if (signupStep === 1 && (!regName || !regPhone || !regEmail || !regPassword)) {
-      setError('Please fill in all basic registration details.');
-      return;
-    }
-    if (signupStep === 2 && (!regAge || !regHeight || !regWeight)) {
-      setError('Please fill in your metrics to help our AI Coach.');
-      return;
-    }
-    setError('');
-    setSignupStep(s => s + 1);
-  };
-
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (regWorkoutTimes.length === 0) {
-      setError('Please select at least one preferred workout time.');
+    if (!regName || !regPhone || !regEmail || !regPassword) {
+      setError('Please fill in all registration details.');
       return;
     }
     setIsLoading(true);
@@ -133,13 +113,6 @@ export default function Checkout({ open, onOpenChange }: { open: boolean, onOpen
       await registerFreeUser(regEmail, regPassword, {
         name: regName,
         phone: regPhone,
-        age: regAge,
-        gender: regGender,
-        height: Number(regHeight),
-        weight: Number(regWeight),
-        activityLevel: regActivityLevel,
-        workoutTimes: regWorkoutTimes,
-        fitnessTarget: regFitnessTarget
       });
       // Success: Auto-logged in, will advance to 'details' step
     } catch (err: any) {
@@ -147,12 +120,6 @@ export default function Checkout({ open, onOpenChange }: { open: boolean, onOpen
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const toggleWorkoutTime = (time: string) => {
-    setRegWorkoutTimes(prev => 
-      prev.includes(time) ? prev.filter(t => t !== time) : [...prev, time]
-    );
   };
 
   const handleDetailsSubmit = () => {
@@ -174,62 +141,69 @@ export default function Checkout({ open, onOpenChange }: { open: boolean, onOpen
     setError('');
 
     try {
-      const clientId = currentUser?.clientRecordId || 'GUEST-LEAD';
+      const clientId = clientDocId || currentUser?.clientDocId || currentUser?.clientRecordId || 'GUEST-LEAD';
       const description = items.map(i => `${i.quantity}x ${i.pkg.name}`).join('\n') + 
         `\n\nPayment Method: ${paymentMethod}` + 
         (paymentMethod === 'Instapay' ? `\nInstapay Ref: ${instapayRef}` : '');
 
-      // Create a pending purchase task in CRM
-      await addTask({
+      // Create a pending purchase task directly in Firestore (bypass context hook to avoid member permission issues)
+      await addDoc(collection(db, 'tasks'), {
         title: `Package Purchase Request: ${name}`,
         description,
         dueDate: new Date().toISOString(),
         status: 'Pending',
         priority: 'High',
         clientId,
-        assignedTo: '', // Unassigned general rep task
+        assignedTo: '',
+        createdBy: currentUser?.id || 'guest',
+        createdAt: new Date().toISOString(),
       });
 
       // Send confirmation email via Firestore trigger
       const buyerEmail = email || regEmail;
       if (buyerEmail) {
-        await addDoc(collection(db, 'mail'), {
-          to: buyerEmail,
-          message: {
-            subject: "Your STRIKE Session Request Received",
-            from: "info@strike-egy.com",
-            html: `
-              <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: auto; background-color: #ffffff; border: 1px solid #e5e5e5; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-                <div style="background-color: #000000; padding: 30px; text-align: center;">
-                  <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 900; letter-spacing: 2px;">STRIKE</h1>
-                  <p style="color: #a3a3a3; margin: 5px 0 0 0; font-size: 14px; letter-spacing: 1px; text-transform: uppercase;">Boxing Club</p>
-                </div>
-                <div style="padding: 40px 30px;">
-                  <h2 style="color: #000000; margin-top: 0; font-size: 22px;">Thank you for your request, ${name}!</h2>
-                  <p style="color: #555555; font-size: 16px; line-height: 1.6;">Your session request has been successfully received and is currently pending activation.</p>
-                  
-                  <div style="background-color: #f9f9f9; border-left: 4px solid #000000; padding: 20px; margin: 30px 0;">
-                    <h3 style="color: #000000; margin-top: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 1px;">Order Summary</h3>
-                    <p style="color: #333333; font-size: 15px; white-space: pre-wrap; margin-bottom: 0;">${description}</p>
+        try {
+          await addDoc(collection(db, 'mail'), {
+            to: buyerEmail,
+            message: {
+              subject: "Your STRIKE Session Request Received",
+              from: "info@strike-egy.com",
+              html: `
+                <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: auto; background-color: #ffffff; border: 1px solid #e5e5e5; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                  <div style="background-color: #000000; padding: 30px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 900; letter-spacing: 2px;">STRIKE</h1>
+                    <p style="color: #a3a3a3; margin: 5px 0 0 0; font-size: 14px; letter-spacing: 1px; text-transform: uppercase;">Boxing Club</p>
                   </div>
-                  
-                  <h3 style="color: #000000; font-size: 18px; margin-bottom: 10px;">Next Steps</h3>
-                  <ul style="color: #555555; font-size: 16px; line-height: 1.6; padding-left: 20px; margin-top: 0;">
-                    <li>Visit the branch to complete your payment on the spot.</li>
-                    <li>Your account will be instantly activated upon payment.</li>
-                    <li>You will receive your <strong>Member ID</strong> to log in and access all active member features in the app.</li>
-                  </ul>
-                  
-                  <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 40px 0 30px 0;" />
-                  <p style="color: #777777; font-size: 14px; margin: 0;">Stay sharp,<br/><strong style="color: #000000;">The STRIKE Team</strong></p>
+                  <div style="padding: 40px 30px;">
+                    <h2 style="color: #000000; margin-top: 0; font-size: 22px;">Thank you for your request, ${name}!</h2>
+                    <p style="color: #555555; font-size: 16px; line-height: 1.6;">Your session request has been successfully received and is currently pending activation.</p>
+                    
+                    <div style="background-color: #f9f9f9; border-left: 4px solid #000000; padding: 20px; margin: 30px 0;">
+                      <h3 style="color: #000000; margin-top: 0; font-size: 16px; text-transform: uppercase; letter-spacing: 1px;">Order Summary</h3>
+                      <p style="color: #333333; font-size: 15px; white-space: pre-wrap; margin-bottom: 0;">${description}</p>
+                    </div>
+                    
+                    <h3 style="color: #000000; font-size: 18px; margin-bottom: 10px;">Next Steps</h3>
+                    <ul style="color: #555555; font-size: 16px; line-height: 1.6; padding-left: 20px; margin-top: 0;">
+                      <li>Visit the branch to complete your payment on the spot.</li>
+                      <li>Your account will be instantly activated upon payment.</li>
+                      <li>You will receive your <strong>Member ID</strong> to log in and access all active member features in the app.</li>
+                    </ul>
+                    
+                    <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 40px 0 30px 0;" />
+                    <p style="color: #777777; font-size: 14px; margin: 0;">Stay sharp,<br/><strong style="color: #000000;">The STRIKE Team</strong></p>
+                  </div>
+                  <div style="background-color: #f5f5f5; padding: 20px; text-align: center; font-size: 12px; color: #999999;">
+                    <p style="margin: 0;">© ${new Date().getFullYear()} STRIKE Boxing Club. All rights reserved.</p>
+                  </div>
                 </div>
-                <div style="background-color: #f5f5f5; padding: 20px; text-align: center; font-size: 12px; color: #999999;">
-                  <p style="margin: 0;">© ${new Date().getFullYear()} STRIKE Boxing Club. All rights reserved.</p>
-                </div>
-              </div>
-            `
-          }
-        });
+              `
+            }
+          });
+        } catch (mailErr) {
+          // Email sending is non-critical — don't block checkout success
+          console.warn("Could not queue confirmation email:", mailErr);
+        }
       }
 
       setStep('success');
@@ -242,6 +216,7 @@ export default function Checkout({ open, onOpenChange }: { open: boolean, onOpen
     }
   };
 
+
   const resetAndClose = () => {
     onOpenChange(false);
     setTimeout(() => {
@@ -250,7 +225,6 @@ export default function Checkout({ open, onOpenChange }: { open: boolean, onOpen
       setPhone('');
       setEmail('');
       setInstapayRef('');
-      setSignupStep(1);
       setError('');
     }, 300);
   };
@@ -333,130 +307,28 @@ export default function Checkout({ open, onOpenChange }: { open: boolean, onOpen
             </TabsContent>
 
             <TabsContent value="register" className="pt-2">
-              <form onSubmit={signupStep === 3 ? handleRegisterSubmit : (e) => { e.preventDefault(); handleRegisterNext(); }} className="space-y-4">
-                {signupStep === 1 && (
-                  <div className="space-y-3 animate-in fade-in slide-in-from-right-4 duration-300">
-                    <div className="space-y-1.5">
-                      <Label>Full Name</Label>
-                      <Input value={regName} onChange={e => setRegName(e.target.value)} placeholder="John Doe" required />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Phone Number</Label>
-                      <Input type="tel" value={regPhone} onChange={e => setRegPhone(e.target.value)} placeholder="01XXXXXXXXX" required />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Email</Label>
-                      <Input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} placeholder="you@example.com" required />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Password</Label>
-                      <Input type="password" value={regPassword} onChange={e => setRegPassword(e.target.value)} placeholder="••••••••" required minLength={6} />
-                    </div>
-                    <Button type="submit" className="w-full mt-2">Next Step</Button>
+              <form onSubmit={handleRegisterSubmit} className="space-y-4">
+                <div className="space-y-3 animate-in fade-in slide-in-from-right-4 duration-300">
+                  <div className="space-y-1.5">
+                    <Label>Full Name</Label>
+                    <Input value={regName} onChange={e => setRegName(e.target.value)} placeholder="John Doe" required />
                   </div>
-                )}
-
-                {signupStep === 2 && (
-                  <div className="space-y-3 animate-in fade-in slide-in-from-right-4 duration-300">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <Label>Age</Label>
-                        <Input type="number" value={regAge} onChange={e => setRegAge(e.target.value)} placeholder="e.g. 25" required />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Gender</Label>
-                        <Select value={regGender} onValueChange={setRegGender}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Male">Male</SelectItem>
-                            <SelectItem value="Female">Female</SelectItem>
-                            <SelectItem value="Other">Other</SelectItem>
-                            <SelectItem value="Prefer not to say">Prefer not to say</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <Label>Height (cm)</Label>
-                        <Input type="number" value={regHeight} onChange={e => setRegHeight(e.target.value)} placeholder="175" required />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Weight (kg)</Label>
-                        <Input type="number" value={regWeight} onChange={e => setRegWeight(e.target.value)} placeholder="70" required />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label>Activity Level</Label>
-                      <Select value={regActivityLevel} onValueChange={setRegActivityLevel}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Sedentary">Sedentary (Office job)</SelectItem>
-                          <SelectItem value="Lightly Active">Lightly Active (1-3 days/week)</SelectItem>
-                          <SelectItem value="Moderately Active">Moderately Active (3-5 days/week)</SelectItem>
-                          <SelectItem value="Very Active">Very Active (6-7 days/week)</SelectItem>
-                          <SelectItem value="Extra Active">Extra Active (Athlete)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex gap-3 pt-2">
-                      <Button type="button" variant="outline" className="w-1/3" onClick={() => setSignupStep(1)}>Back</Button>
-                      <Button type="submit" className="w-2/3">Next Step</Button>
-                    </div>
+                  <div className="space-y-1.5">
+                    <Label>Phone Number</Label>
+                    <Input type="tel" value={regPhone} onChange={e => setRegPhone(e.target.value)} placeholder="01XXXXXXXXX" required />
                   </div>
-                )}
-
-                {signupStep === 3 && (
-                  <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                    <div className="space-y-2">
-                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Preferred Workout Times</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {timeOptions.map(time => (
-                          <div key={time} className={`flex items-center space-x-2 border rounded-md p-2.5 cursor-pointer transition-colors ${regWorkoutTimes.includes(time) ? 'border-primary bg-primary/5' : 'hover:bg-muted'}`} onClick={() => toggleWorkoutTime(time)}>
-                            <Checkbox checked={regWorkoutTimes.includes(time)} onCheckedChange={() => toggleWorkoutTime(time)} />
-                            <span className="text-xs font-medium">{time}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Primary Fitness Target</Label>
-                      <div className="space-y-2">
-                        {[
-                          { id: 'Weight Loss', icon: Flame, desc: 'Burn fat and lean out' },
-                          { id: 'Gain Muscle', icon: Dumbbell, desc: 'Build size and strength' },
-                          { id: 'Improve Lifestyle', icon: Activity, desc: 'Overall health & mobility' },
-                          { id: 'Maintenance', icon: Target, desc: 'Keep current shape' }
-                        ].map(target => (
-                          <div 
-                            key={target.id}
-                            onClick={() => setRegFitnessTarget(target.id)}
-                            className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all ${regFitnessTarget === target.id ? 'border-primary bg-primary/10' : 'hover:border-primary/50'}`}
-                          >
-                            <div className={`p-1.5 rounded-full ${regFitnessTarget === target.id ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                              <target.icon className="h-3.5 w-3.5" />
-                            </div>
-                            <div className="flex-1">
-                              <p className="font-semibold text-xs">{target.id}</p>
-                              <p className="text-[10px] text-muted-foreground">{target.desc}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex gap-3 pt-2">
-                      <Button type="button" variant="outline" className="w-1/3" onClick={() => setSignupStep(2)}>Back</Button>
-                      <Button type="submit" className="w-2/3 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/95 hover:to-blue-600/95 text-white" disabled={isLoading}>
-                        {isLoading ? 'Creating...' : 'Register & Checkout'}
-                      </Button>
-                    </div>
+                  <div className="space-y-1.5">
+                    <Label>Email</Label>
+                    <Input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} placeholder="you@example.com" required />
                   </div>
-                )}
+                  <div className="space-y-1.5">
+                    <Label>Password</Label>
+                    <Input type="password" value={regPassword} onChange={e => setRegPassword(e.target.value)} placeholder="••••••••" required minLength={6} />
+                  </div>
+                  <Button type="submit" className="w-full mt-4 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/95 hover:to-blue-600/95 text-white" disabled={isLoading}>
+                    {isLoading ? 'Creating...' : 'Register & Checkout'}
+                  </Button>
+                </div>
               </form>
             </TabsContent>
           </Tabs>
@@ -502,7 +374,7 @@ export default function Checkout({ open, onOpenChange }: { open: boolean, onOpen
 
             <div className="space-y-2">
               <Label>Select Payment Method</Label>
-              <Select value={paymentMethod} onValueChange={(v: 'Instapay' | 'Cash') => setPaymentMethod(v)}>
+              <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v === 'Instapay' ? 'Instapay' : 'Cash')}>
                 <SelectTrigger className="h-12 rounded-xl">
                   <SelectValue />
                 </SelectTrigger>

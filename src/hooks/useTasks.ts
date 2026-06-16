@@ -18,6 +18,11 @@ export const useTasks = () => {
       setLoading(false);
       return;
     }
+    // Members can't list all tasks — skip the global listener
+    if (effectiveRole === 'client' || effectiveRole === 'coach') {
+      setLoading(false);
+      return;
+    }
     const unsub = onSnapshot(collection(db, 'tasks'), (snapshot) => {
       setTasks(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Task)));
       setLoading(false);
@@ -26,7 +31,7 @@ export const useTasks = () => {
       setLoading(false);
     });
     return () => unsub();
-  }, [currentUser]);
+  }, [currentUser, effectiveRole]);
 
   const visibleTasks = useMemo(() => {
     if (!currentUser) return [];

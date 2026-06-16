@@ -50,7 +50,6 @@ import { processPaymentTransaction, PaymentTransactionParams } from './services/
 export interface AppContextType {
   currentUser: User | null;
   users: User[];
-  login: () => Promise<void>;
   logout: () => Promise<void>;
   clients: Client[];
   loadingClients: boolean;
@@ -131,7 +130,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     effectiveRole, 
     previewRole, 
     setPreviewRole, 
-    login, 
     logout, 
     updateUser, 
     deleteUser, 
@@ -484,7 +482,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const contextValue = useMemo<AppContextType>(() => ({
     currentUser: currentUser ? { ...currentUser, role: effectiveRole as any } : null,
     users,
-    login,
     logout,
     clients: visibleClients,
     loadingClients,

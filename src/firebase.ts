@@ -1,8 +1,6 @@
 import { initializeApp, deleteApp } from 'firebase/app';
 import {
   getAuth,
-  GoogleAuthProvider,
-  signInWithPopup,
   signOut,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -22,18 +20,7 @@ export const db = initializeFirestore(app, {
   })
 }, (firebaseConfig as any).firestoreDatabaseId);
 
-export const googleProvider = new GoogleAuthProvider();
 export const storage = getStorage(app);
-
-export const signInWithGoogle = async () => {
-  try {
-    const result = await signInWithPopup(auth, googleProvider);
-    return result.user;
-  } catch (error) {
-    console.error("Error signing in with Google", error);
-    throw error;
-  }
-};
 
 export const signInWithEmail = async (email: string, password: string) => {
   return signInWithEmailAndPassword(auth, email, password);

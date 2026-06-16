@@ -5,13 +5,20 @@ import { Attendance, Branch, Client, User } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandler';
 import { addAuditLog } from '../services/auditService';
 import { isBefore, parseISO, startOfDay } from 'date-fns';
+import { useAuth } from '../contexts/AuthContext';
 
 export const useAttendance = (currentUser: User | null, clients: Client[]) => {
+  const { effectiveRole } = useAuth();
   const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!currentUser) return;
+    // Members can't list all attendance — skip the global listener
+    if (effectiveRole === 'client' || effectiveRole === 'coach') {
+      setLoading(false);
+      return;
+    }
     const unsub = onSnapshot(
       query(collection(db, 'attendance'), orderBy('date', 'desc')),
       (snapshot) => {
@@ -24,7 +31,7 @@ export const useAttendance = (currentUser: User | null, clients: Client[]) => {
       }
     );
     return () => unsub();
-  }, [currentUser]);
+  }, [currentUser, effectiveRole]);
 
   const recordAttendance = async (clientId: string, branch: Branch) => {
     if (!currentUser) return;

@@ -5,9 +5,9 @@ import { useTheme } from '../contexts/ThemeContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { QrCode, Lock, Globe, UserPlus, User, LogOut, Sun, Moon, Calendar, Users, History, TrendingUp, Package } from 'lucide-react';
+import { QrCode, Lock, Globe, UserPlus, User, LogOut, Sun, Moon, Calendar, Users, History, TrendingUp, Package, ShoppingBag } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, doc, documentId } from 'firebase/firestore';
+import { collection, query, where, doc, documentId, getDoc, getDocs } from 'firebase/firestore';
 import { Client } from '../types';
 
 import MemberHome from './MemberHome';
@@ -22,6 +22,7 @@ import MemberLocker from './MemberLocker';
 import MemberJuiceBar from './MemberJuiceBar';
 import MemberInvites from './MemberInvites';
 import GuestPortal from './GuestPortal';
+import CartDrawer from './CartDrawer';
 
 type MemberTab = 'home' | 'booking' | 'juicebar' | 'locker' | 'invites' | 'profile';
 
@@ -37,9 +38,10 @@ const NAV_ITEMS: { tab: MemberTab; label: string; icon: React.ReactNode }[] = [
 interface MemberPortalProps {
   isGuest?: boolean;
   onSwitchToCRM?: () => void;
+  onSwitchToStore?: () => void;
 }
 
-export default function MemberPortal({ isGuest = false, onSwitchToCRM }: MemberPortalProps = {}) {
+export default function MemberPortal({ isGuest = false, onSwitchToCRM, onSwitchToStore }: MemberPortalProps = {}) {
   const { currentUser, logout } = useAuth();
   const { branding } = useSettings();
   const { theme, toggleTheme } = useTheme();
@@ -55,7 +57,7 @@ export default function MemberPortal({ isGuest = false, onSwitchToCRM }: MemberP
   const [bookingSubTab, setBookingSubTab] = useState<'pt' | 'group'>('pt');
   const [profileSubTab, setProfileSubTab] = useState<'settings' | 'progress' | 'membership' | 'attendance'>('settings');
 
-  // 1. Subscribe to primary client record
+  // 1. Fetch primary client record
   useEffect(() => {
     if (!currentUser?.clientRecordId) {
       setLoading(false);
@@ -67,43 +69,43 @@ export default function MemberPortal({ isGuest = false, onSwitchToCRM }: MemberP
       where('memberId', '==', currentUser.clientRecordId.trim())
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty && snapshot.docs[0]) {
-        const docSnap = snapshot.docs[0];
-        const pClient = { ...docSnap.data(), id: docSnap.id } as Client;
-        setPrimaryClient(pClient);
-        
-        // Default selected client to primary if not yet set
-        setSelectedClientId(prev => prev || pClient.id);
-      } else {
-        console.warn("No client document found matching member ID:", currentUser.clientRecordId);
-      }
-      setLoading(false);
-    }, (err) => {
-      console.error("Error subscribing to client record:", err);
-      setLoading(false);
-    });
-
-    return unsubscribe;
+    getDocs(q)
+      .then((snapshot) => {
+        if (!snapshot.empty && snapshot.docs[0]) {
+          const docSnap = snapshot.docs[0];
+          const pClient = { ...docSnap.data(), id: docSnap.id } as Client;
+          setPrimaryClient(pClient);
+          setActiveClient(pClient);
+          setSelectedClientId(prev => prev || pClient.id);
+        } else {
+          console.warn("No client document found matching member ID:", currentUser.clientRecordId);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not load client record (may be a permissions issue):", err.code || err.message);
+      })
+      .finally(() => setLoading(false));
   }, [currentUser?.clientRecordId]);
 
-  // 2. Subscribe to active client record (handles switched profiles)
+  // 2. Fetch active client record when switched
   useEffect(() => {
     if (!selectedClientId) return;
+    // Skip if already loaded as primary
+    if (activeClient?.id === selectedClientId) return;
 
     const docRef = doc(db, 'clients', selectedClientId);
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
-        setActiveClient({ ...docSnap.data(), id: docSnap.id } as Client);
-      }
-    }, (err) => {
-      console.error("Error subscribing to active client:", err);
-    });
-
-    return unsubscribe;
+    getDoc(docRef)
+      .then((docSnap) => {
+        if (docSnap.exists()) {
+          setActiveClient({ ...docSnap.data(), id: docSnap.id } as Client);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not load active client (may be a permissions issue):", err.code || err.message);
+      });
   }, [selectedClientId]);
 
-  // 3. Subscribe to linked clients (family members)
+  // 3. Fetch linked clients (family members)
   useEffect(() => {
     if (!primaryClient) {
       setLinkedClients([]);
@@ -121,17 +123,17 @@ export default function MemberPortal({ isGuest = false, onSwitchToCRM }: MemberP
       where(documentId(), 'in', linkedIds)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list = snapshot.docs.map(docSnap => ({
-        ...docSnap.data(),
-        id: docSnap.id
-      } as Client));
-      setLinkedClients(list);
-    }, (err) => {
-      console.error("Error subscribing to linked clients:", err);
-    });
-
-    return unsubscribe;
+    getDocs(q)
+      .then((snapshot) => {
+        const list = snapshot.docs.map(docSnap => ({
+          ...docSnap.data(),
+          id: docSnap.id
+        } as Client));
+        setLinkedClients(list);
+      })
+      .catch((err) => {
+        console.warn("Could not load linked clients:", err.code || err.message);
+      });
   }, [primaryClient?.linkedClientIds]);
 
   if (isGuest) {
@@ -193,6 +195,20 @@ export default function MemberPortal({ isGuest = false, onSwitchToCRM }: MemberP
             </div>
           )}
 
+          {onSwitchToStore && (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={onSwitchToStore} 
+              title="Shop Packages" 
+              className="h-8 w-8 text-zinc-400 hover:text-white"
+            >
+              <ShoppingBag className="h-4 w-4" />
+            </Button>
+          )}
+
+          <CartDrawer />
+
           <Button variant="ghost" size="icon" onClick={toggleTheme} className="h-8 w-8">
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
@@ -204,7 +220,7 @@ export default function MemberPortal({ isGuest = false, onSwitchToCRM }: MemberP
       </header>
 
       <main className="flex-1 container mx-auto px-4 py-6 pb-24 max-w-md">
-        {activeTab === 'home' && <MemberHome client={activeClient} />}
+        {activeTab === 'home' && <MemberHome client={activeClient} onSwitchToStore={onSwitchToStore} />}
         
         {activeTab === 'booking' && (
           <div className="space-y-4">
@@ -262,7 +278,7 @@ export default function MemberPortal({ isGuest = false, onSwitchToCRM }: MemberP
             {profileSubTab === 'progress' && <MemberProgress client={activeClient} />}
             {profileSubTab === 'membership' && (
               <div className="space-y-6 animate-in fade-in">
-                <MemberPackages client={activeClient} />
+                <MemberPackages client={activeClient} onSwitchToStore={onSwitchToStore} />
                 <MemberSubscription client={activeClient} />
               </div>
             )}

@@ -60,9 +60,25 @@ service cloud.firestore {
 
     function isOwnClientRecord(clientId) {
       return isAuthenticated() && (
-        (resource != null && resource.data.portalUserId == request.auth.uid) ||
-        (exists(/databases/$(database)/documents/clients/$(clientId)) && 
-         get(/databases/$(database)/documents/clients/$(clientId)).data.portalUserId == request.auth.uid)
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clientRecordId == clientId ||
+            (
+              'clientDocId' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && (
+                get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clientDocId == clientId ||
+                (
+                  exists(/databases/$(database)/documents/clients/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clientDocId)) &&
+                  'linkedClientIds' in get(/databases/$(database)/documents/clients/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clientDocId)).data &&
+                  clientId in get(/databases/$(database)/documents/clients/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clientDocId)).data.linkedClientIds
+                )
+              )
+            )
+          )
+        ) ||
+        (
+          exists(/databases/$(database)/documents/clients/$(clientId)) && 
+          get(/databases/$(database)/documents/clients/$(clientId)).data.portalUserId == request.auth.uid
+        )
       );
     }
 
@@ -77,7 +93,7 @@ service cloud.firestore {
       return isAuthenticated() && (
         request.auth.token.email in ["michaelmitry13@gmail.com", "magd.gallab@gmail.com", "admin@strike.eg"] ||
         (userExists() && (
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager', 'admin'] ||
           (
             'can_delete_payments' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.can_delete_payments == true
@@ -90,7 +106,7 @@ service cloud.firestore {
       return isAuthenticated() && (
         request.auth.token.email in ["michaelmitry13@gmail.com", "magd.gallab@gmail.com", "admin@strike.eg"] ||
         (userExists() && (
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager', 'admin'] ||
           (
             'can_access_settings_and_history' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.can_access_settings_and_history == true
@@ -103,7 +119,7 @@ service cloud.firestore {
       return isAuthenticated() && (
         request.auth.token.email in ["michaelmitry13@gmail.com", "magd.gallab@gmail.com", "admin@strike.eg"] ||
         (userExists() && (
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager'] ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'crm_admin', 'sales_manager', 'manager', 'admin'] ||
           (
             'can_view_global_dashboard' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.can_view_global_dashboard == true
@@ -245,7 +261,7 @@ service cloud.firestore {
              isNonEmptyString(data.dueDate) &&
              data.status in ['Pending', 'In Progress', 'Completed'] &&
              data.priority in ['Low', 'Medium', 'High'] &&
-             isNonEmptyString(data.assignedTo) &&
+             data.assignedTo is string &&
              isNonEmptyString(data.createdBy) &&
              isNonEmptyString(data.createdAt);
     }
@@ -366,11 +382,27 @@ service cloud.firestore {
       allow delete: if canStrikeAccessSettings();
     }
 
+    match /mail/{mailId} {
+      // Members and guests can create mail documents for email triggers
+      allow create: if true;
+      allow read, update, delete: if isStrikeStaff();
+    }
+
     match /clients/{clientId} {
       allow get: if isStrikeStaff() || isOwnClientRecord(clientId);
       allow list: if isStrikeStaff() || (isAuthenticated() && (
         resource.data.portalUserId == request.auth.uid ||
-        resource.data.memberId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clientRecordId
+        resource.data.memberId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clientRecordId ||
+        (
+          'clientDocId' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && (
+            resource.data.id == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clientDocId ||
+            (
+              exists(/databases/$(database)/documents/clients/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clientDocId)) &&
+              'linkedClientIds' in get(/databases/$(database)/documents/clients/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clientDocId)).data &&
+              resource.data.id in get(/databases/$(database)/documents/clients/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clientDocId)).data.linkedClientIds
+            )
+          )
+        )
       ));
       allow create: if isStrikeStaff() || (isAuthenticated() && request.resource.data.portalUserId == request.auth.uid);
       allow update: if isStrikeStaff() || (isOwnClientRecord(clientId) && isSafeClientSelfEdit());

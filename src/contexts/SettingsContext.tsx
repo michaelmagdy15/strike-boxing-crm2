@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { BrandingSettings, SalesTarget, Branch } from '../types';
 import { db } from '../firebase';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import { addAuditLog } from '../services/auditService';
 
 interface SettingsContextType {
@@ -35,17 +35,30 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode; isAuthentic
   const [branches, setBranches] = useState<Branch[]>(['COMPLEX', 'MIVIDA', 'Strike IMPACT']);
   const [commissionRates, setCommissionRates] = useState({ ptRate: 8, groupRate: 5 });
 
-  // Branding is publicly readable per security rules — always subscribe regardless of auth state
+  // Branding — use one-time read for members/coaches to avoid onSnapshot permission errors
   useEffect(() => {
+    // Wait for role to be determined before subscribing
+    if (!isAuthenticated && !role) return;
+
+    if (role === 'client' || role === 'coach') {
+      // One-time read for members
+      getDoc(doc(db, 'settings', 'branding'))
+        .then((snapshot) => {
+          if (snapshot.exists()) setBranding(snapshot.data() as BrandingSettings);
+        })
+        .catch((err) => console.warn('Could not load branding:', err.code || err.message));
+      return;
+    }
+    // Real-time listener for staff/admin
     const unsubBranding = onSnapshot(
       doc(db, 'settings', 'branding'),
       (snapshot) => {
         if (snapshot.exists()) setBranding(snapshot.data() as BrandingSettings);
       },
-      (error) => console.error('Firestore Error (branding):', error)
+      (error) => console.warn('Firestore Error (branding):', error.code || error.message)
     );
     return () => { unsubBranding(); };
-  }, []);
+  }, [role, isAuthenticated]);
 
   // Auth-required settings — only subscribe when a privileged user is logged in to avoid permission errors
   useEffect(() => {

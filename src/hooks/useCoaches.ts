@@ -8,13 +8,18 @@ import { addAuditLog } from '../services/auditService';
 import { useAuth } from '../contexts/AuthContext';
 
 export const useCoaches = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, effectiveRole } = useAuth();
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!currentUser) {
       setCoaches([]);
+      setLoading(false);
+      return;
+    }
+    // Members/coaches can't list all coaches — skip the global listener
+    if (effectiveRole === 'client' || effectiveRole === 'coach') {
       setLoading(false);
       return;
     }
@@ -26,7 +31,7 @@ export const useCoaches = () => {
       setLoading(false);
     });
     return () => unsub();
-  }, [currentUser]);
+  }, [currentUser, effectiveRole]);
 
   const generateCoachId = async (): Promise<string> => {
     const q = query(collection(db, 'users'), where('role', '==', 'coach'));

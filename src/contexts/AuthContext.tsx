@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { User, UserId, UserRole, isSuperAdmin, isAdmin, BrandingSettings, PendingAccount, PasswordResetRequest, Client, Coach } from '../types';
-import { auth, db, signInWithGoogle, signInWithEmail, logOut, createFirebaseUser, sendPasswordReset } from '../firebase';
+import { auth, db, signInWithEmail, logOut, createFirebaseUser, sendPasswordReset } from '../firebase';
 import { onAuthStateChanged, updatePassword as fbUpdatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import {
   doc,
@@ -26,7 +26,6 @@ interface AuthContextType {
   allUsers: User[];
   pendingAccounts: PendingAccount[];
   passwordResetRequests: PasswordResetRequest[];
-  login: () => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   loginWithCoachId: (coachId: string, password: string) => Promise<void>;
   loginWithMemberId: (memberId: string, password: string) => Promise<void>;
@@ -128,6 +127,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const batch = writeBatch(db);
                 staleInvites.forEach(d => batch.delete(d.ref));
                 await batch.commit();
+              }
+            }
+            if (userData.role === 'client' && userData.clientRecordId) {
+              try {
+                const clientQ = query(collection(db, 'clients'), where('memberId', '==', userData.clientRecordId.trim()));
+                const clientSnap = await getDocs(clientQ);
+                if (!clientSnap.empty && clientSnap.docs[0]) {
+                  const clientDocId = clientSnap.docs[0].id;
+                  const clientData = clientSnap.docs[0].data();
+
+                  // Migrate clientDocId on user doc if missing
+                  if (!userData.clientDocId) {
+                    userData.clientDocId = clientDocId;
+                    await updateDoc(userDocRef, { clientDocId });
+                  }
+
+                  // Ensure portalUserId is set on the client doc for security rules
+                  if (!clientData.portalUserId || clientData.portalUserId !== userId) {
+                    await updateDoc(doc(db, 'clients', clientDocId), { portalUserId: userId });
+                  }
+                }
+              } catch (e) {
+                console.error("Error migrating user clientDocId/portalUserId:", e);
               }
             }
             setCurrentUser(userData);
@@ -254,7 +276,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => { unsubPending(); unsubResets(); };
   }, [currentUser?.id, currentUser?.role]);
 
-  const login = async () => { await signInWithGoogle(); };
   const logout = async () => { await logOut(); };
   const refreshUserData = async () => {};
   const updateBranding = async (_updates: Partial<BrandingSettings>) => {};
@@ -327,6 +348,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email,
       role: 'client',
       clientRecordId: memberId,
+      clientDocId: clientId,
       phone,
       mustChangePassword: true,
     };
@@ -613,13 +635,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     profileData: {
       name: string;
       phone: string;
-      age: string;
-      gender: string;
-      height: number;
-      weight: number;
-      activityLevel: string;
-      workoutTimes: string[];
-      fitnessTarget: string;
+      age?: string;
+      gender?: string;
+      height?: number;
+      weight?: number;
+      activityLevel?: string;
+      workoutTimes?: string[];
+      fitnessTarget?: string;
     }
   ) => {
     // 1. Create firebase user auth
@@ -654,13 +676,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       portalUserId: uid,
       points: 100, // Welcome points
       aiTokens: 50, // Welcome tokens for AI chat
-      gender: profileData.gender,
-      height: profileData.height,
-      weight: profileData.weight,
-      activityLevel: profileData.activityLevel,
-      workoutTimes: profileData.workoutTimes,
-      fitnessTarget: profileData.fitnessTarget,
-      dateOfBirth: profileData.age, // Storing age here for now
+      gender: profileData.gender || 'Prefer not to say',
+      height: profileData.height || 0,
+      weight: profileData.weight || 0,
+      activityLevel: profileData.activityLevel || 'Moderately Active',
+      workoutTimes: profileData.workoutTimes || [],
+      fitnessTarget: profileData.fitnessTarget || 'Improve Lifestyle',
+      dateOfBirth: profileData.age || '', // Storing age here for now
       referralCode: `REF-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
       createdAt: new Date().toISOString()
     };
@@ -673,6 +695,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email,
       role: 'client',
       clientRecordId: newMemberId,
+      clientDocId: clientRef.id,
     };
     await setDoc(doc(db, 'users', uid), newUser);
 
@@ -689,7 +712,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     allUsers,
     pendingAccounts,
     passwordResetRequests,
-    login,
     loginWithEmail: loginWithEmailFn,
     loginWithCoachId,
     loginWithMemberId,

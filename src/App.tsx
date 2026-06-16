@@ -39,7 +39,8 @@ import { ForcePasswordChangeDialog } from './components/ForcePasswordChangeDialo
 import { QRCodePage } from './components/QRCodePage';
 import QuoteGenerator from './QuoteGenerator';
 import ClubOperations from './ClubOperations';
-import { CartProvider } from './member/CartContext';
+import { CartProvider, useCart } from './member/CartContext';
+import Checkout from './member/Checkout';
 
 const QUOTE_GENERATOR_EMAILS = ['magd.gallab@gmail.com', 'michaelmitry13@gmail.com'];
 
@@ -60,6 +61,8 @@ function AppContent() {
   });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
   const [showPortalOverride, setShowPortalOverride] = React.useState<'crm' | 'member' | null>(null);
+  const [clientViewMode, setClientViewMode] = React.useState<'portal' | 'store'>('portal');
+  const { isCheckoutOpen, setIsCheckoutOpen } = useCart();
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed(prev => {
@@ -225,7 +228,18 @@ function AppContent() {
   }
 
   if (currentUser.role === 'client') {
-    return <MemberPortal />;
+    if (clientViewMode === 'store') {
+      return (
+        <GuestPortal 
+          onSwitchToCRM={() => setClientViewMode('portal')} 
+        />
+      );
+    }
+    return (
+      <MemberPortal 
+        onSwitchToStore={() => setClientViewMode('store')} 
+      />
+    );
   }
 
   const navItems = [

@@ -8,6 +8,57 @@ import { useAuth } from '../contexts/AuthContext';
 import { Calendar, MapPin, Clock, Bell, LogIn, LogOut, ShieldAlert, Dumbbell, Map, MessageSquare, ChevronRight } from 'lucide-react';
 import { Client } from '../types';
 
+export function getPackageImage(packageName: string, sessions: number): string {
+  const lowerName = packageName.toLowerCase();
+
+  // 1. Adults (Maxim, Impact)
+  if (!lowerName.includes('kid') && !lowerName.includes('junior')) {
+    if (lowerName.includes('impact')) {
+      if (sessions === 10) return "/Adults (Mivida, Maxim, Impact)/Impact/Impact 10.jpg";
+      if (sessions === 20) return "/Adults (Mivida, Maxim, Impact)/Impact/Impact 20.jpg";
+      if (sessions === 30) return "/Adults (Mivida, Maxim, Impact)/Impact/Impact 30.jpg";
+      return "/Adults (Mivida, Maxim, Impact)/Impact/Impact 10.jpg";
+    } else {
+      if (sessions === 10) return "/Adults (Mivida, Maxim, Impact)/Maxim/ADLUT 10.jpg";
+      if (sessions === 20) return "/Adults (Mivida, Maxim, Impact)/Maxim/ADLUT 20.jpg";
+      if (sessions === 30) return "/Adults (Mivida, Maxim, Impact)/Maxim/ADLUT 30.jpg";
+      return "/Adults (Mivida, Maxim, Impact)/Maxim/ADLUT.jpg";
+    }
+  }
+
+  // 2. Juniors
+  if (lowerName.includes('junior')) {
+    const isPro = lowerName.includes('pro');
+    if (isPro) {
+      if (sessions === 10) return "/Juniors-Juniors Pro/Juniors 10 sessions (pro).jpg";
+      if (sessions === 20) return "/Juniors-Juniors Pro/Juniors 20 sessions (pro).jpg";
+      if (sessions === 30) return "/Juniors-Juniors Pro/Juniors 30 sessions (pro).jpg";
+      return "/Juniors-Juniors Pro/Juniors 10 sessions (pro).jpg";
+    } else {
+      if (sessions === 10) return "/Juniors-Juniors Pro/Juniors 10 sessions .jpg";
+      if (sessions === 20) return "/Juniors-Juniors Pro/Juniors 20sessions .jpg";
+      if (sessions === 30) return "/Juniors-Juniors Pro/Juniors 30 sessions .jpg";
+      if (sessions <= 12) return "/Juniors-Juniors Pro/Juniors 10 sessions .jpg";
+      return "/Juniors-Juniors Pro/Juniors 20sessions .jpg";
+    }
+  }
+
+  // 3. Kids
+  const isPro = lowerName.includes('pro');
+  if (isPro) {
+    if (sessions === 10) return "/Kids Pro- Kids/Kids 10 sessions (pro).jpg";
+    if (sessions === 20) return "/Kids Pro- Kids/Kids 20 sessions (pro).jpg";
+    if (sessions === 30) return "/Kids Pro- Kids/Kids 30 sessions (pro).jpg";
+    return "/Kids Pro- Kids/Kids 10 sessions (pro).jpg";
+  } else {
+    if (sessions === 10) return "/Kids Pro- Kids/Kids 10 sessions.jpg";
+    if (sessions === 20) return "/Kids Pro- Kids/Kids 20 sessions.jpg";
+    if (sessions === 30) return "/Kids Pro- Kids/Kids 30 sessions.jpg";
+    if (sessions <= 10) return "/Kids Pro- Kids/Kids 10 sessions.jpg";
+    return "/Kids Pro- Kids/Kids 20 sessions.jpg";
+  }
+}
+
 interface GuestPortalProps {
   onSwitchToCRM: () => void;
   isLeadPending?: boolean;
@@ -224,8 +275,12 @@ export default function GuestPortal({ onSwitchToCRM, isLeadPending = false, clie
               <div className="grid grid-cols-1 gap-3">
                 {displayKids.map(pkg => (
                   <div key={pkg.id} className="bg-card border rounded-2xl p-4 flex gap-4 shadow-sm hover:border-primary/30 transition-all">
-                    <div className="h-16 w-16 rounded-xl bg-zinc-800 overflow-hidden shrink-0 flex items-center justify-center border border-white/5">
-                      <Dumbbell className="h-8 w-8 text-zinc-500 animate-float" />
+                    <div className="h-16 w-16 rounded-xl bg-zinc-900 overflow-hidden shrink-0 flex items-center justify-center border border-white/5">
+                      <img 
+                        src={getPackageImage(pkg.name, pkg.sessions)} 
+                        alt={pkg.name} 
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                     <div className="flex-1 flex flex-col justify-center">
                       <h3 className="font-extrabold text-xs text-foreground uppercase">{pkg.name}</h3>
@@ -278,22 +333,31 @@ export default function GuestPortal({ onSwitchToCRM, isLeadPending = false, clie
 
               <div className="grid grid-cols-1 gap-3">
                 {displayAdults.map(pkg => (
-                  <div key={pkg.id} className="relative bg-card border rounded-2xl p-5 shadow-sm overflow-hidden hover:border-primary/30 transition-all flex justify-between items-center">
-                    <div className="absolute -right-4 top-0 p-4 opacity-5 pointer-events-none">
-                      <h1 className="text-7xl font-black italic">{pkg.sessions}</h1>
+                  <div key={pkg.id} className="bg-card border rounded-2xl p-4 flex gap-4 shadow-sm hover:border-primary/30 transition-all items-center">
+                    <div className="h-16 w-16 rounded-xl bg-zinc-900 overflow-hidden shrink-0 flex items-center justify-center border border-white/5">
+                      <img 
+                        src={getPackageImage(pkg.name, pkg.sessions)} 
+                        alt={pkg.name} 
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                    <div className="relative z-10 flex-1 pr-4">
-                      <Badge variant="outline" className="mb-2 text-[9px] font-bold border-zinc-700 text-zinc-400 uppercase tracking-widest">{pkg.type || 'Adults'}</Badge>
-                      <h3 className="font-extrabold text-sm text-foreground uppercase">{pkg.name}</h3>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{pkg.expiryDays} Days Expiry</p>
-                      <p className="font-black text-md text-primary mt-2">{pkg.price.toLocaleString()} <span className="text-[10px] font-normal text-muted-foreground">EGP</span></p>
+                    <div className="flex-1 flex flex-col justify-center min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Badge variant="outline" className="text-[8px] font-bold border-zinc-700 text-zinc-400 uppercase tracking-widest px-1.5 py-0">{pkg.type || 'Adults'}</Badge>
+                      </div>
+                      <h3 className="font-extrabold text-xs text-foreground uppercase mt-1 truncate">{pkg.name}</h3>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{pkg.sessions} Sessions • {pkg.expiryDays} Days Validity</p>
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className="font-black text-sm text-primary">{pkg.price.toLocaleString()} EGP</span>
+                        <Button 
+                          size="sm" 
+                          onClick={() => addToCart(pkg as any)} 
+                          className="h-8 px-4 text-xs font-bold rounded-xl"
+                        >
+                          Add to Basket
+                        </Button>
+                      </div>
                     </div>
-                    <Button 
-                      onClick={() => addToCart(pkg as any)} 
-                      className="font-bold rounded-xl h-10 px-5 shadow-lg relative z-10"
-                    >
-                      Book Now
-                    </Button>
                   </div>
                 ))}
               </div>

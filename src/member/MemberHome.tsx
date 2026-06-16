@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Client } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { QRCodeSVG } from 'qrcode.react';
 import { db } from '../firebase';
-import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { format, parseISO } from 'date-fns';
-import { Sparkles, Calendar, CheckCircle2, Trophy, Activity, Dumbbell, Award, Users } from 'lucide-react';
+import { Sparkles, Calendar, CheckCircle2, Trophy, Activity, Dumbbell, Award, Users, ShoppingBag } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
-export default function MemberHome({ client }: { client: Client | null }) {
+export default function MemberHome({ client, onSwitchToStore }: { client: Client | null, onSwitchToStore?: () => void }) {
   const { theme } = useTheme();
   const [lastCheckIn, setLastCheckIn] = useState<string | null>(null);
   const [performanceLogs, setPerformanceLogs] = useState<any[]>([]);
@@ -46,16 +47,18 @@ export default function MemberHome({ client }: { client: Client | null }) {
       return;
     }
     const q = query(collection(db, 'clientPerformance'), where('clientId', '==', client.id));
-    const unsub = onSnapshot(q, (snapshot) => {
-      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      list.sort((a: any, b: any) => b.date.localeCompare(a.date));
-      setPerformanceLogs(list);
-      setLoadingPerformance(false);
-    }, (err) => {
-      console.error("Error loading performance logs:", err);
-      setLoadingPerformance(false);
-    });
-    return unsub;
+    getDocs(q)
+      .then((snapshot) => {
+        const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        list.sort((a: any, b: any) => (b.date || '').localeCompare(a.date || ''));
+        setPerformanceLogs(list);
+      })
+      .catch((err) => {
+        // Gracefully handle permission errors — show empty state
+        console.warn("Could not load performance logs (may be a permissions issue):", err.code || err.message);
+        setPerformanceLogs([]);
+      })
+      .finally(() => setLoadingPerformance(false));
   }, [client?.id]);
 
   useEffect(() => {
@@ -103,7 +106,8 @@ export default function MemberHome({ client }: { client: Client | null }) {
         setLoadingTraffic(false);
       })
       .catch((err) => {
-        console.error("Error fetching traffic data:", err);
+        console.warn("Could not load traffic data (may be a permissions issue):", err.code || err.message);
+        setTrafficData([]);
         setLoadingTraffic(false);
       });
   }, []);
@@ -202,6 +206,15 @@ export default function MemberHome({ client }: { client: Client | null }) {
           </CardContent>
         </Card>
       </div>
+
+      {onSwitchToStore && (
+        <Button 
+          onClick={onSwitchToStore}
+          className="w-full bg-zinc-950 hover:bg-zinc-900 text-primary border border-primary/20 hover:border-primary/40 rounded-2xl h-12 text-xs font-bold uppercase tracking-wider shadow-sm flex items-center justify-center gap-2"
+        >
+          <ShoppingBag className="h-4 w-4" /> Shop Session Packages
+        </Button>
+      )}
 
       {/* Quick Summary Metrics */}
       <div className="grid grid-cols-2 gap-4">

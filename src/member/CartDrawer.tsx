@@ -6,13 +6,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import Checkout from './Checkout';
 
 export default function CartDrawer() {
-  const { items, updateQuantity, removeFromCart, totalItems, totalPrice } = useCart();
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const { 
+    items, 
+    updateQuantity, 
+    removeFromCart, 
+    totalItems, 
+    totalPrice, 
+    isCheckoutOpen, 
+    setIsCheckoutOpen, 
+    isCartOpen, 
+    setIsCartOpen 
+  } = useCart();
 
   return (
     <>
-      <Dialog open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
+      <Dialog open={isCartOpen} onOpenChange={setIsCartOpen}>
         <DialogTrigger render={
           <Button variant="outline" size="icon" className="relative h-10 w-10 rounded-full border-primary/20 bg-background/50 backdrop-blur-md">
             <ShoppingCart className="h-5 w-5 text-primary" />
@@ -93,7 +101,7 @@ export default function CartDrawer() {
               <Button 
                 className="w-full h-12 text-md font-bold"
                 onClick={() => {
-                  setIsDrawerOpen(false);
+                  setIsCartOpen(false);
                   setIsCheckoutOpen(true);
                 }}
               >
