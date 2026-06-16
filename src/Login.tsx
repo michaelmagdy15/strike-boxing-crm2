@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { UserRole } from './types';
 import { Eye, EyeOff, ShieldCheck, Dumbbell, Users, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import SignupWizard from './SignupWizard';
 
 type View = 'login' | 'signup' | 'signup-success';
 
@@ -24,7 +25,11 @@ const GoogleIcon = () => (
   </svg>
 );
 
-export default function Login() {
+interface LoginProps {
+  onSwitchToMemberStore?: () => void;
+}
+
+export default function Login({ onSwitchToMemberStore }: LoginProps = {}) {
   const { login, loginWithEmail, loginWithCoachId, loginWithMemberId, submitSignUpRequest, submitPasswordResetRequest, submitMemberPasswordResetRequest, isAuthReady, authError, setAuthError } = useAuth();
   const { branding } = useSettings();
 
@@ -194,262 +199,275 @@ export default function Login() {
             <Button variant="outline" onClick={() => setView('login')}>Back to Login</Button>
           </CardContent>
         </Card>
+
+        {onSwitchToMemberStore && (
+          <Button 
+            variant="outline" 
+            onClick={onSwitchToMemberStore} 
+            className="mt-4 w-full max-w-md bg-background/50 border-white/10 hover:bg-muted text-xs font-bold h-10 rounded-xl"
+          >
+            ← Go to Member Storefront
+          </Button>
+        )}
       </div>
     );
   }
 
   // ── Sign-up request view ──
   if (view === 'signup') {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-        <Logo />
-        <Card className="w-full max-w-md shadow-2xl">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" onClick={() => { setView('login'); setError(''); }}>
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <div>
-                <CardTitle>Request Access</CardTitle>
-                <CardDescription className="mt-1">An admin will review and approve your account.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSignUp} className="space-y-4">
-              {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
-              <div className="space-y-2">
-                <Label>Full Name <span className="text-destructive">*</span></Label>
-                <Input value={signupName} onChange={e => setSignupName(e.target.value)} placeholder="Your full name" required />
-              </div>
-              <div className="space-y-2">
-                <Label>Email Address <span className="text-destructive">*</span></Label>
-                <Input type="email" value={signupEmail} onChange={e => setSignupEmail(e.target.value)} placeholder="you@example.com" required />
-              </div>
-              <div className="space-y-2">
-                <Label>Requested Role</Label>
-                <Select value={signupRole} onValueChange={v => setSignupRole(v as UserRole)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="rep">Sales Rep</SelectItem>
-                    <SelectItem value="manager">Manager</SelectItem>
-                    <SelectItem value="coach">Coach</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Message (Optional)</Label>
-                <Textarea
-                  value={signupMessage}
-                  onChange={e => setSignupMessage(e.target.value)}
-                  placeholder="Any additional info for the admin..."
-                  rows={3}
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Submitting...' : 'Submit Request'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <SignupWizard onBack={() => { setView('login'); setError(''); }} />;
   }
 
   // ── Main login view ──
+  // ── Main login view ──
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-      <Logo />
-
-      <Card className="w-full max-w-md border-border/50 shadow-2xl">
-        <CardHeader className="text-center pb-2">
-          <CardTitle className="text-2xl">Sign In</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {authError && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertDescription className="break-words font-mono text-xs">
-                {authError}
-              </AlertDescription>
-            </Alert>
+    <div className="min-h-screen bg-background flex flex-col md:flex-row font-sans">
+      {/* Left Column - Hero Branding (Desktop Only) */}
+      <div className="hidden md:flex md:w-1/2 bg-zinc-950 relative overflow-hidden flex-col justify-between p-12 text-white">
+        <div className="absolute inset-0 bg-cover bg-center opacity-40 mix-blend-luminosity" style={{ backgroundImage: `url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=1470&auto=format&fit=crop')` }} />
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/80" />
+        
+        <div className="relative z-10 flex items-center gap-3">
+          {branding.logoUrl ? (
+            <img src={branding.logoUrl} alt={branding.companyName} className="h-10 w-auto object-contain" />
+          ) : (
+            <h1 className="text-2xl font-black tracking-widest uppercase text-primary font-logo">
+              {branding.companyName}
+            </h1>
           )}
-          {error && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+        </div>
 
-          <Tabs defaultValue="staff" onValueChange={() => { setError(''); setAuthError(null); }}>
-            <TabsList className="grid grid-cols-3 w-full mb-4">
-              <TabsTrigger value="staff" className="flex items-center gap-1.5 text-xs">
-                <ShieldCheck className="h-3.5 w-3.5" /> Staff
-              </TabsTrigger>
-              <TabsTrigger value="coach" className="flex items-center gap-1.5 text-xs">
-                <Dumbbell className="h-3.5 w-3.5" /> Coach
-              </TabsTrigger>
-              <TabsTrigger value="member" className="flex items-center gap-1.5 text-xs">
-                <Users className="h-3.5 w-3.5" /> Member
-              </TabsTrigger>
-            </TabsList>
+        <div className="relative z-10 space-y-4 max-w-md">
+          <h2 className="text-4xl font-extrabold tracking-tight leading-none uppercase">
+            Unlock your <span className="text-primary text-gradient">true potential</span>
+          </h2>
+          <p className="text-sm text-zinc-400 font-light leading-relaxed">
+            Gamified workout challenges, direct access to expert AI fitness coaching, real-time performance tracking, and direct connection with your friends. Join our community and train like a pro today.
+          </p>
+        </div>
 
-            {/* ── Staff Tab ── */}
-            <TabsContent value="staff" className="space-y-4">
-              {!/StrikeCRM-Mobile/i.test(navigator.userAgent) && (
-                <>
-                  <Button
-                    variant="outline"
-                    className="w-full h-12 justify-center gap-3 border-muted-foreground/20 hover:bg-primary hover:text-primary-foreground transition-all"
-                    onClick={handleGoogleLogin}
-                    disabled={isLoading}
-                  >
-                    <GoogleIcon />
-                    <span className="font-semibold">Continue with Google</span>
-                  </Button>
+        <div className="relative z-10 flex justify-between text-xs text-zinc-500">
+          <span>&copy; {new Date().getFullYear()} {branding.companyName}</span>
+          <a href="https://mitrixo.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
+            Powered by mitrixo.com
+          </a>
+        </div>
+      </div>
 
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-card px-2 text-muted-foreground">or</span>
-                    </div>
-                  </div>
-                </>
+      {/* Right Column - Auth Forms */}
+      <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-12 bg-background relative overflow-y-auto">
+        <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {/* Logo on mobile only */}
+          <div className="md:hidden">
+            <Logo />
+          </div>
+
+          <div className="space-y-2 text-center md:text-left">
+            <h1 className="text-3xl font-bold tracking-tight">Welcome Back</h1>
+            <p className="text-sm text-muted-foreground">Select your portal role to sign in to your workspace.</p>
+          </div>
+
+          <Card className="border-border/50 shadow-2xl glass-card">
+            <CardContent className="pt-6">
+              {authError && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertDescription className="break-words font-mono text-xs">
+                    {authError}
+                  </AlertDescription>
+                </Alert>
+              )}
+              {error && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
               )}
 
-              <form onSubmit={handleEmailLogin} className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="staff-email">Email</Label>
-                  <Input id="staff-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="staff-password">Password</Label>
-                  <div className="relative">
-                    <Input
-                      id="staff-password"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      className="pr-10"
-                      autoComplete="current-password"
-                    />
-                    <button type="button" onClick={() => setShowPassword(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              <Tabs defaultValue="member" onValueChange={() => { setError(''); setAuthError(null); }}>
+                <TabsList className="grid grid-cols-3 w-full mb-6 bg-muted/50 p-1 rounded-lg">
+                  <TabsTrigger value="member" className="flex items-center justify-center gap-1.5 text-xs py-2">
+                    <Users className="h-3.5 w-3.5" /> Member
+                  </TabsTrigger>
+                  <TabsTrigger value="coach" className="flex items-center justify-center gap-1.5 text-xs py-2">
+                    <Dumbbell className="h-3.5 w-3.5" /> Coach
+                  </TabsTrigger>
+                  <TabsTrigger value="staff" className="flex items-center justify-center gap-1.5 text-xs py-2">
+                    <ShieldCheck className="h-3.5 w-3.5" /> Staff
+                  </TabsTrigger>
+                </TabsList>
+
+                {/* ── Member Tab ── */}
+                <TabsContent value="member" className="space-y-4">
+                  <form onSubmit={handleMemberLogin} className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="member-id">Member ID</Label>
+                      <Input
+                        id="member-id"
+                        placeholder="e.g. MEM-001"
+                        value={memberId}
+                        onChange={e => setMemberId(e.target.value)}
+                        className="font-mono tracking-wide"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="member-password">Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="member-password"
+                          type={showMemberPassword ? 'text' : 'password'}
+                          placeholder="••••••••"
+                          value={memberPassword}
+                          onChange={e => setMemberPassword(e.target.value)}
+                          className="pr-10"
+                          autoComplete="current-password"
+                          required
+                        />
+                        <button type="button" onClick={() => setShowMemberPassword(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                          {showMemberPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <Button type="submit" className="w-full h-11 text-sm font-semibold bg-gradient-to-r from-primary to-rose-600 hover:from-primary/95 hover:to-rose-600/95 transition-all duration-300" disabled={isLoading}>
+                      {isLoading ? 'Signing in...' : 'Sign In as Member'}
+                    </Button>
+                  </form>
+                  <div className="flex items-center justify-between text-xs pt-2">
+                    <button
+                      className="text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+                      onClick={() => {
+                        setMemberForgotOpen(true);
+                        setMemberForgotSubmitted(false);
+                        setMemberForgotId('');
+                        setMemberForgotPhone('');
+                        setError('');
+                      }}
+                    >
+                      Forgot password?
+                    </button>
+                    <button className="text-primary hover:text-primary/80 font-semibold underline-offset-4 hover:underline" onClick={() => { setView('signup'); setError(''); }}>
+                      Join for Free
                     </button>
                   </div>
-                </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? 'Signing in...' : 'Sign In'}
-                </Button>
-              </form>
+                </TabsContent>
 
-              <div className="flex justify-between text-xs">
-                <button className="text-muted-foreground hover:text-foreground underline-offset-4 hover:underline" onClick={() => { setForgotOpen(true); setForgotSubmitted(false); setForgotEmail(''); setForgotName(''); }}>
-                  Forgot password?
-                </button>
-                <button className="text-muted-foreground hover:text-foreground underline-offset-4 hover:underline" onClick={() => { setView('signup'); setError(''); }}>
-                  Request access
-                </button>
-              </div>
-            </TabsContent>
-
-            {/* ── Coach Tab ── */}
-            <TabsContent value="coach" className="space-y-4">
-              <p className="text-sm text-muted-foreground text-center">Sign in using your Coach ID (e.g. COACH-001) and password.</p>
-              <form onSubmit={handleCoachLogin} className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="coach-id">Coach ID</Label>
-                  <Input
-                    id="coach-id"
-                    placeholder="COACH-001"
-                    value={coachId}
-                    onChange={e => setCoachId(e.target.value.toUpperCase())}
-                    className="font-mono tracking-wide"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="coach-password">Password</Label>
-                  <div className="relative">
-                    <Input
-                      id="coach-password"
-                      type={showCoachPassword ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      value={coachPassword}
-                      onChange={e => setCoachPassword(e.target.value)}
-                      className="pr-10"
-                      autoComplete="current-password"
-                    />
-                    <button type="button" onClick={() => setShowCoachPassword(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                      {showCoachPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {/* ── Coach Tab ── */}
+                <TabsContent value="coach" className="space-y-4">
+                  <form onSubmit={handleCoachLogin} className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="coach-id">Coach ID</Label>
+                      <Input
+                        id="coach-id"
+                        placeholder="COACH-001"
+                        value={coachId}
+                        onChange={e => setCoachId(e.target.value.toUpperCase())}
+                        className="font-mono tracking-wide"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="coach-password">Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="coach-password"
+                          type={showCoachPassword ? 'text' : 'password'}
+                          placeholder="••••••••"
+                          value={coachPassword}
+                          onChange={e => setCoachPassword(e.target.value)}
+                          className="pr-10"
+                          autoComplete="current-password"
+                          required
+                        />
+                        <button type="button" onClick={() => setShowCoachPassword(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                          {showCoachPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <Button type="submit" className="w-full h-11 text-sm font-semibold" disabled={isLoading}>
+                      {isLoading ? 'Signing in...' : 'Sign In as Coach'}
+                    </Button>
+                  </form>
+                  <div className="text-center text-xs pt-2">
+                    <button className="text-muted-foreground hover:text-foreground underline-offset-4 hover:underline" onClick={() => { setForgotOpen(true); setForgotSubmitted(false); setForgotEmail(''); setForgotName(''); }}>
+                      Forgot password?
                     </button>
                   </div>
-                </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? 'Signing in...' : 'Sign In as Coach'}
-                </Button>
-              </form>
-              <div className="text-center">
-                <button className="text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline" onClick={() => { setForgotOpen(true); setForgotSubmitted(false); setForgotEmail(''); setForgotName(''); }}>
-                  Forgot password?
-                </button>
-              </div>
-            </TabsContent>
+                </TabsContent>
 
-            {/* ── Member Tab ── */}
-            <TabsContent value="member" className="space-y-4">
-              <p className="text-sm text-muted-foreground text-center">Sign in using your Member ID and password.</p>
-              <form onSubmit={handleMemberLogin} className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="member-id">Member ID</Label>
-                  <Input
-                    id="member-id"
-                    placeholder="Your member ID"
-                    value={memberId}
-                    onChange={e => setMemberId(e.target.value)}
-                    className="font-mono tracking-wide"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="member-password">Password</Label>
-                  <div className="relative">
-                    <Input
-                      id="member-password"
-                      type={showMemberPassword ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      value={memberPassword}
-                      onChange={e => setMemberPassword(e.target.value)}
-                      className="pr-10"
-                      autoComplete="current-password"
-                    />
-                    <button type="button" onClick={() => setShowMemberPassword(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                      {showMemberPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {/* ── Staff Tab ── */}
+                <TabsContent value="staff" className="space-y-4">
+                  {!/StrikeCRM-Mobile/i.test(navigator.userAgent) && (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="w-full h-11 justify-center gap-3 border-border hover:bg-muted transition-all"
+                        onClick={handleGoogleLogin}
+                        disabled={isLoading}
+                      >
+                        <GoogleIcon />
+                        <span className="font-semibold">Continue with Google</span>
+                      </Button>
+
+                      <div className="relative py-2">
+                        <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border/80" /></div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                          <span className="bg-card/80 px-2 text-muted-foreground">or</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <form onSubmit={handleEmailLogin} className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="staff-email">Email</Label>
+                      <Input id="staff-email" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="staff-password">Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="staff-password"
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="••••••••"
+                          value={password}
+                          onChange={e => setPassword(e.target.value)}
+                          className="pr-10"
+                          autoComplete="current-password"
+                          required
+                        />
+                        <button type="button" onClick={() => setShowPassword(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <Button type="submit" className="w-full h-11 text-sm font-semibold" disabled={isLoading}>
+                      {isLoading ? 'Signing in...' : 'Sign In'}
+                    </Button>
+                  </form>
+
+                  <div className="text-center text-xs pt-2">
+                    <button className="text-muted-foreground hover:text-foreground underline-offset-4 hover:underline" onClick={() => { setForgotOpen(true); setForgotSubmitted(false); setForgotEmail(''); setForgotName(''); }}>
+                      Forgot password?
                     </button>
                   </div>
-                </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? 'Signing in...' : 'Sign In as Member'}
-                </Button>
-              </form>
-              <div className="text-center">
-                <button
-                  className="text-xs text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
-                  onClick={() => {
-                    setMemberForgotOpen(true);
-                    setMemberForgotSubmitted(false);
-                    setMemberForgotId('');
-                    setMemberForgotPhone('');
-                    setError('');
-                  }}
-                >
-                  Forgot password?
-                </button>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
 
-      <div className="mt-8 text-center text-xs text-muted-foreground/60">
-        Made & managed by <a href="https://mitrixo.com" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors font-medium underline underline-offset-4 decoration-muted-foreground/30 hover:decoration-foreground">mitrixo.com systems</a>
+          {onSwitchToMemberStore && (
+            <Button 
+              variant="outline" 
+              onClick={onSwitchToMemberStore} 
+              className="mt-4 w-full bg-background/50 border-white/10 hover:bg-muted text-xs font-bold h-11 rounded-xl"
+            >
+              ← Go to Member Storefront
+            </Button>
+          )}
+
+          <div className="text-center text-xs text-muted-foreground/60 md:hidden">
+            Made & managed by <a href="https://mitrixo.com" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors font-medium underline underline-offset-4 decoration-muted-foreground/30 hover:decoration-foreground">mitrixo.com systems</a>
+          </div>
+        </div>
       </div>
 
       {/* ── Forgot Password Dialog (Staff / Coach — email) ── */}

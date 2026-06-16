@@ -21,6 +21,7 @@ import MemberProgress from './MemberProgress';
 import MemberLocker from './MemberLocker';
 import MemberJuiceBar from './MemberJuiceBar';
 import MemberInvites from './MemberInvites';
+import GuestPortal from './GuestPortal';
 
 type MemberTab = 'home' | 'booking' | 'juicebar' | 'locker' | 'invites' | 'profile';
 
@@ -33,7 +34,12 @@ const NAV_ITEMS: { tab: MemberTab; label: string; icon: React.ReactNode }[] = [
   { tab: 'profile',  label: 'Profile',    icon: <User className="h-5 w-5" /> },
 ];
 
-export default function MemberPortal() {
+interface MemberPortalProps {
+  isGuest?: boolean;
+  onSwitchToCRM?: () => void;
+}
+
+export default function MemberPortal({ isGuest = false, onSwitchToCRM }: MemberPortalProps = {}) {
   const { currentUser, logout } = useAuth();
   const { branding } = useSettings();
   const { theme, toggleTheme } = useTheme();
@@ -128,11 +134,25 @@ export default function MemberPortal() {
     return unsubscribe;
   }, [primaryClient?.linkedClientIds]);
 
+  if (isGuest) {
+    return <GuestPortal onSwitchToCRM={onSwitchToCRM || (() => {})} />;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
+    );
+  }
+
+  if (primaryClient?.status === 'Lead') {
+    return (
+      <GuestPortal 
+        onSwitchToCRM={onSwitchToCRM || logout} 
+        isLeadPending={true} 
+        client={primaryClient} 
+      />
     );
   }
 

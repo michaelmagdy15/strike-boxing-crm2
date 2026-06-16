@@ -159,6 +159,10 @@ export interface Payment {
   deleted_at?: string | null; // ISO string (soft delete)
 }
 
+export type Gender = 'Male' | 'Female' | 'Other' | 'Prefer not to say';
+export type ActivityLevel = 'Sedentary' | 'Lightly Active' | 'Moderately Active' | 'Very Active' | 'Extra Active';
+export type FitnessTarget = 'Weight Loss' | 'Gain Muscle' | 'Improve Lifestyle' | 'Maintenance';
+
 export interface Client {
   id: string;
   name: string;
@@ -189,6 +193,17 @@ export interface Client {
   typeOfClient?: string;
   salesName?: string;
   
+  // Gamified Fitness & AI Health Profile
+  gender?: Gender;
+  height?: number; // in cm
+  weight?: number; // in kg
+  activityLevel?: ActivityLevel;
+  workoutTimes?: string[]; // e.g., ["Morning", "Evening"] or ["Mon 6AM", ...]
+  fitnessTarget?: FitnessTarget;
+  aiTokens?: number; // Tokens available for AI Coach chat
+  referralCode?: string; // User's unique invite code
+  referredBy?: string; // Referral code of the person who invited them
+
   packages?: ClientPackage[];
   linkedAccount?: boolean; // Shares phone number with another member (family/parent)
   hasDiscount?: boolean; // Flag to indicate if member has received a discount

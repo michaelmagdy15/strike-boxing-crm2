@@ -206,14 +206,13 @@ function AppContent() {
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|StrikeCRM/i.test(navigator.userAgent) || window.innerWidth < 768;
     if (isMobile && showPortalOverride !== 'crm') {
       return (
-        <CartProvider>
-          <GuestPortal 
-            onSwitchToCRM={() => setShowPortalOverride('crm')} 
-          />
-        </CartProvider>
+        <MemberPortal 
+          isGuest={true} 
+          onSwitchToCRM={() => setShowPortalOverride('crm')} 
+        />
       );
     }
-    return <Login />;
+    return <Login onSwitchToMemberStore={() => setShowPortalOverride('member')} />;
   }
 
   // Block the app until user sets a real password
@@ -731,8 +730,10 @@ export default function App() {
           <AuthAwareSettingsProvider>
             <AppProvider>
               <ThemeProvider>
-                <AppContent />
-                <BuildVersionFooter />
+                <CartProvider>
+                  <AppContent />
+                  <BuildVersionFooter />
+                </CartProvider>
               </ThemeProvider>
             </AppProvider>
           </AuthAwareSettingsProvider>

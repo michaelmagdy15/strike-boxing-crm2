@@ -40,6 +40,7 @@ interface AuthContextType {
   createCoachAccount: (name: string, email: string, branch?: string) => Promise<{ uid: string; coachId: string }>;
   createClientAccount: (clientId: string, memberId: string, clientName: string, phone?: string) => Promise<{ uid: string }>;
   submitSignUpRequest: (name: string, email: string, role: UserRole, message?: string) => Promise<void>;
+  registerFreeUser: (email: string, password: string, profileData: any) => Promise<void>;
   approveSignUpRequest: (id: string, pending: PendingAccount) => Promise<void>;
   denySignUpRequest: (id: string) => Promise<void>;
   submitPasswordResetRequest: (email: string, name?: string) => Promise<void>;
@@ -606,6 +607,78 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { membersMigrated, coachesMigrated, errors };
   };
 
+  const registerFreeUser = async (
+    email: string,
+    password: string,
+    profileData: {
+      name: string;
+      phone: string;
+      age: string;
+      gender: string;
+      height: number;
+      weight: number;
+      activityLevel: string;
+      workoutTimes: string[];
+      fitnessTarget: string;
+    }
+  ) => {
+    // 1. Create firebase user auth
+    // Wait, createFirebaseUser sets a password and creates the user, but we'll use standard createUserWithEmailAndPassword here if we can,
+    // or just the same flow as createClientAccount but capturing password.
+    // Let's implement it inside the hook directly.
+    const { createUserWithEmailAndPassword, updateProfile } = await import('firebase/auth');
+    const userCred = await createUserWithEmailAndPassword(auth, email, password);
+    await updateProfile(userCred.user, { displayName: profileData.name });
+
+    const uid = userCred.user.uid;
+
+    // 2. Generate a member ID (e.g., M-0001)
+    const clientsSnap = await getDocs(collection(db, 'clients'));
+    const memberIds = clientsSnap.docs
+      .map(d => d.data().memberId)
+      .filter(id => typeof id === 'string' && id.startsWith('MEM-'))
+      .map(id => parseInt(id.replace('MEM-', ''), 10))
+      .filter(n => !isNaN(n));
+    const nextNum = memberIds.length > 0 ? Math.max(...memberIds) + 1 : 1;
+    const newMemberId = `MEM-${String(nextNum).padStart(3, '0')}`;
+
+    // 3. Create Client record
+    const clientRef = doc(collection(db, 'clients'));
+    const newClient = {
+      id: clientRef.id,
+      name: profileData.name,
+      phone: profileData.phone || '',
+      status: 'Lead',
+      stage: 'New',
+      memberId: newMemberId,
+      portalUserId: uid,
+      points: 100, // Welcome points
+      aiTokens: 50, // Welcome tokens for AI chat
+      gender: profileData.gender,
+      height: profileData.height,
+      weight: profileData.weight,
+      activityLevel: profileData.activityLevel,
+      workoutTimes: profileData.workoutTimes,
+      fitnessTarget: profileData.fitnessTarget,
+      dateOfBirth: profileData.age, // Storing age here for now
+      referralCode: `REF-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+      createdAt: new Date().toISOString()
+    };
+    await setDoc(clientRef, newClient);
+
+    // 4. Create User record
+    const newUser: User = {
+      id: uid,
+      name: profileData.name,
+      email,
+      role: 'client',
+      clientRecordId: newMemberId,
+    };
+    await setDoc(doc(db, 'users', uid), newUser);
+
+    // Auto-login happens automatically by Firebase onAuthStateChanged
+  };
+
   const memoizedCurrentUser = useMemo(() => {
     return currentUser ? { ...currentUser, role: effectiveRole || currentUser.role } : null;
   }, [currentUser, effectiveRole]);
@@ -630,6 +703,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     createClientAccount,
     activatePendingUser,
     submitSignUpRequest,
+    registerFreeUser,
     approveSignUpRequest,
     denySignUpRequest,
     submitPasswordResetRequest,
