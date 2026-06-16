@@ -34,10 +34,12 @@ import { NotificationCenter } from './components/NotificationCenter';
 import BuildVersionFooter from './components/BuildVersionFooter';
 import CoachPortal from './coach/CoachPortal';
 import MemberPortal from './member/MemberPortal';
+import GuestPortal from './member/GuestPortal';
 import { ForcePasswordChangeDialog } from './components/ForcePasswordChangeDialog';
 import { QRCodePage } from './components/QRCodePage';
 import QuoteGenerator from './QuoteGenerator';
 import ClubOperations from './ClubOperations';
+import { CartProvider } from './member/CartContext';
 
 const QUOTE_GENERATOR_EMAILS = ['magd.gallab@gmail.com', 'michaelmitry13@gmail.com'];
 
@@ -57,6 +59,7 @@ function AppContent() {
     return localStorage.getItem('sidebar_collapsed') === 'true';
   });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
+  const [showPortalOverride, setShowPortalOverride] = React.useState<'crm' | 'member' | null>(null);
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed(prev => {
@@ -200,6 +203,16 @@ function AppContent() {
   }
 
   if (!currentUser) {
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|StrikeCRM/i.test(navigator.userAgent) || window.innerWidth < 768;
+    if (isMobile && showPortalOverride !== 'crm') {
+      return (
+        <CartProvider>
+          <GuestPortal 
+            onSwitchToCRM={() => setShowPortalOverride('crm')} 
+          />
+        </CartProvider>
+      );
+    }
     return <Login />;
   }
 
