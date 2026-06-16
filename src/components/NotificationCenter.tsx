@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../context';
 import { useTasks } from '../hooks/useTasks';
+import { useAuth } from '../contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Bell, AlertTriangle, Gift, CheckSquare, Clock, User as UserIcon, X, Check } from 'lucide-react';
 import { differenceInDays, isSameDay, isSameMonth, parseISO, isToday, isBefore, isAfter, startOfDay } from 'date-fns';
@@ -18,28 +19,36 @@ export interface AppNotification {
 }
 
 export function NotificationCenter() {
-  const { clients, currentUser, setSearchQuery } = useAppContext();
+  const { clients, setSearchQuery } = useAppContext();
+  const { currentUser, updateUser } = useAuth();
   const { tasks } = useTasks();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Load dismissed notifications from localStorage on mount
+  // Load dismissed notifications from database and localStorage on mount
   useEffect(() => {
     if (currentUser?.id) {
+      const dbDismissed = currentUser.dismissedNotifications || [];
       const stored = localStorage.getItem(`crm_notifications_dismissed_${currentUser.id}`);
+      const mergedSet = new Set<string>(dbDismissed);
+      
       if (stored) {
         try {
-          setDismissedIds(new Set(JSON.parse(stored)));
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(id => mergedSet.add(id));
+          }
         } catch (e) {
-          console.error("Failed to parse dismissed notifications", e);
+          console.error("Failed to parse dismissed notifications from localStorage", e);
         }
       }
+      setDismissedIds(mergedSet);
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, currentUser?.dismissedNotifications]);
 
-  // Save dismissed notifications to localStorage when changed
+  // Save dismissed notifications to database and localStorage when changed
   const dismissNotification = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!currentUser?.id) return;
@@ -47,7 +56,12 @@ export function NotificationCenter() {
     setDismissedIds(prev => {
       const next = new Set(prev);
       next.add(id);
-      localStorage.setItem(`crm_notifications_dismissed_${currentUser.id}`, JSON.stringify(Array.from(next)));
+      const arr = Array.from(next);
+      localStorage.setItem(`crm_notifications_dismissed_${currentUser.id}`, JSON.stringify(arr));
+      // Save to database
+      updateUser(currentUser.id, { dismissedNotifications: arr }).catch(err => {
+        console.error("Failed to save dismissed notification to DB", err);
+      });
       return next;
     });
   };
@@ -58,7 +72,12 @@ export function NotificationCenter() {
     setDismissedIds(prev => {
       const next = new Set(prev);
       allIds.forEach(id => next.add(id));
-      localStorage.setItem(`crm_notifications_dismissed_${currentUser.id}`, JSON.stringify(Array.from(next)));
+      const arr = Array.from(next);
+      localStorage.setItem(`crm_notifications_dismissed_${currentUser.id}`, JSON.stringify(arr));
+      // Save to database
+      updateUser(currentUser.id, { dismissedNotifications: arr }).catch(err => {
+        console.error("Failed to save dismissed notifications to DB", err);
+      });
       return next;
     });
     setIsOpen(false);

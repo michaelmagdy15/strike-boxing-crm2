@@ -59,7 +59,8 @@ export const useCoaches = () => {
             email,
             role: 'coach',
             coachId,
-            mustChangePassword: true
+            mustChangePassword: true,
+            phone: coach.phone || ''
           };
 
           await setDoc(doc(db, 'users', uid), newUser);
@@ -83,6 +84,18 @@ export const useCoaches = () => {
       const isNowActive = updates.active === true || (existing?.active === true && updates.active === undefined);
       const hasNoUser = !existing?.userId && !updates.userId;
 
+      // Sync phone or name changes to linked user if user already exists
+      if (existing?.userId && (updates.phone !== undefined || updates.name !== undefined)) {
+        try {
+          const userUpdates: Partial<User> = {};
+          if (updates.phone !== undefined) userUpdates.phone = updates.phone;
+          if (updates.name !== undefined) userUpdates.name = updates.name;
+          await updateDoc(doc(db, 'users', existing.userId), cleanData(userUpdates));
+        } catch (syncErr) {
+          console.error("Failed to sync coach info to user account:", syncErr);
+        }
+      }
+
       if (isNowActive && hasNoUser) {
         try {
           const coachId = await generateCoachId();
@@ -98,7 +111,8 @@ export const useCoaches = () => {
             email,
             role: 'coach',
             coachId,
-            mustChangePassword: true
+            mustChangePassword: true,
+            phone: updates.phone || existing?.phone || ''
           };
 
           await setDoc(doc(db, 'users', uid), newUser);

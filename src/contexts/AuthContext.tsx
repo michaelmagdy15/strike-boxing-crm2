@@ -206,7 +206,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Users listener
   useEffect(() => {
     if (!currentUser) return;
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+    const staffQuery = query(
+      collection(db, 'users'),
+      where('role', 'in', ['crm_admin', 'super_admin', 'admin', 'manager', 'rep'])
+    );
+    const unsubUsers = onSnapshot(staffQuery, (snapshot) => {
       const allUsersData = snapshot.docs.map(d => {
         const data = d.data();
         const hasStoredId = 'id' in data;
@@ -481,6 +485,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateUser = async (id: UserId, updates: Partial<User>) => {
     const currentName = users.find(u => u.id === id)?.name;
     await userService.updateUser(id, updates, currentName);
+    if (currentUser && id === currentUser.id) {
+      setCurrentUser(prev => prev ? { ...prev, ...updates } : prev);
+    }
   };
 
   const deleteUser = async (id: UserId) => {

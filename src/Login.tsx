@@ -448,6 +448,10 @@ export default function Login() {
         </CardContent>
       </Card>
 
+      <div className="mt-8 text-center text-xs text-muted-foreground/60">
+        Made & managed by <a href="https://mitrixo.com" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors font-medium underline underline-offset-4 decoration-muted-foreground/30 hover:decoration-foreground">mitrixo.com systems</a>
+      </div>
+
       {/* ── Forgot Password Dialog (Staff / Coach — email) ── */}
       <Dialog open={forgotOpen} onOpenChange={open => { setForgotOpen(open); if (!open) setForgotSubmitted(false); }}>
         <DialogContent>

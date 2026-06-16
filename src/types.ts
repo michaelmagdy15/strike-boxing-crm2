@@ -25,6 +25,7 @@ export interface Coach {
   name: string;
   active: boolean;
   userId?: string; // links to users collection when coach has a login account
+  phone?: string;
 }
 
 export interface PendingAccount {
@@ -82,6 +83,7 @@ export interface User {
   phone?: string;
   mustChangePassword?: boolean; // true = forced change on next login
   photoURL?: string;           // avatar image URL
+  dismissedNotifications?: string[];
 }
 
 export interface PTPackageRecord {
