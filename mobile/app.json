@@ -2,14 +2,14 @@
   "expo": {
     "name": "StrikeEG",
     "slug": "strike-eg",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.strikeboxing.crm",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "infoPlist": {
         "NSCameraUsageDescription": "This app requires access to the camera to scan member QR codes for attendance and check-in.",
         "NSPhotoLibraryUsageDescription": "This app requires access to your photo library to let you upload profile pictures and branding logos.",
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.strikeboxing.crm",
-      "versionCode": 4,
+      "versionCode": 5,
       "adaptiveIcon": {
         "backgroundColor": "#0a0a0a",
         "foregroundImage": "./assets/icon.png"
